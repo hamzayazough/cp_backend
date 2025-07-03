@@ -14,6 +14,7 @@ import { PromoterSkillEntity } from '../database/entities/promoter-skill.entity'
 import { FollowerEstimateEntity } from '../database/entities/follower-estimate.entity';
 import { PromoterWorkEntity } from '../database/entities/promoter-work.entity';
 import { CreateUserDto, User } from '../interfaces/user';
+import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { Language } from 'src/enums/language';
 
@@ -69,6 +70,7 @@ export class UserService {
 
     const user = this.userRepository.create({
       firebaseUid: createUserDto.firebaseUid,
+      isSetupDone: false,
       email: createUserDto.email,
       name: createUserDto.name,
       role: createUserDto.role,
@@ -104,6 +106,101 @@ export class UserService {
     }
 
     return this.getUserByFirebaseUid(createUserDto.firebaseUid);
+  }
+
+  /**
+   * Create a basic user account from Firebase token only
+   */
+  async createBasicUser(firebaseUser: FirebaseUser): Promise<User> {
+    const existingUser = await this.userRepository.findOne({
+      where: [{ email: firebaseUser.email }, { firebaseUid: firebaseUser.uid }],
+    });
+
+    if (existingUser) {
+      throw new ConflictException(
+        'User already exists with this email or Firebase UID',
+      );
+    }
+
+    const user = this.userRepository.create({
+      firebaseUid: firebaseUser.uid,
+      email: firebaseUser.email,
+      isSetupDone: false,
+      walletBalance: 0,
+    });
+
+    const savedUser = await this.userRepository.save(user);
+    return this.mapEntityToUser(savedUser);
+  }
+
+  /**
+   * Complete user setup with full profile details
+   */
+  async completeUserSetup(
+    firebaseUid: string,
+    createUserDto: CreateUserDto,
+  ): Promise<User> {
+    const existingUser = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User account not found');
+    }
+
+    if (existingUser.isSetupDone) {
+      throw new ConflictException('User setup is already completed');
+    }
+
+    // Check if username is taken
+    if (createUserDto.name) {
+      const existingName = await this.userRepository.findOne({
+        where: { name: createUserDto.name },
+      });
+
+      if (existingName) {
+        throw new ConflictException('Username is already taken');
+      }
+    }
+
+    if (!createUserDto.role) {
+      throw new ConflictException('Role is required');
+    }
+
+    // Update user with complete information
+    existingUser.name = createUserDto.name;
+    existingUser.role = createUserDto.role;
+    existingUser.bio = createUserDto.bio;
+    existingUser.tiktokUrl = createUserDto.tiktokUrl;
+    existingUser.instagramUrl = createUserDto.instagramUrl;
+    existingUser.snapchatUrl = createUserDto.snapchatUrl;
+    existingUser.youtubeUrl = createUserDto.youtubeUrl;
+    existingUser.twitterUrl = createUserDto.twitterUrl;
+    existingUser.websiteUrl = createUserDto.websiteUrl;
+    existingUser.isSetupDone = true;
+
+    const savedUser = await this.userRepository.save(existingUser);
+
+    // Create role-specific details
+    if (
+      createUserDto.role === 'ADVERTISER' &&
+      createUserDto.advertiserDetails
+    ) {
+      await this.createAdvertiserDetails(
+        savedUser.id,
+        createUserDto.advertiserDetails,
+      );
+    } else if (
+      createUserDto.role === 'PROMOTER' &&
+      createUserDto.promoterDetails
+    ) {
+      await this.createPromoterDetails(
+        savedUser.id,
+        createUserDto.promoterDetails,
+      );
+    }
+
+    return this.getUserByFirebaseUid(firebaseUid);
   }
 
   async checkUsernameExists(name: string): Promise<boolean> {
@@ -270,6 +367,7 @@ export class UserService {
       name: userEntity.name,
       role: userEntity.role,
       createdAt: userEntity.createdAt.toISOString(),
+      isSetupDone: userEntity.isSetupDone,
       avatarUrl: userEntity.avatarUrl,
       backgroundUrl: userEntity.backgroundUrl,
       bio: userEntity.bio,

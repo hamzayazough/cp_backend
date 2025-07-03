@@ -12,6 +12,7 @@ export interface User {
   name: string;
   role: UserRole;
   createdAt: string;
+  isSetupDone: boolean;
 
   avatarUrl?: string; // Profile picture (S3 URL)
   backgroundUrl?: string; // Background banner (S3 URL)
