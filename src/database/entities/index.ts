@@ -1,0 +1,8 @@
+export { UserEntity } from './user.entity';
+export { AdvertiserDetailsEntity } from './advertiser-details.entity';
+export { AdvertiserTypeMappingEntity } from './advertiser-type-mapping.entity';
+export { PromoterDetailsEntity } from './promoter-details.entity';
+export { PromoterLanguageEntity } from './promoter-language.entity';
+export { PromoterSkillEntity } from './promoter-skill.entity';
+export { FollowerEstimateEntity } from './follower-estimate.entity';
+export { PromoterWorkEntity } from './promoter-work.entity';

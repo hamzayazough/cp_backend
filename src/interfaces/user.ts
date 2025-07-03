@@ -1,9 +1,10 @@
-import { AdvertiserType } from "../enums/advertiser-type";
-import { Language } from "../enums/language";
-import { FollowerEstimate } from "./follower-estimate";
-import { PromoterWork } from "./promoter-work";
+import { SocialPlatform } from 'src/enums/social-platform';
+import { AdvertiserType } from '../enums/advertiser-type';
+import { Language } from '../enums/language';
+import { FollowerEstimate } from './follower-estimate';
+import { PromoterWork } from './promoter-work';
 
-export type UserRole = "ADVERTISER" | "PROMOTER" | "ADMIN";
+export type UserRole = 'ADVERTISER' | 'PROMOTER' | 'ADMIN';
 
 export interface User {
   id: string;
@@ -38,16 +39,60 @@ export interface User {
 export interface AdvertiserDetails {
   companyName: string;
   advertiserTypes: AdvertiserType[]; // e.g., ["CLOTHING", "EDUCATION"]
-  companyWebsite?: string;
+  companyWebsite: string;
   verified?: boolean;
 }
 
 // 📣 Promoter-specific data
 export interface PromoterDetails {
-  works: PromoterWork[]; // List of past projects (mp4, images)
-  location?: string;
-  languagesSpoken?: Language[];
+  location: string;
+  languagesSpoken: Language[];
+  skills: string[];
+  works?: PromoterWork[]; // List of past projects (mp4, images)
   followersEstimate?: FollowerEstimate[];
-  skills?: string[];
   verified?: boolean;
+}
+
+//--------------------DTOs----------------------------------
+export interface CreateUserDto {
+  firebaseUid: string;
+  email: string;
+  name: string;
+  bio: string;
+  role: UserRole | null;
+
+  tiktokUrl: string;
+  instagramUrl: string;
+  snapchatUrl: string;
+  youtubeUrl: string;
+  twitterUrl: string;
+  websiteUrl: string;
+
+  advertiserDetails?: AdvertiserDetailsDto;
+
+  promoterDetails?: PromoterDetailsDto;
+}
+
+export interface AdvertiserDetailsDto {
+  companyName: string;
+  advertiserTypes: AdvertiserType[];
+  companyWebsite: string;
+}
+export interface PromoterDetailsDto {
+  location: string;
+  languagesSpoken: Language[];
+  skills: string[];
+  followerEstimates?: FollowerEstimateDto[];
+  works?: PromoterWorkDto[];
+}
+
+export interface FollowerEstimateDto {
+  platform: SocialPlatform;
+  count: number;
+}
+
+export interface PromoterWorkDto {
+  title: string;
+  description?: string;
+  mediaUrl: string;
 }

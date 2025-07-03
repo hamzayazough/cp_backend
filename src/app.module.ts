@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { DatabaseModule } from './database/database.module';
+import { UserModule } from './modules/user.module';
 import { ProtectedController } from './controllers/protected.controller';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 
@@ -12,13 +14,17 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    DatabaseModule,
     AuthModule,
+    UserModule,
   ],
   controllers: [AppController, ProtectedController],
   providers: [AppService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(FirebaseAuthMiddleware).forRoutes('protected');
+    consumer
+      .apply(FirebaseAuthMiddleware)
+      .forRoutes('protected', 'auth/create-account', 'auth/profile');
   }
 }
