@@ -3,7 +3,7 @@ import { AdvertiserType } from '../enums/advertiser-type';
 import { Language } from '../enums/language';
 import { FollowerEstimate } from './follower-estimate';
 import { PromoterWork } from './promoter-work';
-
+import { AdvertiserWork } from './advertiser-work';
 export type UserRole = 'ADVERTISER' | 'PROMOTER' | 'ADMIN';
 
 export interface User {
@@ -42,6 +42,7 @@ export interface AdvertiserDetails {
   advertiserTypes: AdvertiserType[]; // e.g., ["CLOTHING", "EDUCATION"]
   companyWebsite: string;
   verified?: boolean;
+  advertiserWork?: AdvertiserWork[]; // Example products or services offered
 }
 
 // 📣 Promoter-specific data

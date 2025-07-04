@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { AdvertiserTypeMappingEntity } from './advertiser-type-mapping.entity';
+import { AdvertiserWorkEntity } from './advertiser-work.entity';
 
 @Entity('advertiser_details')
 export class AdvertiserDetailsEntity {
@@ -43,4 +44,13 @@ export class AdvertiserDetailsEntity {
     cascade: true,
   })
   advertiserTypeMappings: AdvertiserTypeMappingEntity[];
+
+  @OneToMany(
+    () => AdvertiserWorkEntity,
+    (advertiserWork) => advertiserWork.advertiserDetails,
+    {
+      cascade: true,
+    },
+  )
+  advertiserWorks: AdvertiserWorkEntity[];
 }

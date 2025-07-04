@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from '../database/entities/user.entity';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
+import { AdvertiserWorkEntity } from '../database/entities/advertiser-work.entity';
 import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
 import { AdvertiserTypeMappingEntity } from '../database/entities/advertiser-type-mapping.entity';
 import { PromoterLanguageEntity } from '../database/entities/promoter-language.entity';
@@ -25,6 +26,8 @@ export class UserService {
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(AdvertiserDetailsEntity)
     private readonly advertiserDetailsRepository: Repository<AdvertiserDetailsEntity>,
+    @InjectRepository(AdvertiserWorkEntity)
+    private readonly advertiserWorkRepository: Repository<AdvertiserWorkEntity>,
     @InjectRepository(PromoterDetailsEntity)
     private readonly promoterDetailsRepository: Repository<PromoterDetailsEntity>,
     @InjectRepository(AdvertiserTypeMappingEntity)
@@ -133,7 +136,7 @@ export class UserService {
   }
 
   /**
-   * Complete user setup with full profile details
+   * Complete user setup with full profile details (supports both creation and updates)
    */
   async completeUserSetup(
     firebaseUid: string,
@@ -141,14 +144,11 @@ export class UserService {
   ): Promise<User> {
     const existingUser = await this.userRepository.findOne({
       where: { firebaseUid },
+      relations: ['advertiserDetails', 'promoterDetails'],
     });
 
     if (!existingUser) {
       throw new NotFoundException('User account not found');
-    }
-
-    if (existingUser.isSetupDone) {
-      throw new ConflictException('User setup is already completed');
     }
 
     if (createUserDto.name) {
@@ -156,7 +156,7 @@ export class UserService {
         where: { name: createUserDto.name },
       });
 
-      if (existingName) {
+      if (existingName && existingName.id !== existingUser.id) {
         throw new ConflictException('Username is already taken');
       }
     }
@@ -165,6 +165,7 @@ export class UserService {
       throw new ConflictException('Role is required');
     }
 
+    // Update user basic info
     existingUser.name = createUserDto.name;
     existingUser.role = createUserDto.role;
     existingUser.bio = createUserDto.bio;
@@ -178,22 +179,41 @@ export class UserService {
 
     const savedUser = await this.userRepository.save(existingUser);
 
+    // Handle advertiser details
     if (
       createUserDto.role === 'ADVERTISER' &&
       createUserDto.advertiserDetails
     ) {
-      await this.createAdvertiserDetails(
-        savedUser.id,
-        createUserDto.advertiserDetails,
-      );
-    } else if (
-      createUserDto.role === 'PROMOTER' &&
-      createUserDto.promoterDetails
-    ) {
-      await this.createPromoterDetails(
-        savedUser.id,
-        createUserDto.promoterDetails,
-      );
+      if (existingUser.advertiserDetails) {
+        // Update existing advertiser details
+        await this.updateAdvertiserDetails(
+          existingUser.advertiserDetails.id,
+          createUserDto.advertiserDetails,
+        );
+      } else {
+        // Create new advertiser details
+        await this.createAdvertiserDetails(
+          savedUser.id,
+          createUserDto.advertiserDetails,
+        );
+      }
+    }
+
+    // Handle promoter details
+    if (createUserDto.role === 'PROMOTER' && createUserDto.promoterDetails) {
+      if (existingUser.promoterDetails) {
+        // Update existing promoter details
+        await this.updatePromoterDetails(
+          existingUser.promoterDetails.id,
+          createUserDto.promoterDetails,
+        );
+      } else {
+        // Create new promoter details
+        await this.createPromoterDetails(
+          savedUser.id,
+          createUserDto.promoterDetails,
+        );
+      }
     }
 
     return this.getUserByFirebaseUid(firebaseUid);
@@ -351,6 +371,133 @@ export class UserService {
     }
   }
 
+  private async updateAdvertiserDetails(
+    advertiserDetailsId: string,
+    advertiserData: CreateUserDto['advertiserDetails'],
+  ): Promise<void> {
+    if (!advertiserData) {
+      throw new Error('Advertiser data is required');
+    }
+
+    // Update advertiser details
+    await this.advertiserDetailsRepository.update(advertiserDetailsId, {
+      companyName: advertiserData.companyName,
+      companyWebsite: advertiserData.companyWebsite,
+    });
+
+    // Remove existing advertiser type mappings
+    await this.advertiserTypeMappingRepository.delete({
+      advertiserId: advertiserDetailsId,
+    });
+
+    // Add new advertiser type mappings
+    if (
+      advertiserData.advertiserTypes &&
+      advertiserData.advertiserTypes.length > 0
+    ) {
+      const typeMappings = advertiserData.advertiserTypes.map(
+        (type: AdvertiserType) =>
+          this.advertiserTypeMappingRepository.create({
+            advertiserId: advertiserDetailsId,
+            advertiserType: type,
+          }),
+      );
+
+      await this.advertiserTypeMappingRepository.save(typeMappings);
+    }
+  }
+
+  private async updatePromoterDetails(
+    promoterDetailsId: string,
+    promoterData: CreateUserDto['promoterDetails'],
+  ): Promise<void> {
+    if (!promoterData) {
+      throw new Error('Promoter data is required');
+    }
+
+    // Update promoter details
+    await this.promoterDetailsRepository.update(promoterDetailsId, {
+      location: promoterData.location,
+    });
+
+    // Remove existing languages
+    await this.promoterLanguageRepository.delete({
+      promoterId: promoterDetailsId,
+    });
+
+    // Remove existing skills
+    await this.promoterSkillRepository.delete({
+      promoterId: promoterDetailsId,
+    });
+
+    // Remove existing follower estimates
+    await this.followerEstimateRepository.delete({
+      promoterId: promoterDetailsId,
+    });
+
+    // Remove existing works
+    await this.promoterWorkRepository.delete({
+      promoterId: promoterDetailsId,
+    });
+
+    // Add new languages
+    if (
+      promoterData.languagesSpoken &&
+      promoterData.languagesSpoken.length > 0
+    ) {
+      const languages = promoterData.languagesSpoken.map((language: Language) =>
+        this.promoterLanguageRepository.create({
+          promoterId: promoterDetailsId,
+          language: language,
+        }),
+      );
+
+      await this.promoterLanguageRepository.save(languages);
+    }
+
+    // Add new skills
+    if (promoterData.skills && promoterData.skills.length > 0) {
+      const skills = promoterData.skills.map((skill) =>
+        this.promoterSkillRepository.create({
+          promoterId: promoterDetailsId,
+          skill,
+        }),
+      );
+
+      await this.promoterSkillRepository.save(skills);
+    }
+
+    // Add new follower estimates
+    if (
+      promoterData.followerEstimates &&
+      promoterData.followerEstimates.length > 0
+    ) {
+      const estimates = promoterData.followerEstimates.map((estimate) =>
+        this.followerEstimateRepository.create({
+          promoterId: promoterDetailsId,
+          platform: estimate.platform,
+          count: estimate.count,
+        }),
+      );
+
+      await this.followerEstimateRepository.save(estimates);
+    }
+
+    // Add new works
+    if (promoterData.works && promoterData.works.length > 0) {
+      const works = promoterData.works.map((work) =>
+        this.promoterWorkRepository.create({
+          promoterId: promoterDetailsId,
+          title: work.title,
+          description: work.description,
+          mediaUrl: work.mediaUrl,
+        }),
+      );
+
+      await this.promoterWorkRepository.save(works);
+    }
+  }
+
   private mapEntityToUser(userEntity: UserEntity): User {
     const user: User = {
       id: userEntity.id,
@@ -495,5 +642,78 @@ export class UserService {
       });
       await this.promoterWorkRepository.save(newWork);
     }
+  }
+
+  /**
+   * Update or add advertiser work to the user's profile
+   */
+  async updateAdvertiserWork(
+    firebaseUid: string,
+    work: {
+      title: string;
+      description: string;
+      mediaUrl?: string;
+      websiteUrl?: string;
+      price?: number;
+    },
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: ['advertiserDetails', 'advertiserDetails.advertiserWorks'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.advertiserDetails) {
+      throw new NotFoundException('User is not an advertiser');
+    }
+
+    let existingWork: AdvertiserWorkEntity | undefined;
+    if (user.advertiserDetails.advertiserWorks) {
+      existingWork = user.advertiserDetails.advertiserWorks.find(
+        (w: AdvertiserWorkEntity) => w.title === work.title,
+      );
+    }
+
+    if (existingWork) {
+      // Update existing work
+      await this.advertiserWorkRepository.update(existingWork.id, {
+        description: work.description,
+        mediaUrl: work.mediaUrl,
+        websiteUrl: work.websiteUrl,
+        price: work.price,
+      });
+    } else {
+      // Create new work
+      const newWork = this.advertiserWorkRepository.create({
+        title: work.title,
+        description: work.description,
+        mediaUrl: work.mediaUrl,
+        websiteUrl: work.websiteUrl,
+        price: work.price,
+        advertiserDetails: user.advertiserDetails,
+      });
+      await this.advertiserWorkRepository.save(newWork);
+    }
+  }
+
+  /**
+   * Mark user setup as complete without requiring full profile details
+   */
+  async markSetupComplete(firebaseUid: string): Promise<User> {
+    const existingUser = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User account not found');
+    }
+
+    existingUser.isSetupDone = true;
+    await this.userRepository.save(existingUser);
+
+    return this.getUserByFirebaseUid(firebaseUid);
   }
 }

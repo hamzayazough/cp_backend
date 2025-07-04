@@ -13,9 +13,10 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from '../services/user.service';
-import { S3Service } from '../services/s3.service';
+import { S3Service, UploadResult } from '../services/s3.service';
 import { CreateUserDto } from '../interfaces/user';
 import { PromoterWork } from 'src/interfaces/promoter-work';
+import { AdvertiserWork } from 'src/interfaces/advertiser-work';
 import { User } from '../auth/user.decorator';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 
@@ -55,7 +56,7 @@ export class AuthController {
   }
 
   /**
-   * Complete user account setup with full profile details
+   * Complete user account setup with full profile details (supports both creation and updates)
    * Input:
    *   - Headers: Firebase Auth Token (required)
    *   - Body: CreateUserDto { role, username, advertiserDetails?, promoterDetails? }
@@ -95,7 +96,7 @@ export class AuthController {
 
       return {
         success: true,
-        message: 'Account setup completed successfully',
+        message: 'Account updated successfully',
         user,
       };
     } catch (error) {
@@ -369,5 +370,132 @@ export class AuthController {
       result,
       work,
     };
+  }
+
+  /**
+   * Upload advertiser work file
+   * Input:
+   *   - Headers: Firebase Auth Token (required)
+   *   - Form data: file (image/video file, optional)
+   *   - Form data: title (string, required)
+   *   - Form data: description (string, required)
+   *   - Form data: websiteUrl (string, optional)
+   *   - Form data: price (number, optional)
+   *   - Query: workId (string, optional) - ID of specific work
+   * Responses:
+   *   - 201 Created: { success: true, message: string, result?: UploadResult, work: AdvertiserWork }
+   *   - 400 Bad Request: Missing title/description, or invalid file type
+   *   - 401 Unauthorized: Invalid or missing Firebase token
+   */
+  @Post('upload-advertiser-work')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAdvertiserWork(
+    @User() firebaseUser: FirebaseUser,
+    @UploadedFile() file: UploadedFile | undefined,
+    @Body('title') title: string,
+    @Body('description') description: string,
+    @Body('websiteUrl') websiteUrl?: string,
+    @Body('price') price?: string,
+  ) {
+    if (!title || title.trim().length === 0) {
+      throw new BadRequestException('Title is required');
+    }
+
+    if (!description || description.trim().length === 0) {
+      throw new BadRequestException('Description is required');
+    }
+
+    let result: UploadResult | undefined = undefined;
+    let mediaUrl: string | undefined = undefined;
+
+    // Handle file upload if provided
+    if (file) {
+      const allowedMimeTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',
+      ];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          'Invalid file type. Only images (JPEG, PNG, WebP, GIF) and videos (MP4, WebM, MOV) are allowed.',
+        );
+      }
+
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSize) {
+        throw new BadRequestException(
+          'File size too large. Maximum size is 50MB.',
+        );
+      }
+
+      result = await this.s3Service.uploadCampaignProduct(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        firebaseUser.uid,
+        'advertiser-work', // Use as campaign ID for folder structure
+        1, // Version
+      );
+      mediaUrl = result?.publicUrl;
+    }
+
+    // Parse price if provided
+    let parsedPrice: number | undefined = undefined;
+    if (price) {
+      parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        throw new BadRequestException('Price must be a valid positive number');
+      }
+    }
+
+    // Create AdvertiserWork object
+    const work: AdvertiserWork = {
+      title: title.trim(),
+      description: description.trim(),
+      mediaUrl,
+      websiteUrl: websiteUrl?.trim() || undefined,
+      price: parsedPrice,
+    };
+
+    // Update user's advertiser works in database
+    await this.userService.updateAdvertiserWork(firebaseUser.uid, work);
+
+    return {
+      success: true,
+      message: 'Advertiser work uploaded successfully',
+      result,
+      work,
+    };
+  }
+
+  /**
+   * Mark user setup as complete
+   * Input:
+   *   - Headers: Firebase Auth Token (required)
+   * Responses:
+   *   - 200 OK: { success: true, message: string, user: User }
+   *   - 401 Unauthorized: Invalid or missing Firebase token
+   *   - 404 Not Found: User account not found
+   */
+  @Post('mark-setup-complete')
+  @HttpCode(HttpStatus.OK)
+  async markSetupComplete(@User() firebaseUser: FirebaseUser) {
+    try {
+      const user = await this.userService.markSetupComplete(firebaseUser.uid);
+
+      return {
+        success: true,
+        message: 'Setup marked as complete successfully',
+        user,
+      };
+    } catch (error) {
+      console.error('Mark setup complete error:', error);
+      throw error;
+    }
   }
 }

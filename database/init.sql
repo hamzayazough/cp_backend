@@ -18,7 +18,10 @@ DO $$ BEGIN
             'EDUCATION', 'CLOTHING', 'TECH', 'BEAUTY', 'FOOD', 'HEALTH',
             'ENTERTAINMENT', 'TRAVEL', 'FINANCE', 'OTHER', 'SPORTS',
             'AUTOMOTIVE', 'ART', 'GAMING', 'ECOMMERCE', 'MEDIA',
-            'NON_PROFIT', 'REAL_ESTATE', 'HOME_SERVICES'
+            'NON_PROFIT', 'REAL_ESTATE', 'HOME_SERVICES', 'EVENTS',
+            'CONSULTING', 'BOOKS', 'MUSIC', 'PETS', 'TOYS', 'BABY',
+            'JEWELRY', 'SCIENCE', 'HARDWARE', 'ENERGY', 'AGRICULTURE',
+            'GOVERNMENT'
         );
     END IF;
 END $$;
@@ -96,6 +99,19 @@ CREATE TABLE IF NOT EXISTS advertiser_type_mappings (
     UNIQUE(advertiser_id, advertiser_type)
 );
 
+-- Advertiser work/portfolio table
+CREATE TABLE IF NOT EXISTS advertiser_works (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    advertiser_details_id UUID REFERENCES advertiser_details(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    media_url TEXT, -- S3 URL for product/service image or video
+    website_url TEXT, -- Optional link to product or service page
+    price DECIMAL(10,2), -- Optional price for the product or service
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Promoter details table
 CREATE TABLE IF NOT EXISTS promoter_details (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -155,6 +171,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 CREATE INDEX IF NOT EXISTS idx_advertiser_details_user_id ON advertiser_details(user_id);
+CREATE INDEX IF NOT EXISTS idx_advertiser_works_advertiser_details_id ON advertiser_works(advertiser_details_id);
 CREATE INDEX IF NOT EXISTS idx_promoter_details_user_id ON promoter_details(user_id);
 CREATE INDEX IF NOT EXISTS idx_follower_estimates_promoter_id ON follower_estimates(promoter_id);
 CREATE INDEX IF NOT EXISTS idx_promoter_works_promoter_id ON promoter_works(promoter_id);
@@ -174,6 +191,9 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECU
 
 DROP TRIGGER IF EXISTS update_advertiser_details_updated_at ON advertiser_details;
 CREATE TRIGGER update_advertiser_details_updated_at BEFORE UPDATE ON advertiser_details FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_advertiser_works_updated_at ON advertiser_works;
+CREATE TRIGGER update_advertiser_works_updated_at BEFORE UPDATE ON advertiser_works FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_promoter_details_updated_at ON promoter_details;
 CREATE TRIGGER update_promoter_details_updated_at BEFORE UPDATE ON promoter_details FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
