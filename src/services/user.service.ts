@@ -86,7 +86,6 @@ export class UserService {
 
     const savedUser = await this.userRepository.save(user);
 
-    // Create role-specific details
     if (
       createUserDto.role === 'ADVERTISER' &&
       createUserDto.advertiserDetails
@@ -152,7 +151,6 @@ export class UserService {
       throw new ConflictException('User setup is already completed');
     }
 
-    // Check if username is taken
     if (createUserDto.name) {
       const existingName = await this.userRepository.findOne({
         where: { name: createUserDto.name },
@@ -167,7 +165,6 @@ export class UserService {
       throw new ConflictException('Role is required');
     }
 
-    // Update user with complete information
     existingUser.name = createUserDto.name;
     existingUser.role = createUserDto.role;
     existingUser.bio = createUserDto.bio;
@@ -181,7 +178,6 @@ export class UserService {
 
     const savedUser = await this.userRepository.save(existingUser);
 
-    // Create role-specific details
     if (
       createUserDto.role === 'ADVERTISER' &&
       createUserDto.advertiserDetails
@@ -269,7 +265,6 @@ export class UserService {
     const savedAdvertiserDetails =
       await this.advertiserDetailsRepository.save(advertiserDetails);
 
-    // Create advertiser type mappings
     if (
       advertiserData.advertiserTypes &&
       advertiserData.advertiserTypes.length > 0
@@ -302,7 +297,6 @@ export class UserService {
     const savedPromoterDetails =
       await this.promoterDetailsRepository.save(promoterDetails);
 
-    // Create language mappings
     if (
       promoterData.languagesSpoken &&
       promoterData.languagesSpoken.length > 0
@@ -317,7 +311,6 @@ export class UserService {
       await this.promoterLanguageRepository.save(languages);
     }
 
-    // Create skills
     if (promoterData.skills && promoterData.skills.length > 0) {
       const skills = promoterData.skills.map((skill) =>
         this.promoterSkillRepository.create({
@@ -329,7 +322,6 @@ export class UserService {
       await this.promoterSkillRepository.save(skills);
     }
 
-    // Create follower estimates (optional)
     if (
       promoterData.followerEstimates &&
       promoterData.followerEstimates.length > 0
@@ -345,7 +337,6 @@ export class UserService {
       await this.followerEstimateRepository.save(estimates);
     }
 
-    // Create works (optional)
     if (promoterData.works && promoterData.works.length > 0) {
       const works = promoterData.works.map((work) =>
         this.promoterWorkRepository.create({
@@ -398,7 +389,6 @@ export class UserService {
       };
     }
 
-    // Map promoter details
     if (userEntity.promoterDetails) {
       user.promoterDetails = {
         location: userEntity.promoterDetails.location,
@@ -426,5 +416,84 @@ export class UserService {
     }
 
     return user;
+  }
+
+  /**
+   * Update user's avatar URL in database
+   */
+  async updateUserAvatarUrl(
+    firebaseUid: string,
+    avatarUrl: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.userRepository.update(user.id, { avatarUrl });
+  }
+
+  /**
+   * Update user's background URL in database
+   */
+  async updateUserBackgroundUrl(
+    firebaseUid: string,
+    backgroundUrl: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.userRepository.update(user.id, { backgroundUrl });
+  }
+
+  /**
+   * Update or add a promoter work for a user
+   */
+  async updatePromoterWork(
+    firebaseUid: string,
+    work: { title: string; description?: string; mediaUrl: string },
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: ['promoterDetails', 'promoterDetails.promoterWorks'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.promoterDetails) {
+      throw new NotFoundException('User is not a promoter');
+    }
+
+    let existingWork: PromoterWorkEntity | undefined;
+    if (user.promoterDetails.promoterWorks) {
+      existingWork = user.promoterDetails.promoterWorks.find(
+        (w: PromoterWorkEntity) => w.title === work.title,
+      );
+    }
+
+    if (existingWork) {
+      await this.promoterWorkRepository.update(existingWork.id, {
+        description: work.description,
+        mediaUrl: work.mediaUrl,
+      });
+    } else {
+      const newWork = this.promoterWorkRepository.create({
+        title: work.title,
+        description: work.description,
+        mediaUrl: work.mediaUrl,
+        promoterDetails: user.promoterDetails,
+      });
+      await this.promoterWorkRepository.save(newWork);
+    }
   }
 }
