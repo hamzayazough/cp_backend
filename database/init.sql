@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     firebase_uid VARCHAR(255) UNIQUE NOT NULL, -- Firebase UID for authentication
     email VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    role user_role NOT NULL,
+    name VARCHAR(255), -- Nullable initially, filled during account completion
+    role user_role, -- Nullable initially, filled during account completion
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     is_setup_done BOOLEAN DEFAULT FALSE,

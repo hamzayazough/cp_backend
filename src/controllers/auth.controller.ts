@@ -57,31 +57,36 @@ export class AuthController {
     @User() firebaseUser: FirebaseUser,
     @Body() createUserDto: CreateUserDto,
   ) {
-    if (
-      createUserDto.role === 'ADVERTISER' &&
-      !createUserDto.advertiserDetails
-    ) {
-      throw new BadRequestException(
-        'Advertiser details are required for advertiser role',
+    try {
+      if (
+        createUserDto.role === 'ADVERTISER' &&
+        !createUserDto.advertiserDetails
+      ) {
+        throw new BadRequestException(
+          'Advertiser details are required for advertiser role',
+        );
+      }
+
+      if (createUserDto.role === 'PROMOTER' && !createUserDto.promoterDetails) {
+        throw new BadRequestException(
+          'Promoter details are required for promoter role',
+        );
+      }
+
+      const user = await this.userService.completeUserSetup(
+        firebaseUser.uid,
+        createUserDto,
       );
+
+      return {
+        success: true,
+        message: 'Account setup completed successfully',
+        user,
+      };
+    } catch (error) {
+      console.error('Complete account error:', error);
+      throw error;
     }
-
-    if (createUserDto.role === 'PROMOTER' && !createUserDto.promoterDetails) {
-      throw new BadRequestException(
-        'Promoter details are required for promoter role',
-      );
-    }
-
-    const user = await this.userService.completeUserSetup(
-      firebaseUser.uid,
-      createUserDto,
-    );
-
-    return {
-      success: true,
-      message: 'Account setup completed successfully',
-      user,
-    };
   }
 
   /**

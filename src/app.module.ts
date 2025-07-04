@@ -23,8 +23,6 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(FirebaseAuthMiddleware)
-      .forRoutes('protected', 'auth/create-account', 'auth/profile');
+    consumer.apply(FirebaseAuthMiddleware).forRoutes('protected', 'auth/*');
   }
 }
