@@ -7,3 +7,8 @@ export { PromoterLanguageEntity } from './promoter-language.entity';
 export { PromoterSkillEntity } from './promoter-skill.entity';
 export { FollowerEstimateEntity } from './follower-estimate.entity';
 export { PromoterWorkEntity } from './promoter-work.entity';
+export { Campaign } from './campaign.entity';
+export { Transaction } from './transaction.entity';
+export { Wallet } from './wallet.entity';
+export { PromoterCampaign } from './promoter-campaign.entity';
+export { MessageThread, Message } from './message.entity';

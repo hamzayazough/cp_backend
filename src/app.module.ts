@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { UserModule } from './modules/user.module';
+import { PromoterModule } from './modules/promoter.module';
 import { ProtectedController } from './controllers/protected.controller';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 
@@ -17,12 +18,15 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
     DatabaseModule,
     AuthModule,
     UserModule,
+    PromoterModule,
   ],
   controllers: [AppController, ProtectedController],
   providers: [AppService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(FirebaseAuthMiddleware).forRoutes('protected', 'auth/*');
+    consumer
+      .apply(FirebaseAuthMiddleware)
+      .forRoutes('protected', 'auth/*', 'promoter/*');
   }
 }
