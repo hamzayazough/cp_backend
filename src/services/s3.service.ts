@@ -211,6 +211,23 @@ export class S3Service {
   }
 
   /**
+   * Delete an object from S3
+   */
+  async deleteObject(key: string): Promise<void> {
+    try {
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+
+      await this.s3Client.send(deleteCommand);
+    } catch (error) {
+      console.error('Error deleting object from S3:', error);
+      throw new BadRequestException('Failed to delete file from S3');
+    }
+  }
+
+  /**
    * Get a signed URL for downloading/viewing a private file
    */
   async generateSignedDownloadUrl(
@@ -229,6 +246,27 @@ export class S3Service {
       throw new BadRequestException(
         `Failed to generate download URL: ${message}`,
       );
+    }
+  }
+
+  /**
+   * Extract S3 key from URL
+   */
+  extractKeyFromUrl(url: string): string {
+    try {
+      const urlParts = url.split('/');
+      // For our bucket structure, the key is everything after the bucket name
+      // Example: https://bucketname.s3.region.amazonaws.com/user-avatars/uid/filename
+      const bucketIndex = urlParts.findIndex((part) =>
+        part.includes(this.bucketName),
+      );
+      if (bucketIndex === -1) {
+        throw new Error('Invalid S3 URL format');
+      }
+      return urlParts.slice(bucketIndex + 1).join('/');
+    } catch (error) {
+      console.error('Error extracting key from URL:', error);
+      throw new BadRequestException('Invalid S3 URL format');
     }
   }
 

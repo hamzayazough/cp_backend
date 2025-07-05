@@ -498,4 +498,75 @@ export class AuthController {
       throw error;
     }
   }
+
+  /**
+   * Delete advertiser work
+   * Input:
+   *   - Headers: Firebase Auth Token (required)
+   *   - Body: { title: string }
+   * Responses:
+   *   - 200 OK: { success: true, message: string }
+   *   - 400 Bad Request: Title is required
+   *   - 401 Unauthorized: Invalid or missing Firebase token
+   *   - 404 Not Found: Work not found
+   */
+  @Post('delete-advertiser-work')
+  @HttpCode(HttpStatus.OK)
+  async deleteAdvertiserWork(
+    @User() firebaseUser: FirebaseUser,
+    @Body('title') title: string,
+  ) {
+    if (!title || title.trim().length === 0) {
+      throw new BadRequestException('Title is required');
+    }
+
+    try {
+      await this.userService.deleteAdvertiserWork(
+        firebaseUser.uid,
+        title.trim(),
+      );
+
+      return {
+        success: true,
+        message: 'Advertiser work deleted successfully',
+      };
+    } catch (error) {
+      console.error('Delete advertiser work error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete promoter work
+   * Input:
+   *   - Headers: Firebase Auth Token (required)
+   *   - Body: { title: string }
+   * Responses:
+   *   - 200 OK: { success: true, message: string }
+   *   - 400 Bad Request: Title is required
+   *   - 401 Unauthorized: Invalid or missing Firebase token
+   *   - 404 Not Found: Work not found
+   */
+  @Post('delete-promoter-work')
+  @HttpCode(HttpStatus.OK)
+  async deletePromoterWork(
+    @User() firebaseUser: FirebaseUser,
+    @Body('title') title: string,
+  ) {
+    if (!title || title.trim().length === 0) {
+      throw new BadRequestException('Title is required');
+    }
+
+    try {
+      await this.userService.deletePromoterWork(firebaseUser.uid, title.trim());
+
+      return {
+        success: true,
+        message: 'Promoter work deleted successfully',
+      };
+    } catch (error) {
+      console.error('Delete promoter work error:', error);
+      throw error;
+    }
+  }
 }

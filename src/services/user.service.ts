@@ -18,6 +18,7 @@ import { CreateUserDto, User } from '../interfaces/user';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { Language } from 'src/enums/language';
+import { S3Service } from './s3.service';
 
 @Injectable()
 export class UserService {
@@ -40,6 +41,7 @@ export class UserService {
     private readonly followerEstimateRepository: Repository<FollowerEstimateEntity>,
     @InjectRepository(PromoterWorkEntity)
     private readonly promoterWorkRepository: Repository<PromoterWorkEntity>,
+    private readonly s3Service: S3Service,
   ) {}
 
   /**
@@ -144,7 +146,11 @@ export class UserService {
   ): Promise<User> {
     const existingUser = await this.userRepository.findOne({
       where: { firebaseUid },
-      relations: ['advertiserDetails', 'promoterDetails'],
+      relations: [
+        'advertiserDetails',
+        'advertiserDetails.advertiserWorks',
+        'promoterDetails',
+      ],
     });
 
     if (!existingUser) {
@@ -175,7 +181,7 @@ export class UserService {
     existingUser.youtubeUrl = createUserDto.youtubeUrl;
     existingUser.twitterUrl = createUserDto.twitterUrl;
     existingUser.websiteUrl = createUserDto.websiteUrl;
-    existingUser.isSetupDone = true;
+    existingUser.isSetupDone = false;
 
     const savedUser = await this.userRepository.save(existingUser);
 
@@ -232,6 +238,7 @@ export class UserService {
       relations: [
         'advertiserDetails',
         'advertiserDetails.advertiserTypeMappings',
+        'advertiserDetails.advertiserWorks',
         'promoterDetails',
         'promoterDetails.promoterLanguages',
         'promoterDetails.promoterSkills',
@@ -253,6 +260,7 @@ export class UserService {
       relations: [
         'advertiserDetails',
         'advertiserDetails.advertiserTypeMappings',
+        'advertiserDetails.advertiserWorks',
         'promoterDetails',
         'promoterDetails.promoterLanguages',
         'promoterDetails.promoterSkills',
@@ -533,6 +541,14 @@ export class UserService {
           userEntity.advertiserDetails.advertiserTypeMappings?.map(
             (mapping: AdvertiserTypeMappingEntity) => mapping.advertiserType,
           ) || [],
+        advertiserWork:
+          userEntity.advertiserDetails.advertiserWorks?.map((work) => ({
+            title: work.title,
+            description: work.description,
+            mediaUrl: work.mediaUrl,
+            websiteUrl: work.websiteUrl,
+            price: work.price,
+          })) || [],
       };
     }
 
@@ -715,5 +731,88 @@ export class UserService {
     await this.userRepository.save(existingUser);
 
     return this.getUserByFirebaseUid(firebaseUid);
+  }
+
+  /**
+   * Delete advertiser work by title
+   */
+  async deleteAdvertiserWork(
+    firebaseUid: string,
+    title: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: ['advertiserDetails', 'advertiserDetails.advertiserWorks'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.advertiserDetails) {
+      throw new NotFoundException('User is not an advertiser');
+    }
+
+    const workToDelete = user.advertiserDetails.advertiserWorks?.find(
+      (work) => work.title === title,
+    );
+
+    if (!workToDelete) {
+      throw new NotFoundException('Advertiser work not found');
+    }
+
+    // Delete from S3 if mediaUrl exists
+    if (workToDelete.mediaUrl) {
+      try {
+        const key = this.s3Service.extractKeyFromUrl(workToDelete.mediaUrl);
+        await this.s3Service.deleteObject(key);
+      } catch (error) {
+        console.error('Error deleting from S3:', error);
+        // Continue with database deletion even if S3 deletion fails
+      }
+    }
+
+    // Delete from database
+    await this.advertiserWorkRepository.delete(workToDelete.id);
+  }
+
+  /**
+   * Delete promoter work by title
+   */
+  async deletePromoterWork(firebaseUid: string, title: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: ['promoterDetails', 'promoterDetails.promoterWorks'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.promoterDetails) {
+      throw new NotFoundException('User is not a promoter');
+    }
+
+    const workToDelete = user.promoterDetails.promoterWorks?.find(
+      (work) => work.title === title,
+    );
+
+    if (!workToDelete) {
+      throw new NotFoundException('Promoter work not found');
+    }
+
+    // Delete from S3 if mediaUrl exists
+    if (workToDelete.mediaUrl) {
+      try {
+        const key = this.s3Service.extractKeyFromUrl(workToDelete.mediaUrl);
+        await this.s3Service.deleteObject(key);
+      } catch (error) {
+        console.error('Error deleting from S3:', error);
+        // Continue with database deletion even if S3 deletion fails
+      }
+    }
+
+    // Delete from database
+    await this.promoterWorkRepository.delete(workToDelete.id);
   }
 }
