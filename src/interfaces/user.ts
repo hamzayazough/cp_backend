@@ -53,6 +53,11 @@ export interface PromoterDetails {
   works?: PromoterWork[]; // List of past projects (mp4, images)
   followersEstimate?: FollowerEstimate[];
   verified?: boolean;
+
+  // Statistics
+  totalSales?: number;
+  numberOfCampaignDone?: number;
+  totalViewsGenerated?: number;
 }
 
 //--------------------DTOs----------------------------------

@@ -14,7 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from '../services/user.service';
 import { S3Service, UploadResult } from '../services/s3.service';
-import { CreateUserDto } from '../interfaces/user';
+import { CreateUserDto, User as UserInterface } from '../interfaces/user';
 import { PromoterWork } from 'src/interfaces/promoter-work';
 import { AdvertiserWork } from 'src/interfaces/advertiser-work';
 import { User } from '../auth/user.decorator';
@@ -567,6 +567,58 @@ export class AuthController {
     } catch (error) {
       console.error('Delete promoter work error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update user profile information
+   * Input:
+   *   - Headers: Firebase Auth Token (required)
+   *   - Body: Partial<User> (any user fields to update)
+   * Responses:
+   *   - 200 OK: { success: true, message: string, user: User }
+   *   - 400 Bad Request: Invalid user data provided
+   *   - 401 Unauthorized: Invalid or missing Firebase token
+   *   - 404 Not Found: User account not found
+   */
+  @Post('update-profile')
+  @HttpCode(HttpStatus.OK)
+  async updateProfile(
+    @User() firebaseUser: FirebaseUser,
+    @Body() updateData: Partial<UserInterface>,
+  ) {
+    try {
+      // Validate that we have some data to update
+      if (!updateData || Object.keys(updateData).length === 0) {
+        throw new BadRequestException('No update data provided');
+      }
+
+      // Update user profile
+      const user = await this.userService.updateUserProfile(
+        firebaseUser.uid,
+        updateData,
+      );
+
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        user,
+      };
+    } catch (error) {
+      console.error('Update profile error:', error);
+
+      // Handle specific error cases
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException(
+          'User account not found. Please contact support.',
+        );
+      }
+
+      throw new BadRequestException('Invalid user data provided');
     }
   }
 }

@@ -28,6 +28,21 @@ export class PromoterDetailsEntity {
   @Column({ default: false })
   verified: boolean;
 
+  @Column({
+    name: 'total_sales',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  totalSales: number;
+
+  @Column({ name: 'number_of_campaign_done', default: 0 })
+  numberOfCampaignDone: number;
+
+  @Column({ name: 'total_views_generated', type: 'bigint', default: 0 })
+  totalViewsGenerated: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

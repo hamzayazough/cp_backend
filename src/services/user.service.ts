@@ -381,128 +381,177 @@ export class UserService {
 
   private async updateAdvertiserDetails(
     advertiserDetailsId: string,
-    advertiserData: CreateUserDto['advertiserDetails'],
+    advertiserData: any,
   ): Promise<void> {
     if (!advertiserData) {
       throw new Error('Advertiser data is required');
     }
 
-    // Update advertiser details
-    await this.advertiserDetailsRepository.update(advertiserDetailsId, {
-      companyName: advertiserData.companyName,
-      companyWebsite: advertiserData.companyWebsite,
-    });
+    // Update basic advertiser details only if provided
+    const updateFields: any = {};
+    if (advertiserData.companyName) {
+      updateFields.companyName = advertiserData.companyName;
+    }
+    if (advertiserData.companyWebsite) {
+      updateFields.companyWebsite = advertiserData.companyWebsite;
+    }
+    if (advertiserData.verified !== undefined) {
+      updateFields.verified = advertiserData.verified;
+    }
 
-    // Remove existing advertiser type mappings
-    await this.advertiserTypeMappingRepository.delete({
-      advertiserId: advertiserDetailsId,
-    });
+    if (Object.keys(updateFields).length > 0) {
+      await this.advertiserDetailsRepository.update(
+        advertiserDetailsId,
+        updateFields,
+      );
+    }
 
-    // Add new advertiser type mappings
+    // Update advertiser types only if provided
     if (
       advertiserData.advertiserTypes &&
-      advertiserData.advertiserTypes.length > 0
+      Array.isArray(advertiserData.advertiserTypes)
     ) {
-      const typeMappings = advertiserData.advertiserTypes.map(
-        (type: AdvertiserType) =>
-          this.advertiserTypeMappingRepository.create({
-            advertiserId: advertiserDetailsId,
-            advertiserType: type,
-          }),
-      );
+      // Remove existing advertiser type mappings
+      await this.advertiserTypeMappingRepository.delete({
+        advertiserId: advertiserDetailsId,
+      });
 
-      await this.advertiserTypeMappingRepository.save(typeMappings);
+      // Add new advertiser type mappings
+      if (advertiserData.advertiserTypes.length > 0) {
+        const typeMappings = advertiserData.advertiserTypes.map(
+          (type: AdvertiserType) =>
+            this.advertiserTypeMappingRepository.create({
+              advertiserId: advertiserDetailsId,
+              advertiserType: type,
+            }),
+        );
+
+        await this.advertiserTypeMappingRepository.save(typeMappings);
+      }
     }
   }
 
   private async updatePromoterDetails(
     promoterDetailsId: string,
-    promoterData: CreateUserDto['promoterDetails'],
+    promoterData: any,
   ): Promise<void> {
     if (!promoterData) {
       throw new Error('Promoter data is required');
     }
 
-    // Update promoter details
-    await this.promoterDetailsRepository.update(promoterDetailsId, {
-      location: promoterData.location,
-    });
+    // Update promoter details fields only if provided
+    const updateFields: any = {};
+    if (promoterData.location !== undefined) {
+      updateFields.location = promoterData.location;
+    }
+    if (promoterData.verified !== undefined) {
+      updateFields.verified = promoterData.verified;
+    }
+    if (promoterData.totalSales !== undefined) {
+      updateFields.totalSales = promoterData.totalSales;
+    }
+    if (promoterData.numberOfCampaignDone !== undefined) {
+      updateFields.numberOfCampaignDone = promoterData.numberOfCampaignDone;
+    }
+    if (promoterData.totalViewsGenerated !== undefined) {
+      updateFields.totalViewsGenerated = promoterData.totalViewsGenerated;
+    }
 
-    // Remove existing languages
-    await this.promoterLanguageRepository.delete({
-      promoterId: promoterDetailsId,
-    });
+    if (Object.keys(updateFields).length > 0) {
+      await this.promoterDetailsRepository.update(
+        promoterDetailsId,
+        updateFields,
+      );
+    }
 
-    // Remove existing skills
-    await this.promoterSkillRepository.delete({
-      promoterId: promoterDetailsId,
-    });
-
-    // Remove existing follower estimates
-    await this.followerEstimateRepository.delete({
-      promoterId: promoterDetailsId,
-    });
-
-    // Remove existing works
-    await this.promoterWorkRepository.delete({
-      promoterId: promoterDetailsId,
-    });
-
-    // Add new languages
+    // Update languages only if provided
     if (
       promoterData.languagesSpoken &&
-      promoterData.languagesSpoken.length > 0
+      Array.isArray(promoterData.languagesSpoken)
     ) {
-      const languages = promoterData.languagesSpoken.map((language: Language) =>
-        this.promoterLanguageRepository.create({
-          promoterId: promoterDetailsId,
-          language: language,
-        }),
-      );
+      // Remove existing languages
+      await this.promoterLanguageRepository.delete({
+        promoterId: promoterDetailsId,
+      });
 
-      await this.promoterLanguageRepository.save(languages);
+      // Add new languages
+      if (promoterData.languagesSpoken.length > 0) {
+        const languages = promoterData.languagesSpoken.map(
+          (language: Language) =>
+            this.promoterLanguageRepository.create({
+              promoterId: promoterDetailsId,
+              language: language,
+            }),
+        );
+
+        await this.promoterLanguageRepository.save(languages);
+      }
     }
 
-    // Add new skills
-    if (promoterData.skills && promoterData.skills.length > 0) {
-      const skills = promoterData.skills.map((skill) =>
-        this.promoterSkillRepository.create({
-          promoterId: promoterDetailsId,
-          skill,
-        }),
-      );
+    // Update skills only if provided
+    if (promoterData.skills && Array.isArray(promoterData.skills)) {
+      // Remove existing skills
+      await this.promoterSkillRepository.delete({
+        promoterId: promoterDetailsId,
+      });
 
-      await this.promoterSkillRepository.save(skills);
+      // Add new skills
+      if (promoterData.skills.length > 0) {
+        const skills = promoterData.skills.map((skill) =>
+          this.promoterSkillRepository.create({
+            promoterId: promoterDetailsId,
+            skill,
+          }),
+        );
+
+        await this.promoterSkillRepository.save(skills);
+      }
     }
 
-    // Add new follower estimates
+    // Update follower estimates only if provided
     if (
       promoterData.followerEstimates &&
-      promoterData.followerEstimates.length > 0
+      Array.isArray(promoterData.followerEstimates)
     ) {
-      const estimates = promoterData.followerEstimates.map((estimate) =>
-        this.followerEstimateRepository.create({
-          promoterId: promoterDetailsId,
-          platform: estimate.platform,
-          count: estimate.count,
-        }),
-      );
+      // Remove existing follower estimates
+      await this.followerEstimateRepository.delete({
+        promoterId: promoterDetailsId,
+      });
 
-      await this.followerEstimateRepository.save(estimates);
+      // Add new follower estimates
+      if (promoterData.followerEstimates.length > 0) {
+        const estimates = promoterData.followerEstimates.map((estimate) =>
+          this.followerEstimateRepository.create({
+            promoterId: promoterDetailsId,
+            platform: estimate.platform,
+            count: estimate.count,
+          }),
+        );
+
+        await this.followerEstimateRepository.save(estimates);
+      }
     }
 
-    // Add new works
-    if (promoterData.works && promoterData.works.length > 0) {
-      const works = promoterData.works.map((work) =>
-        this.promoterWorkRepository.create({
-          promoterId: promoterDetailsId,
-          title: work.title,
-          description: work.description,
-          mediaUrl: work.mediaUrl,
-        }),
-      );
+    // Update works only if provided
+    if (promoterData.works && Array.isArray(promoterData.works)) {
+      // Remove existing works
+      await this.promoterWorkRepository.delete({
+        promoterId: promoterDetailsId,
+      });
 
-      await this.promoterWorkRepository.save(works);
+      // Add new works
+      if (promoterData.works.length > 0) {
+        const works = promoterData.works.map((work) =>
+          this.promoterWorkRepository.create({
+            promoterId: promoterDetailsId,
+            title: work.title,
+            description: work.description,
+            mediaUrl: work.mediaUrl,
+          }),
+        );
+
+        await this.promoterWorkRepository.save(works);
+      }
     }
   }
 
@@ -556,6 +605,14 @@ export class UserService {
       user.promoterDetails = {
         location: userEntity.promoterDetails.location,
         verified: userEntity.promoterDetails.verified,
+        totalSales: userEntity.promoterDetails.totalSales
+          ? parseFloat(userEntity.promoterDetails.totalSales.toString())
+          : 0,
+        numberOfCampaignDone:
+          userEntity.promoterDetails.numberOfCampaignDone || 0,
+        totalViewsGenerated: userEntity.promoterDetails.totalViewsGenerated
+          ? parseInt(userEntity.promoterDetails.totalViewsGenerated.toString())
+          : 0,
         languagesSpoken:
           userEntity.promoterDetails.promoterLanguages?.map(
             (lang) => lang.language,
@@ -814,5 +871,113 @@ export class UserService {
 
     // Delete from database
     await this.promoterWorkRepository.delete(workToDelete.id);
+  }
+
+  /**
+   * Update user profile with general information
+   */
+  async updateUserProfile(
+    firebaseUid: string,
+    updateData: Partial<User>,
+  ): Promise<User> {
+    // Find user by Firebase UID
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: [
+        'advertiserDetails',
+        'advertiserDetails.advertiserTypeMappings',
+        'advertiserDetails.advertiserWorks',
+        'promoterDetails',
+        'promoterDetails.promoterLanguages',
+        'promoterDetails.promoterSkills',
+        'promoterDetails.followerEstimates',
+        'promoterDetails.promoterWorks',
+      ],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Extract fields that can be updated directly on the user entity
+    const { advertiserDetails, promoterDetails, ...userFields } = updateData;
+
+    // Update user basic fields
+    if (Object.keys(userFields).length > 0) {
+      await this.userRepository.update(user.id, userFields);
+    }
+
+    // Update advertiser details if provided
+    if (
+      advertiserDetails &&
+      user.role === 'ADVERTISER' &&
+      user.advertiserDetails
+    ) {
+      await this.updateAdvertiserDetails(
+        user.advertiserDetails.id,
+        advertiserDetails,
+      );
+    }
+
+    // Update promoter details if provided
+    if (promoterDetails && user.role === 'PROMOTER' && user.promoterDetails) {
+      await this.updatePromoterDetails(
+        user.promoterDetails.id,
+        promoterDetails,
+      );
+    }
+
+    // Return updated user
+    return await this.getUserByFirebaseUid(firebaseUid);
+  }
+
+  /**
+   * Delete user account
+   */
+  async deleteUser(firebaseUid: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      relations: [
+        'advertiserDetails',
+        'advertiserDetails.advertiserWorks',
+        'promoterDetails',
+        'promoterDetails.promoterWorks',
+      ],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Delete associated advertiser works
+    if (user.advertiserDetails) {
+      for (const work of user.advertiserDetails.advertiserWorks) {
+        if (work.mediaUrl) {
+          try {
+            const key = this.s3Service.extractKeyFromUrl(work.mediaUrl);
+            await this.s3Service.deleteObject(key);
+          } catch (error) {
+            console.error('Error deleting advertiser work from S3:', error);
+          }
+        }
+      }
+    }
+
+    // Delete associated promoter works
+    if (user.promoterDetails) {
+      for (const work of user.promoterDetails.promoterWorks) {
+        if (work.mediaUrl) {
+          try {
+            const key = this.s3Service.extractKeyFromUrl(work.mediaUrl);
+            await this.s3Service.deleteObject(key);
+          } catch (error) {
+            console.error('Error deleting promoter work from S3:', error);
+          }
+        }
+      }
+    }
+
+    // Delete user
+    await this.userRepository.delete(user.id);
   }
 }

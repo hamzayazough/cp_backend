@@ -102,6 +102,34 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- Meeting plan enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'meeting_plan') THEN
+        CREATE TYPE meeting_plan AS ENUM (
+            'ONE_TIME', 'WEEKLY', 'BIWEEKLY', 'CUSTOM'
+        );
+    END IF;
+END $$;
+
+-- Sales tracking method enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sales_tracking_method') THEN
+        CREATE TYPE sales_tracking_method AS ENUM (
+            'REF_LINK', 'COUPON_CODE'
+        );
+    END IF;
+END $$;
+
+-- Deliverable enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'deliverable') THEN
+        CREATE TYPE deliverable AS ENUM (
+            'PROMOTIONAL_VIDEO', 'SCRIPT', 'CONTENT_PLAN', 'WEEKLY_REPORT',
+            'LIVE_SESSION', 'PRODUCT_REVIEW', 'INSTAGRAM_POST', 'TIKTOK_VIDEO', 'CUSTOM'
+        );
+    END IF;
+END $$;
+
 -- Main users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -129,7 +157,12 @@ CREATE TABLE IF NOT EXISTS users (
     
     -- Financial
     stripe_account_id VARCHAR(255),
-    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0)
+    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0),
+    
+    -- Statistics
+    total_sales DECIMAL(10,2) DEFAULT 0.00 CHECK (total_sales >= 0),
+    number_of_campaign_done INTEGER DEFAULT 0 CHECK (number_of_campaign_done >= 0),
+    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
 );
 
 -- Advertiser details table
@@ -173,6 +206,9 @@ CREATE TABLE IF NOT EXISTS promoter_details (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     location VARCHAR(255),
     verified BOOLEAN DEFAULT FALSE,
+    total_sales DECIMAL(10, 2) DEFAULT 0.00,
+    number_of_campaign_done INTEGER DEFAULT 0,
+    total_views_generated BIGINT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
@@ -229,32 +265,40 @@ CREATE TABLE IF NOT EXISTS campaigns (
     status campaign_status NOT NULL DEFAULT 'ACTIVE',
     created_by UUID REFERENCES users(id) ON DELETE CASCADE, -- advertiser_id
     is_public BOOLEAN DEFAULT TRUE,
-    application_required BOOLEAN DEFAULT FALSE,
-    deadline TIMESTAMP WITH TIME ZONE,
     expiry_date TIMESTAMP WITH TIME ZONE,
-    budget DECIMAL(10,2),
     media_url TEXT,
+    selected_promoter_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    discord_invite_link TEXT,
+    
+    -- Store advertiser types as JSON array
+    advertiser_type JSON,
     
     -- VISIBILITY specific fields
     cpv DECIMAL(10,4), -- cost per 100 views
     max_views INTEGER,
     track_url TEXT,
     
+    -- CONSULTANT & SELLER shared fields
+    max_budget DECIMAL(10,2),
+    min_budget DECIMAL(10,2),
+    deadline TIMESTAMP WITH TIME ZONE,
+    
     -- CONSULTANT specific fields
-    max_quote DECIMAL(10,2),
-    reference_url TEXT,
+    expected_deliverables JSON, -- Array of Deliverable enums
     meeting_count INTEGER,
+    reference_url TEXT,
     
     -- SELLER specific fields
+    seller_requirements JSON, -- Array of Deliverable enums
+    deliverables JSON, -- Array of Deliverable enums
+    meeting_plan meeting_plan, -- MeetingPlan enum
     deadline_strict BOOLEAN DEFAULT FALSE,
+    promoter_links JSON, -- Array of strings for promoter-created links
     
     -- SALESMAN specific fields
     commission_per_sale DECIMAL(10,2),
+    track_sales_via sales_tracking_method, -- SalesTrackingMethod enum
     code_prefix VARCHAR(50),
-    only_approved_can_sell BOOLEAN DEFAULT FALSE,
-    
-    -- Selection result
-    selected_promoter_id UUID REFERENCES users(id) ON DELETE SET NULL,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

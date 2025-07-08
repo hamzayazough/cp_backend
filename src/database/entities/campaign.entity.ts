@@ -9,7 +9,14 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { CampaignType, CampaignStatus } from '../../enums/campaign-type';
+import {
+  CampaignType,
+  CampaignStatus,
+  SalesTrackingMethod,
+  Deliverable,
+  MeetingPlan,
+} from '../../enums/campaign-type';
+import { AdvertiserType } from '../../enums/advertiser-type';
 import { PromoterCampaign } from './promoter-campaign.entity';
 
 @Entity('campaigns')
@@ -39,20 +46,25 @@ export class Campaign {
   @Column({ name: 'is_public', type: 'boolean', default: true })
   isPublic: boolean;
 
-  @Column({ name: 'application_required', type: 'boolean', default: false })
-  applicationRequired: boolean;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  deadline?: Date;
-
   @Column({ name: 'expiry_date', type: 'timestamptz', nullable: true })
   expiryDate?: Date;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  budget?: number;
-
   @Column({ name: 'media_url', type: 'text', nullable: true })
   mediaUrl?: string;
+
+  @Column({ name: 'selected_promoter_id', type: 'uuid', nullable: true })
+  selectedPromoterId?: string;
+
+  @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
+  discordInviteLink?: string;
+
+  // Store advertiser types as JSON array
+  @Column({
+    name: 'advertiser_type',
+    type: 'json',
+    nullable: true,
+  })
+  advertiserType?: AdvertiserType[];
 
   // VISIBILITY specific fields
   @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true })
@@ -64,25 +76,74 @@ export class Campaign {
   @Column({ name: 'track_url', type: 'text', nullable: true })
   trackUrl?: string;
 
-  // CONSULTANT specific fields
+  // CONSULTANT & SELLER shared fields
   @Column({
-    name: 'max_quote',
+    name: 'max_budget',
     type: 'decimal',
     precision: 10,
     scale: 2,
     nullable: true,
   })
-  maxQuote?: number;
+  maxBudget?: number;
 
-  @Column({ name: 'reference_url', type: 'text', nullable: true })
-  referenceUrl?: string;
+  @Column({
+    name: 'min_budget',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  minBudget?: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  deadline?: Date;
+
+  // CONSULTANT specific fields
+  @Column({
+    name: 'expected_deliverables',
+    type: 'json',
+    nullable: true,
+  })
+  expectedDeliverables?: Deliverable[];
 
   @Column({ name: 'meeting_count', type: 'integer', nullable: true })
   meetingCount?: number;
 
+  @Column({ name: 'reference_url', type: 'text', nullable: true })
+  referenceUrl?: string;
+
   // SELLER specific fields
-  @Column({ name: 'deadline_strict', type: 'boolean', default: false })
+  @Column({
+    name: 'seller_requirements',
+    type: 'json',
+    nullable: true,
+  })
+  sellerRequirements?: Deliverable[];
+
+  @Column({
+    name: 'deliverables',
+    type: 'json',
+    nullable: true,
+  })
+  deliverables?: Deliverable[];
+
+  @Column({
+    name: 'meeting_plan',
+    type: 'enum',
+    enum: MeetingPlan,
+    nullable: true,
+  })
+  meetingPlan?: MeetingPlan;
+
+  @Column({ name: 'deadline_strict', type: 'boolean', nullable: true })
   deadlineStrict?: boolean;
+
+  @Column({
+    name: 'promoter_links',
+    type: 'json',
+    nullable: true,
+  })
+  promoterLinks?: string[];
 
   // SALESMAN specific fields
   @Column({
@@ -94,15 +155,16 @@ export class Campaign {
   })
   commissionPerSale?: number;
 
+  @Column({
+    name: 'track_sales_via',
+    type: 'enum',
+    enum: SalesTrackingMethod,
+    nullable: true,
+  })
+  trackSalesVia?: SalesTrackingMethod;
+
   @Column({ name: 'code_prefix', type: 'varchar', length: 50, nullable: true })
   codePrefix?: string;
-
-  @Column({ name: 'only_approved_can_sell', type: 'boolean', default: false })
-  onlyApprovedCanSell?: boolean;
-
-  // Selection result
-  @Column({ name: 'selected_promoter_id', type: 'uuid', nullable: true })
-  selectedPromoterId?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

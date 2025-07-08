@@ -285,7 +285,7 @@ export class PromoterService {
       title: campaign.title,
       type: campaign.type,
       cpv: campaign.cpv,
-      budget: campaign.budget,
+      budget: this.getCampaignBudget(campaign),
       advertiser: campaign.advertiser?.name || 'Unknown',
       tags: this.getCampaignTags(campaign),
       description: campaign.description,
@@ -427,5 +427,23 @@ export class PromoterService {
       return campaign.cpv * 100; // Assuming 100 views as baseline
     }
     return 0;
+  }
+
+  private getCampaignBudget(campaign: Campaign): number | undefined {
+    if (
+      campaign.type === CampaignType.CONSULTANT ||
+      campaign.type === CampaignType.SELLER
+    ) {
+      return campaign.maxBudget;
+    }
+    // For VISIBILITY and SALESMAN campaigns, calculate budget based on their specific fields
+    if (
+      campaign.type === CampaignType.VISIBILITY &&
+      campaign.cpv &&
+      campaign.maxViews
+    ) {
+      return (campaign.cpv * campaign.maxViews) / 100; // Convert per 100 views to total budget
+    }
+    return undefined;
   }
 }
