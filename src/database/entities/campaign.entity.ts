@@ -166,6 +166,47 @@ export class Campaign {
   @Column({ name: 'code_prefix', type: 'varchar', length: 50, nullable: true })
   codePrefix?: string;
 
+  // Payment tracking fields
+  @Column({
+    name: 'budget_held',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  budgetHeld: number;
+
+  @Column({
+    name: 'final_payout_amount',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  finalPayoutAmount?: number;
+
+  @Column({ name: 'payout_executed', type: 'boolean', default: false })
+  payoutExecuted: boolean;
+
+  @Column({ name: 'payout_date', type: 'timestamptz', nullable: true })
+  payoutDate?: Date;
+
+  @Column({
+    name: 'stripe_charge_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  stripeChargeId?: string;
+
+  @Column({
+    name: 'stripe_transfer_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  stripeTransferId?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

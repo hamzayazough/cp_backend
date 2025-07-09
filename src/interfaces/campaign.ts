@@ -29,6 +29,14 @@ export interface Campaign {
 
   //discord generated invite link once the campaign is created
   discordInviteLink?: string;
+
+  // Payment tracking fields
+  budgetHeld: number; // Amount currently reserved/held from advertiser
+  finalPayoutAmount?: number; // Actual amount to pay to promoter (negotiated/agreed)
+  payoutExecuted: boolean; // Indicates if transfer to promoter completed
+  payoutDate?: Date; // When payout was executed
+  stripeChargeId?: string; // Stripe charge ID for funds collection
+  stripeTransferId?: string; // Stripe transfer ID for payout to promoter
 }
 
 export interface VisibilityCampaign extends Campaign {

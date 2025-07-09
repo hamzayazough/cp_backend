@@ -12,3 +12,23 @@ export { Transaction } from './transaction.entity';
 export { Wallet } from './wallet.entity';
 export { PromoterCampaign } from './promoter-campaign.entity';
 export { MessageThread, Message } from './message.entity';
+export { PayoutRecord } from './payout-record.entity';
+export { AdvertiserCharge } from './advertiser-charge.entity';
+export { PromoterBalance } from './promoter-balance.entity';
+export { AdvertiserSpend } from './advertiser-spend.entity';
+
+// Analytics entities
+export { CampaignAnalytics } from './campaign-analytics.entity';
+export { PromoterPerformanceMetrics } from './promoter-performance-metrics.entity';
+export { AdvertiserAnalytics } from './advertiser-analytics.entity';
+export { PlatformMetrics } from './platform-metrics.entity';
+
+// Financial entities
+export { PaymentTransaction } from './payment-transaction.entity';
+export { StripeConnectAccount } from './stripe-connect-account.entity';
+export { PaymentMethod } from './payment-method.entity';
+export { CampaignBudgetAllocation } from './campaign-budget-allocation.entity';
+export { BillingPeriodSummary } from './billing-period-summary.entity';
+export { FinancialAnalytics } from './financial-analytics.entity';
+export { PayoutSettings } from './payout-settings.entity';
+export { Invoice } from './invoice.entity';
