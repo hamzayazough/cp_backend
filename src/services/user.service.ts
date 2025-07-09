@@ -144,7 +144,6 @@ export class UserService {
     firebaseUid: string,
     createUserDto: CreateUserDto,
   ): Promise<User> {
-    console.log('create user dto:', createUserDto);
     const existingUser = await this.userRepository.findOne({
       where: { firebaseUid },
       relations: [
@@ -153,7 +152,6 @@ export class UserService {
         'promoterDetails',
       ],
     });
-    console.log('user found:', existingUser);
 
     if (!existingUser) {
       throw new NotFoundException('User account not found');
@@ -184,7 +182,6 @@ export class UserService {
     existingUser.twitterUrl = createUserDto.twitterUrl;
     existingUser.websiteUrl = createUserDto.websiteUrl;
     existingUser.isSetupDone = false;
-    console.log('existing user before saving update:', existingUser);
     const savedUser = await this.userRepository.save(existingUser);
 
     // Handle advertiser details
@@ -192,7 +189,6 @@ export class UserService {
       createUserDto.role === 'ADVERTISER' &&
       createUserDto.advertiserDetails
     ) {
-      console.log('not suppose to be here');
       if (existingUser.advertiserDetails) {
         // Update existing advertiser details
         await this.updateAdvertiserDetails(
@@ -201,7 +197,6 @@ export class UserService {
         );
       } else {
         // Create new advertiser details
-        console.log('suppose to be here');
         await this.createAdvertiserDetails(
           savedUser.id,
           createUserDto.advertiserDetails,

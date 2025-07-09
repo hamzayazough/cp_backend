@@ -47,29 +47,22 @@ export class PromoterService {
     const data: PromoterDashboardData = {};
 
     // Find promoter by Firebase UID
-    console.log('Looking for user with Firebase UID:', firebaseUid);
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
     });
-
-    console.log('Found promoter:', promoter);
 
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
 
     const promoterId = promoter.id;
-    console.log('Promoter ID:', promoterId);
 
     // Get actual data from database
-    console.log('Required data:', request);
     if (request.includeStats) {
       data.stats = await this.getPromoterStats(promoterId);
     }
-    console.log('Promoter stats:', data.stats);
 
     if (request.includeCampaigns) {
-      console.log('Fetching active campaigns for promoter:', promoterId);
       data.activeCampaigns = await this.getActiveCampaigns(
         promoterId,
         request.activeCampaignLimit || 10,
@@ -77,7 +70,6 @@ export class PromoterService {
     }
 
     if (request.includeSuggestions) {
-      console.log('Fetching suggested campaigns for promoter:', promoterId);
       data.suggestedCampaigns = await this.getSuggestedCampaigns(
         promoterId,
         request.suggestedCampaignLimit || 5,
@@ -85,7 +77,6 @@ export class PromoterService {
     }
 
     if (request.includeTransactions) {
-      console.log('Fetching recent transactions for promoter:', promoterId);
       data.recentTransactions = await this.getRecentTransactions(
         promoterId,
         request.transactionLimit || 5,
@@ -93,7 +84,6 @@ export class PromoterService {
     }
 
     if (request.includeMessages) {
-      console.log('Fetching recent messages for promoter:', promoterId);
       data.recentMessages = await this.getRecentMessages(
         promoterId,
         request.messageLimit || 5,
@@ -101,7 +91,6 @@ export class PromoterService {
     }
 
     if (request.includeWallet) {
-      console.log('Fetching wallet info for promoter:', promoterId);
       data.wallet = await this.getWalletInfo(promoterId);
     }
 
@@ -109,8 +98,6 @@ export class PromoterService {
   }
 
   private async getPromoterStats(promoterId: string): Promise<PromoterStats> {
-    console.log('Calculating promoter stats for ID:', promoterId);
-
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
@@ -126,7 +113,6 @@ export class PromoterService {
       yesterday.getDate(),
     );
 
-    console.log('Fetching earnings this week...');
     const earningsThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
@@ -134,9 +120,7 @@ export class PromoterService {
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
-    console.log('Earnings this week:', earningsThisWeek);
 
-    console.log('Fetching earnings last week...');
     const earningsLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
@@ -145,18 +129,14 @@ export class PromoterService {
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
-    console.log('Earnings last week:', earningsLastWeek);
 
-    console.log('Fetching views today...');
     const viewsToday = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .select('SUM(pc.viewsGenerated)', 'total')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.updatedAt >= :startOfToday', { startOfToday })
       .getRawOne();
-    console.log('Views today:', viewsToday);
 
-    console.log('Fetching views yesterday...');
     const viewsYesterday = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .select('SUM(pc.viewsGenerated)', 'total')
@@ -164,9 +144,7 @@ export class PromoterService {
       .andWhere('pc.updatedAt >= :startOfYesterday', { startOfYesterday })
       .andWhere('pc.updatedAt < :startOfToday', { startOfToday })
       .getRawOne();
-    console.log('Views yesterday:', viewsYesterday);
 
-    console.log('Fetching sales this week...');
     const salesThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
@@ -175,9 +153,7 @@ export class PromoterService {
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
-    console.log('Sales this week:', salesThisWeek);
 
-    console.log('Fetching sales last week...');
     const salesLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
@@ -187,23 +163,18 @@ export class PromoterService {
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
-    console.log('Sales last week:', salesLastWeek);
 
-    console.log('Fetching active campaigns count...');
     const activeCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.status = :status', { status: 'ONGOING' })
       .getCount();
-    console.log('Active campaigns:', activeCampaigns);
 
-    console.log('Fetching pending review campaigns count...');
     const pendingReviewCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
       .getCount();
-    console.log('Pending review campaigns:', pendingReviewCampaigns);
 
     const earningsThisWeekNum = parseFloat(earningsThisWeek?.total || '0');
     const earningsLastWeekNum = parseFloat(earningsLastWeek?.total || '0');
