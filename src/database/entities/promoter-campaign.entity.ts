@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 
 export enum PromoterCampaignStatus {
   ONGOING = 'ONGOING',
@@ -50,9 +50,9 @@ export class PromoterCampaign {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Campaign, { eager: false })
+  @ManyToOne(() => CampaignEntity, { eager: false })
   @JoinColumn({ name: 'campaign_id' })
-  campaign: Campaign;
+  campaign: CampaignEntity;
 
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'promoter_id' })

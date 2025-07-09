@@ -14,7 +14,7 @@ import {
   PromoterWalletDirectEarnings,
 } from '../interfaces/promoter-dashboard';
 import { UserEntity } from '../database/entities/user.entity';
-import { Campaign } from '../database/entities/campaign.entity';
+import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
@@ -26,8 +26,8 @@ export class PromoterService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
-    @InjectRepository(Campaign)
-    private campaignRepository: Repository<Campaign>,
+    @InjectRepository(CampaignEntity)
+    private campaignRepository: Repository<CampaignEntity>,
     @InjectRepository(Transaction)
     private transactionRepository: Repository<Transaction>,
     @InjectRepository(Wallet)
@@ -62,11 +62,14 @@ export class PromoterService {
     console.log('Promoter ID:', promoterId);
 
     // Get actual data from database
+    console.log('Required data:', request);
     if (request.includeStats) {
       data.stats = await this.getPromoterStats(promoterId);
     }
+    console.log('Promoter stats:', data.stats);
 
     if (request.includeCampaigns) {
+      console.log('Fetching active campaigns for promoter:', promoterId);
       data.activeCampaigns = await this.getActiveCampaigns(
         promoterId,
         request.activeCampaignLimit || 10,
@@ -74,6 +77,7 @@ export class PromoterService {
     }
 
     if (request.includeSuggestions) {
+      console.log('Fetching suggested campaigns for promoter:', promoterId);
       data.suggestedCampaigns = await this.getSuggestedCampaigns(
         promoterId,
         request.suggestedCampaignLimit || 5,
@@ -81,6 +85,7 @@ export class PromoterService {
     }
 
     if (request.includeTransactions) {
+      console.log('Fetching recent transactions for promoter:', promoterId);
       data.recentTransactions = await this.getRecentTransactions(
         promoterId,
         request.transactionLimit || 5,
@@ -88,6 +93,7 @@ export class PromoterService {
     }
 
     if (request.includeMessages) {
+      console.log('Fetching recent messages for promoter:', promoterId);
       data.recentMessages = await this.getRecentMessages(
         promoterId,
         request.messageLimit || 5,
@@ -95,6 +101,7 @@ export class PromoterService {
     }
 
     if (request.includeWallet) {
+      console.log('Fetching wallet info for promoter:', promoterId);
       data.wallet = await this.getWalletInfo(promoterId);
     }
 
@@ -102,6 +109,8 @@ export class PromoterService {
   }
 
   private async getPromoterStats(promoterId: string): Promise<PromoterStats> {
+    console.log('Calculating promoter stats for ID:', promoterId);
+
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
@@ -117,7 +126,7 @@ export class PromoterService {
       yesterday.getDate(),
     );
 
-    // Get earnings this week vs last week
+    console.log('Fetching earnings this week...');
     const earningsThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
@@ -125,7 +134,9 @@ export class PromoterService {
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
+    console.log('Earnings this week:', earningsThisWeek);
 
+    console.log('Fetching earnings last week...');
     const earningsLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
@@ -134,15 +145,18 @@ export class PromoterService {
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
+    console.log('Earnings last week:', earningsLastWeek);
 
-    // Get views today vs yesterday
+    console.log('Fetching views today...');
     const viewsToday = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .select('SUM(pc.viewsGenerated)', 'total')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.updatedAt >= :startOfToday', { startOfToday })
       .getRawOne();
+    console.log('Views today:', viewsToday);
 
+    console.log('Fetching views yesterday...');
     const viewsYesterday = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .select('SUM(pc.viewsGenerated)', 'total')
@@ -150,8 +164,9 @@ export class PromoterService {
       .andWhere('pc.updatedAt >= :startOfYesterday', { startOfYesterday })
       .andWhere('pc.updatedAt < :startOfToday', { startOfToday })
       .getRawOne();
+    console.log('Views yesterday:', viewsYesterday);
 
-    // Get sales this week vs last week (assuming salesman commission transactions)
+    console.log('Fetching sales this week...');
     const salesThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
@@ -160,7 +175,9 @@ export class PromoterService {
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
+    console.log('Sales this week:', salesThisWeek);
 
+    console.log('Fetching sales last week...');
     const salesLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
@@ -170,20 +187,23 @@ export class PromoterService {
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
+    console.log('Sales last week:', salesLastWeek);
 
-    // Get active campaigns count
+    console.log('Fetching active campaigns count...');
     const activeCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.status = :status', { status: 'ONGOING' })
       .getCount();
+    console.log('Active campaigns:', activeCampaigns);
 
-    // Get pending review campaigns count
+    console.log('Fetching pending review campaigns count...');
     const pendingReviewCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
       .getCount();
+    console.log('Pending review campaigns:', pendingReviewCampaigns);
 
     const earningsThisWeekNum = parseFloat(earningsThisWeek?.total || '0');
     const earningsLastWeekNum = parseFloat(earningsLastWeek?.total || '0');
@@ -394,7 +414,7 @@ export class PromoterService {
     };
   }
 
-  private getCampaignTags(campaign: Campaign): string[] {
+  private getCampaignTags(campaign: CampaignEntity): string[] {
     const tags: string[] = [];
 
     if (campaign.type === CampaignType.VISIBILITY) {
@@ -408,7 +428,7 @@ export class PromoterService {
     return tags;
   }
 
-  private getCampaignRequirements(campaign: Campaign): string[] {
+  private getCampaignRequirements(campaign: CampaignEntity): string[] {
     const requirements: string[] = [];
 
     if (campaign.type === CampaignType.VISIBILITY) {
@@ -422,14 +442,14 @@ export class PromoterService {
     return requirements;
   }
 
-  private calculateEstimatedEarnings(campaign: Campaign): number {
+  private calculateEstimatedEarnings(campaign: CampaignEntity): number {
     if (campaign.type === CampaignType.VISIBILITY && campaign.cpv) {
       return campaign.cpv * 100; // Assuming 100 views as baseline
     }
     return 0;
   }
 
-  private getCampaignBudget(campaign: Campaign): number | undefined {
+  private getCampaignBudget(campaign: CampaignEntity): number | undefined {
     if (
       campaign.type === CampaignType.CONSULTANT ||
       campaign.type === CampaignType.SELLER

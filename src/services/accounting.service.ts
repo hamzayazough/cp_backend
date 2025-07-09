@@ -83,7 +83,7 @@ export class AccountingService {
         earnings.totalEarnings += payout.amount;
 
         // Categorize by campaign type
-        const campaignType = payout.campaign?.type as CampaignType;
+        const campaignType = payout.campaign?.type;
         switch (campaignType) {
           case CampaignType.VISIBILITY:
             earnings.earningsByType.visibility += payout.amount;

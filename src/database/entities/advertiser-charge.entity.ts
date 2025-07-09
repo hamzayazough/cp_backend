@@ -8,7 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 
 export enum ChargeStatus {
   PENDING = 'PENDING',
@@ -87,7 +87,7 @@ export class AdvertiserCharge {
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
 
-  @ManyToOne(() => Campaign, { eager: false })
+  @ManyToOne(() => CampaignEntity, { eager: false })
   @JoinColumn({ name: 'campaign_id' })
-  campaign?: Campaign;
+  campaign?: CampaignEntity;
 }

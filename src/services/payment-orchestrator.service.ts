@@ -10,13 +10,13 @@ import {
   MonthlyAdvertiserSpend,
   PaymentDashboard,
 } from '../interfaces/payment';
-import { Campaign } from '../interfaces/campaign';
 import { CampaignType } from '../enums/campaign-type';
 
 // Import modular services
 import { PaymentProcessingService } from './payment-processing.service';
 import { AccountingService } from './accounting.service';
 import { StripeIntegrationService } from './stripe-integration.service';
+import { CampaignEntity } from 'src/database/entities';
 
 /**
  * Main PaymentService that orchestrates the modular payment services
@@ -34,7 +34,7 @@ export class PaymentServiceImpl implements PaymentService {
 
   // Campaign Payment Processing - delegated to PaymentProcessingService
   async chargeCampaignBudget(
-    campaign: Campaign,
+    campaign: CampaignEntity,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge> {
     return this.paymentProcessingService.chargeCampaignBudget(

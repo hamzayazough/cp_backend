@@ -7,7 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 import { CampaignType } from '../../enums/campaign-type';
 
 @Entity('campaign_budget_allocations')
@@ -113,7 +113,7 @@ export class CampaignBudgetAllocation {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Campaign, { nullable: false })
+  @ManyToOne(() => CampaignEntity, { nullable: false })
   @JoinColumn({ name: 'campaign_id' })
-  campaign: Campaign;
+  campaign: CampaignEntity;
 }

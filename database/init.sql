@@ -178,12 +178,7 @@ CREATE TABLE IF NOT EXISTS users (
     
     -- Financial
     stripe_account_id VARCHAR(255),
-    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0),
-    
-    -- Statistics
-    total_sales DECIMAL(10,2) DEFAULT 0.00 CHECK (total_sales >= 0),
-    number_of_campaign_done INTEGER DEFAULT 0 CHECK (number_of_campaign_done >= 0),
-    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
+    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0)
 );
 
 -- Advertiser details table
@@ -196,7 +191,7 @@ CREATE TABLE IF NOT EXISTS advertiser_details (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
-    UNIQUE(user_id)
+    CONSTRAINT unique_advertiser_user UNIQUE(user_id)
 );
 
 -- Advertiser types junction table (many-to-many)
@@ -206,17 +201,18 @@ CREATE TABLE IF NOT EXISTS advertiser_type_mappings (
     advertiser_type advertiser_type NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
-    UNIQUE(advertiser_id, advertiser_type)
+    CONSTRAINT unique_advertiser_type UNIQUE(advertiser_id, advertiser_type)
 );
 
 -- Advertiser work samples table
 CREATE TABLE IF NOT EXISTS advertiser_works (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES advertiser_details(id) ON DELETE CASCADE,
+    advertiser_details_id  UUID REFERENCES advertiser_details(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
-    description TEXT,
-    work_url TEXT, -- S3 URL or external link
-    thumbnail_url TEXT, -- S3 URL for thumbnail
+    description TEXT NOT NULL,
+    media_url TEXT, -- S3 URL for product/service image or video
+    website_url TEXT, -- Optional link to product or service page
+    price DECIMAL(10,2), -- Optional price for the product or service
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -230,8 +226,13 @@ CREATE TABLE IF NOT EXISTS promoter_details (
     verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Statistics
+    total_sales DECIMAL(10,2) DEFAULT 0.00 CHECK (total_sales >= 0),
+    number_of_campaign_done INTEGER DEFAULT 0 CHECK (number_of_campaign_done >= 0),
+    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0),
     
-    UNIQUE(user_id)
+    CONSTRAINT unique_promoter_user UNIQUE(user_id)
 );
 
 -- Promoter languages (many-to-many)
@@ -256,14 +257,11 @@ CREATE TABLE IF NOT EXISTS promoter_skills (
     UNIQUE(promoter_id, skill)
 );
 
--- Follower estimates for different platforms
 CREATE TABLE IF NOT EXISTS follower_estimates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
     platform social_platform NOT NULL,
-    follower_count INTEGER DEFAULT 0 CHECK (follower_count >= 0),
-    engagement_rate DECIMAL(5,2) DEFAULT 0.00 CHECK (engagement_rate >= 0 AND engagement_rate <= 100),
-    verified_account BOOLEAN DEFAULT FALSE,
+    count INTEGER NOT NULL CHECK (count >= 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
@@ -276,7 +274,7 @@ CREATE TABLE IF NOT EXISTS promoter_works (
     promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    work_url TEXT, -- S3 URL or external link
+    media_url TEXT, -- S3 URL or external link
     platform social_platform,
     view_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -289,31 +287,42 @@ CREATE TABLE IF NOT EXISTS campaigns (
     advertiser_id UUID REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
-    campaign_type campaign_type NOT NULL,
+    type campaign_type NOT NULL,
     status campaign_status DEFAULT 'ACTIVE',
-    budget DECIMAL(10,2) NOT NULL CHECK (budget > 0),
+    min_budget DECIMAL(10,2) NOT NULL CHECK (min_budget > 0),
+    max_budget DECIMAL(10,2) NOT NULL CHECK (max_budget > 0 AND max_budget >= min_budget),
     spent_budget DECIMAL(10,2) DEFAULT 0.00 CHECK (spent_budget >= 0),
-    
+    advertiser_types advertiser_type[] DEFAULT '{}',
+    is_public BOOLEAN DEFAULT FALSE,
+    expiry_date TIMESTAMP,
+    media_url TEXT, -- S3 URL for campaign media (image/video)
+    promoter_links TEXT[],
+
+    selected_promoter_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    discord_invite_link TEXT, -- Optional Discord invite link for campaign discussions
     -- Campaign-specific fields based on type
     -- For VISIBILITY campaigns
-    target_views INTEGER,
-    price_per_view DECIMAL(6,4),
+    cpv DECIMAL(6,4),
+    max_views INTEGER DEFAULT 1000000 CHECK (max_views > 1000),
     
     -- For CONSULTANT campaigns
     hourly_rate DECIMAL(8,2),
     total_hours INTEGER,
     meeting_plan meeting_plan,
     expertise_required TEXT,
-    
+    reference_url TEXT, -- Optional reference URL for more details
+    meeting_count INTEGER, -- Number of meetings included in the campaign
     -- For SELLER campaigns
     deliverables deliverable[],
+    seller_requirements deliverable[] DEFAULT '{}',
     deadline DATE,
+    deadline_strict BOOLEAN, -- Whether the deadline is strict or flexible
     fixed_price DECIMAL(10,2),
     
     -- For SALESMAN campaigns
     commission_rate DECIMAL(5,2) CHECK (commission_rate >= 0 AND commission_rate <= 100),
     sales_tracking_method sales_tracking_method,
-    coupon_code VARCHAR(50),
+    code_prefix VARCHAR(50),
     ref_link TEXT,
     
     -- Common fields
@@ -321,6 +330,14 @@ CREATE TABLE IF NOT EXISTS campaigns (
     target_audience TEXT,
     preferred_platforms social_platform[],
     min_followers INTEGER DEFAULT 0,
+    
+    -- Payment tracking fields
+    budget_held DECIMAL(10,2) DEFAULT 0.00 CHECK (budget_held >= 0),
+    final_payout_amount DECIMAL(10,2),
+    payout_executed BOOLEAN DEFAULT FALSE,
+    payout_date TIMESTAMP,
+    stripe_charge_id VARCHAR(255),
+    stripe_transfer_id VARCHAR(255),
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -368,6 +385,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     description TEXT,
     payment_method payment_method,
     stripe_transaction_id VARCHAR(255),
+    estimated_payment_date TIMESTAMP WITH TIME ZONE,
     processed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -418,10 +436,10 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
     sender_type message_sender_type NOT NULL,
     content TEXT NOT NULL,
-    read_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 -- Payment tracking tables
 CREATE TABLE IF NOT EXISTS payout_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1047,394 +1065,5 @@ CREATE TRIGGER update_payout_settings_updated_at BEFORE UPDATE ON payout_setting
 DROP TRIGGER IF EXISTS update_invoices_updated_at ON invoices;
 CREATE TRIGGER update_invoices_updated_at BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- ========================================
--- CORE BUSINESS TABLES
--- ========================================
 
--- Main users table
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    firebase_uid VARCHAR(255) UNIQUE NOT NULL, -- Firebase UID for authentication
-    email VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255), -- Nullable initially, filled during account completion
-    role user_role, -- Nullable initially, filled during account completion
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    is_setup_done BOOLEAN DEFAULT FALSE,
-    -- Profile information
-    avatar_url TEXT, -- S3 URL for profile picture
-    background_url TEXT, -- S3 URL for background banner
-    bio TEXT,
-    rating DECIMAL(3,2) CHECK (rating >= 0 AND rating <= 5), -- 0.00 to 5.00
-    
-    -- Social Media Links
-    tiktok_url TEXT,
-    instagram_url TEXT,
-    snapchat_url TEXT,
-    youtube_url TEXT,
-    twitter_url TEXT,
-    website_url TEXT, -- Personal or company website
-    
-    -- Financial
-    stripe_account_id VARCHAR(255),
-    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0),
-    
-    -- Statistics
-    total_sales DECIMAL(10,2) DEFAULT 0.00 CHECK (total_sales >= 0),
-    number_of_campaign_done INTEGER DEFAULT 0 CHECK (number_of_campaign_done >= 0),
-    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
-);
 
--- Advertiser details table
-CREATE TABLE IF NOT EXISTS advertiser_details (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    company_name VARCHAR(255) NOT NULL,
-    company_website TEXT,
-    verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(user_id)
-);
-
--- Advertiser types junction table (many-to-many)
-CREATE TABLE IF NOT EXISTS advertiser_type_mappings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES advertiser_details(id) ON DELETE CASCADE,
-    advertiser_type advertiser_type NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(advertiser_id, advertiser_type)
-);
-
--- Advertiser work samples table
-CREATE TABLE IF NOT EXISTS advertiser_works (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES advertiser_details(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    work_url TEXT, -- S3 URL or external link
-    thumbnail_url TEXT, -- S3 URL for thumbnail
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Promoter details table
-CREATE TABLE IF NOT EXISTS promoter_details (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    age INTEGER CHECK (age >= 13 AND age <= 120),
-    location VARCHAR(255),
-    verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(user_id)
-);
-
--- Promoter languages (many-to-many)
-CREATE TABLE IF NOT EXISTS promoter_languages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
-    language language NOT NULL,
-    proficiency VARCHAR(50) DEFAULT 'NATIVE', -- NATIVE, FLUENT, INTERMEDIATE, BASIC
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(promoter_id, language)
-);
-
--- Promoter skills/interests
-CREATE TABLE IF NOT EXISTS promoter_skills (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
-    skill VARCHAR(255) NOT NULL,
-    experience_level VARCHAR(50) DEFAULT 'BEGINNER', -- EXPERT, INTERMEDIATE, BEGINNER
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(promoter_id, skill)
-);
-
--- Follower estimates for different platforms
-CREATE TABLE IF NOT EXISTS follower_estimates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
-    platform social_platform NOT NULL,
-    follower_count INTEGER DEFAULT 0 CHECK (follower_count >= 0),
-    engagement_rate DECIMAL(5,2) DEFAULT 0.00 CHECK (engagement_rate >= 0 AND engagement_rate <= 100),
-    verified_account BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(promoter_id, platform)
-);
-
--- Promoter work samples/portfolio
-CREATE TABLE IF NOT EXISTS promoter_works (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID REFERENCES promoter_details(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    work_url TEXT, -- S3 URL or external link
-    platform social_platform,
-    view_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Campaigns table
-CREATE TABLE IF NOT EXISTS campaigns (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    campaign_type campaign_type NOT NULL,
-    status campaign_status DEFAULT 'ACTIVE',
-    budget DECIMAL(10,2) NOT NULL CHECK (budget > 0),
-    spent_budget DECIMAL(10,2) DEFAULT 0.00 CHECK (spent_budget >= 0),
-    
-    -- Campaign-specific fields based on type
-    -- For VISIBILITY campaigns
-    target_views INTEGER,
-    price_per_view DECIMAL(6,4),
-    
-    -- For CONSULTANT campaigns
-    hourly_rate DECIMAL(8,2),
-    total_hours INTEGER,
-    meeting_plan meeting_plan,
-    expertise_required TEXT,
-    
-    -- For SELLER campaigns
-    deliverables deliverable[],
-    deadline DATE,
-    fixed_price DECIMAL(10,2),
-    
-    -- For SALESMAN campaigns
-    commission_rate DECIMAL(5,2) CHECK (commission_rate >= 0 AND commission_rate <= 100),
-    sales_tracking_method sales_tracking_method,
-    coupon_code VARCHAR(50),
-    ref_link TEXT,
-    
-    -- Common fields
-    requirements TEXT,
-    target_audience TEXT,
-    preferred_platforms social_platform[],
-    min_followers INTEGER DEFAULT 0,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    starts_at TIMESTAMP WITH TIME ZONE,
-    ends_at TIMESTAMP WITH TIME ZONE
-);
-
--- Campaign applications (for CONSULTANT and SELLER campaigns)
-CREATE TABLE IF NOT EXISTS campaign_applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    application_message TEXT,
-    proposed_rate DECIMAL(8,2), -- For negotiable campaigns
-    status VARCHAR(50) DEFAULT 'PENDING', -- PENDING, ACCEPTED, REJECTED
-    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(campaign_id, promoter_id)
-);
-
--- Promoter campaign participation
-CREATE TABLE IF NOT EXISTS promoter_campaigns (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(50) DEFAULT 'ONGOING', -- ONGOING, AWAITING_REVIEW, COMPLETED, PAUSED
-    views_generated INTEGER DEFAULT 0,
-    earnings DECIMAL(10,2) DEFAULT 0.00,
-    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP WITH TIME ZONE,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(campaign_id, promoter_id)
-);
-
--- Transactions table for tracking all financial movements
-CREATE TABLE IF NOT EXISTS transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
-    type transaction_type NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    status transaction_status DEFAULT 'PENDING',
-    description TEXT,
-    payment_method payment_method,
-    stripe_transaction_id VARCHAR(255),
-    processed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Wallet management for promoters
-CREATE TABLE IF NOT EXISTS wallets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- View earnings (accumulated from visibility/salesman campaigns)
-    current_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (current_balance >= 0),
-    pending_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (pending_balance >= 0),
-    total_earned DECIMAL(12,2) DEFAULT 0.00 CHECK (total_earned >= 0),
-    total_withdrawn DECIMAL(12,2) DEFAULT 0.00 CHECK (total_withdrawn >= 0),
-    last_payout_date TIMESTAMP WITH TIME ZONE,
-    next_payout_date TIMESTAMP WITH TIME ZONE,
-    minimum_threshold DECIMAL(6,2) DEFAULT 50.00,
-    
-    -- Direct earnings (consultant/seller campaigns)
-    direct_total_earned DECIMAL(12,2) DEFAULT 0.00 CHECK (direct_total_earned >= 0),
-    direct_total_paid DECIMAL(12,2) DEFAULT 0.00 CHECK (direct_total_paid >= 0),
-    direct_pending_payments DECIMAL(10,2) DEFAULT 0.00 CHECK (direct_pending_payments >= 0),
-    direct_last_payment_date TIMESTAMP WITH TIME ZONE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Message threads for communication
-CREATE TABLE IF NOT EXISTS message_threads (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-    subject VARCHAR(255),
-    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(advertiser_id, promoter_id, campaign_id)
-);
-
--- Individual messages
-CREATE TABLE IF NOT EXISTS messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    thread_id UUID REFERENCES message_threads(id) ON DELETE CASCADE,
-    sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    sender_type message_sender_type NOT NULL,
-    content TEXT NOT NULL,
-    read_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Payment tracking tables
-CREATE TABLE IF NOT EXISTS payout_records (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    status payout_status DEFAULT 'PENDING',
-    stripe_transfer_id VARCHAR(255),
-    stripe_payout_id VARCHAR(255),
-    period_start TIMESTAMP WITH TIME ZONE,
-    period_end TIMESTAMP WITH TIME ZONE,
-    description TEXT,
-    failure_reason TEXT,
-    processed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS advertiser_charges (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    status charge_status DEFAULT 'PENDING',
-    stripe_charge_id VARCHAR(255),
-    stripe_payment_method_id VARCHAR(255),
-    currency VARCHAR(3) DEFAULT 'USD',
-    description TEXT,
-    failure_reason TEXT,
-    refunded_amount DECIMAL(10,2) DEFAULT 0.00,
-    processed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS promoter_balances (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    available_balance DECIMAL(10,2) DEFAULT 0.00,
-    pending_balance DECIMAL(10,2) DEFAULT 0.00,
-    total_earned DECIMAL(12,2) DEFAULT 0.00,
-    total_withdrawn DECIMAL(12,2) DEFAULT 0.00,
-    last_payout_date TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS advertiser_spends (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    advertiser_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    total_spent DECIMAL(12,2) DEFAULT 0.00,
-    total_refunded DECIMAL(12,2) DEFAULT 0.00,
-    pending_charges DECIMAL(10,2) DEFAULT 0.00,
-    last_charge_date TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Apply the trigger to core tables with updated_at
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_details_updated_at ON advertiser_details;
-CREATE TRIGGER update_advertiser_details_updated_at BEFORE UPDATE ON advertiser_details FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_works_updated_at ON advertiser_works;
-CREATE TRIGGER update_advertiser_works_updated_at BEFORE UPDATE ON advertiser_works FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_details_updated_at ON promoter_details;
-CREATE TRIGGER update_promoter_details_updated_at BEFORE UPDATE ON promoter_details FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_follower_estimates_updated_at ON follower_estimates;
-CREATE TRIGGER update_follower_estimates_updated_at BEFORE UPDATE ON follower_estimates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_works_updated_at ON promoter_works;
-CREATE TRIGGER update_promoter_works_updated_at BEFORE UPDATE ON promoter_works FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Triggers for campaign and transaction tables
-DROP TRIGGER IF EXISTS update_campaigns_updated_at ON campaigns;
-CREATE TRIGGER update_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_campaign_applications_updated_at ON campaign_applications;
-CREATE TRIGGER update_campaign_applications_updated_at BEFORE UPDATE ON campaign_applications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_campaigns_updated_at ON promoter_campaigns;
-CREATE TRIGGER update_promoter_campaigns_updated_at BEFORE UPDATE ON promoter_campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_transactions_updated_at ON transactions;
-CREATE TRIGGER update_transactions_updated_at BEFORE UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_wallets_updated_at ON wallets;
-CREATE TRIGGER update_wallets_updated_at BEFORE UPDATE ON wallets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_message_threads_updated_at ON message_threads;
-CREATE TRIGGER update_message_threads_updated_at BEFORE UPDATE ON message_threads FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Triggers for payment tracking tables
-DROP TRIGGER IF EXISTS update_payout_records_updated_at ON payout_records;
-CREATE TRIGGER update_payout_records_updated_at BEFORE UPDATE ON payout_records FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_charges_updated_at ON advertiser_charges;
-CREATE TRIGGER update_advertiser_charges_updated_at BEFORE UPDATE ON advertiser_charges FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_balances_updated_at ON promoter_balances;
-CREATE TRIGGER update_promoter_balances_updated_at BEFORE UPDATE ON promoter_balances FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_spends_updated_at ON advertiser_spends;
-CREATE TRIGGER update_advertiser_spends_updated_at BEFORE UPDATE ON advertiser_spends FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

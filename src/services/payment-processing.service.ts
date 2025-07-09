@@ -9,11 +9,9 @@ import { Repository } from 'typeorm';
 
 import { PAYMENT_CONSTANTS } from '../interfaces/payment-service.interface';
 import { PayoutRecord, AdvertiserCharge } from '../interfaces/payment';
-import { Campaign } from '../interfaces/campaign';
-import { CampaignType } from '../enums/campaign-type';
 
 // Entities
-import { Campaign as CampaignEntity } from '../database/entities/campaign.entity';
+import { CampaignEntity } from '../database/entities/campaign.entity';
 import {
   PayoutRecord as PayoutRecordEntity,
   PayoutStatus,
@@ -27,6 +25,7 @@ import { UserEntity } from '../database/entities/user.entity';
 // Import other services
 import { StripeIntegrationService } from './stripe-integration.service';
 import { AccountingService } from './accounting.service';
+import { CampaignStatus } from 'src/enums/campaign-status';
 
 /**
  * Service responsible for processing payments, charges, and payouts
@@ -52,14 +51,14 @@ export class PaymentProcessingService {
    * Charge advertiser for campaign budget with upfront payment
    */
   async chargeCampaignBudget(
-    campaign: Campaign,
+    campaign: CampaignEntity,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge> {
     this.logger.log(`Charging campaign budget for campaign ${campaign.id}`);
 
     try {
       // Validate campaign status
-      if (campaign.status !== 'ACTIVE') {
+      if (campaign.status !== CampaignStatus.ACTIVE) {
         throw new BadRequestException(
           'Campaign must be active to charge budget',
         );
@@ -110,7 +109,7 @@ export class PaymentProcessingService {
 
       // Create charge record first
       const chargeEntity = this.chargeRepository.create({
-        advertiserId: campaign.createdBy, // Using createdBy as advertiserId
+        advertiserId: campaign.advertiserId, // Using createdBy as advertiserId
         campaignId: campaign.id,
         amount: campaignBudget,
         status: ChargeStatus.PENDING,
@@ -150,7 +149,7 @@ export class PaymentProcessingService {
 
           // Update advertiser spend tracking
           await this.accountingService.updateAdvertiserSpend(
-            campaign.createdBy,
+            campaign.advertiserId,
             campaign.type,
             campaignBudget,
           );
@@ -354,7 +353,7 @@ export class PaymentProcessingService {
 
       // Create refund charge record
       const refundEntity = this.chargeRepository.create({
-        advertiserId: campaign.createdBy,
+        advertiserId: campaign.advertiserId,
         campaignId: campaign.id,
         amount: -refundAmount, // Negative amount for refund
         status: ChargeStatus.PENDING,
@@ -388,7 +387,7 @@ export class PaymentProcessingService {
 
         // Update advertiser spend tracking (subtract refunded amount)
         await this.accountingService.updateAdvertiserSpend(
-          campaign.createdBy,
+          campaign.advertiserId,
           campaign.type,
           -refundAmount,
         );

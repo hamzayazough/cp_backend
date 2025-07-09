@@ -8,7 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 
 export enum PayoutStatus {
   PENDING = 'PENDING',
@@ -81,7 +81,7 @@ export class PayoutRecord {
   @JoinColumn({ name: 'promoter_id' })
   promoter: UserEntity;
 
-  @ManyToOne(() => Campaign, { eager: false })
+  @ManyToOne(() => CampaignEntity, { eager: false })
   @JoinColumn({ name: 'campaign_id' })
-  campaign?: Campaign;
+  campaign?: CampaignEntity;
 }

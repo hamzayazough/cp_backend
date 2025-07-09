@@ -8,7 +8,7 @@ import { AccountingService } from '../services/accounting.service';
 import { StripeIntegrationService } from '../services/stripe-integration.service';
 
 // Entities
-import { Campaign as CampaignEntity } from '../database/entities/campaign.entity';
+import { CampaignEntity } from '../database/entities/campaign.entity';
 import { PayoutRecord as PayoutRecordEntity } from '../database/entities/payout-record.entity';
 import { AdvertiserCharge as AdvertiserChargeEntity } from '../database/entities/advertiser-charge.entity';
 import { PromoterBalance as PromoterBalanceEntity } from '../database/entities/promoter-balance.entity';

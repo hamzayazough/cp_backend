@@ -7,8 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { UserEntity } from './user.entity';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 
 export enum PaymentTransactionType {
   CHARGE = 'CHARGE',
@@ -72,7 +71,7 @@ export class PaymentTransaction {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Campaign, { nullable: true })
+  @ManyToOne(() => CampaignEntity, { nullable: true })
   @JoinColumn({ name: 'related_campaign_id' })
-  relatedCampaign: Campaign;
+  relatedCampaign: CampaignEntity;
 }

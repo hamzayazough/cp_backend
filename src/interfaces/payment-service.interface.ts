@@ -9,13 +9,13 @@ import {
   MonthlyAdvertiserSpend,
   PaymentDashboard,
 } from '../interfaces/payment';
-import { Campaign } from '../interfaces/campaign';
 import { CampaignType } from '../enums/campaign-type';
+import { CampaignEntity } from 'src/database/entities';
 
 export interface PaymentService {
   // Campaign funding and payouts
   chargeCampaignBudget(
-    campaign: Campaign,
+    campaign: CampaignEntity,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge>;
   executePromoterPayout(

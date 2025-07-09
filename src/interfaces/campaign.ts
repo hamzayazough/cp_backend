@@ -1,86 +1,83 @@
-import {
-  CampaignStatus,
-  CampaignType,
-  SalesTrackingMethod,
-  Deliverable,
-  MeetingPlan,
-} from '../enums/campaign-type';
-import { AdvertiserType } from '../enums/advertiser-type';
+import { CampaignType } from '../enums/campaign-type';
+import { CampaignStatus } from '../enums/campaign-status';
+import { MeetingPlan } from '../enums/meeting-plan';
+import { SalesTrackingMethod } from '../enums/sales-tracking-method';
+import { Deliverable } from '../enums/deliverable';
+import { SocialPlatform } from '../enums/social-platform';
 
-// Base campaign interface
+// Base campaign interface - matches CampaignEntity
 export interface Campaign {
   id: string;
+  advertiserId: string; // Changed from createdBy to match entity
   title: string;
   description: string;
-  type: CampaignType;
-  advertiserType?: AdvertiserType[];
-  isPublic: boolean;
-  expiryDate?: Date;
-  mediaUrl?: string;
-
-  //set by server
+  campaignType: CampaignType; // Changed from type to match entity
   status: CampaignStatus;
-  createdAt: string;
-  updatedAt?: string;
-  createdBy: string;
+  budget: number; // Required budget field from SQL schema
+  spentBudget: number; // Tracks how much has been spent
 
-  // after creation
-  selectedPromoterId?: string; // ID of the selected promoter for the campaign if campaign isPublic = false and a promoter is selected
+  // Campaign-specific fields for VISIBILITY campaigns
+  maxViews?: number;
+  pricePerView?: number; // Changed from cpv to match entity
 
-  //discord generated invite link once the campaign is created
-  discordInviteLink?: string;
+  // Campaign-specific fields for CONSULTANT campaigns
+  hourlyRate?: number;
+  totalHours?: number;
+  meetingPlan?: MeetingPlan;
+  expertiseRequired?: string;
 
-  // Payment tracking fields
-  budgetHeld: number; // Amount currently reserved/held from advertiser
-  finalPayoutAmount?: number; // Actual amount to pay to promoter (negotiated/agreed)
-  payoutExecuted: boolean; // Indicates if transfer to promoter completed
-  payoutDate?: Date; // When payout was executed
-  stripeChargeId?: string; // Stripe charge ID for funds collection
-  stripeTransferId?: string; // Stripe transfer ID for payout to promoter
+  // Campaign-specific fields for SELLER campaigns
+  deliverables?: Deliverable[];
+  deadline?: Date;
+  fixedPrice?: number;
+
+  // Campaign-specific fields for SALESMAN campaigns
+  commissionRate?: number; // Changed from commissionPerSale to match entity
+  salesTrackingMethod?: SalesTrackingMethod; // Changed from trackSalesVia to match entity
+  couponCode?: string;
+  refLink?: string;
+
+  // Common fields
+  requirements?: string;
+  targetAudience?: string;
+  preferredPlatforms?: SocialPlatform[];
+  minFollowers: number;
+
+  // Timestamps
+  createdAt: Date;
+  updatedAt: Date;
+  startsAt?: Date;
+  endsAt?: Date;
 }
 
 export interface VisibilityCampaign extends Campaign {
-  type: CampaignType.VISIBILITY;
-  cpv: number; // cost per 100 views
-  maxViews?: number; // maximum view user want to achieve
-  trackUrl: string;
+  campaignType: CampaignType.VISIBILITY;
+  maxViews: number;
+  pricePerView: number; // Required for visibility campaigns
 }
 
 export interface ConsultantCampaign extends Campaign {
-  type: CampaignType.CONSULTANT;
-  expectedDeliverables: Deliverable[];
-  meetingCount?: number;
-  maxBudget: number;
-  minBudget: number;
-  deadline?: Date;
-  isPublic: false; // false by default
-
-  // Once Consultant campaign is created the selected promoter is gonna share a link to show his current work
-  // to the advertiser, so advertiser can see the progress and give feedback
-  referenceUrl?: string;
+  campaignType: CampaignType.CONSULTANT;
+  hourlyRate: number;
+  totalHours: number;
+  meetingPlan?: MeetingPlan;
+  expertiseRequired?: string;
 }
 
 export interface SellerCampaign extends Campaign {
-  type: CampaignType.SELLER;
-  sellerRequirements?: Deliverable[];
+  campaignType: CampaignType.SELLER;
   deliverables?: Deliverable[];
+  deadline?: Date;
+  fixedPrice: number;
   meetingPlan?: MeetingPlan;
-  deadlineStrict?: boolean;
-  maxBudget: number;
-  minBudget: number;
-  isPublic: false; // false by default
-
-  // Once Seller campaign is created, the selected promoter is gonna share links for example, if he creates a tiktok account for the product (tiktok account link) or post instagram posts (instagram post links)
-  // PromoterLinks is an array of links that the promoter has created for the campaign
-  PromoterLinks?: string[];
 }
 
 export interface SalesmanCampaign extends Campaign {
-  type: CampaignType.SALESMAN;
-  commissionPerSale: number;
-  trackSalesVia: SalesTrackingMethod;
-  codePrefix?: string;
-  isPublic: false; // false by default
+  campaignType: CampaignType.SALESMAN;
+  commissionRate: number;
+  salesTrackingMethod: SalesTrackingMethod;
+  couponCode?: string;
+  refLink?: string;
 }
 
 // Form data interface for campaign creation wizard
@@ -88,41 +85,42 @@ export interface CampaignFormData {
   // Basic Info (matches base Campaign interface)
   title: string;
   description: string;
-  type: CampaignType | null;
-  expiryDate: Date | null;
-  mediaUrl?: string; // Optional to match Campaign interface
-  advertiserType: AdvertiserType[]; // Required array for selection
+  campaignType: CampaignType | null; // Changed from type to match entity
+  budget: number;
 
-  // VISIBILITY Campaign fields (matches VisibilityCampaign)
-  cpv?: number; // Required when type is VISIBILITY, but optional in form until validation
-  maxViews?: number | null; // Optional in both
-  trackUrl?: string; // Required when type is VISIBILITY, but optional in form until validation
+  // Campaign-specific fields for VISIBILITY campaigns
+  maxViews?: number;
+  pricePerView?: number; // Changed from cpv
 
-  // CONSULTANT Campaign fields (matches ConsultantCampaign)
-  expectedDeliverables?: Deliverable[]; // Required when type is CONSULTANT
-  meetingCount?: number | null; // Optional in both
-  referenceUrl?: string; // Optional - provided by promoter after selection
-  maxBudget?: number; // Required when type is CONSULTANT
-  minBudget?: number; // Required when type is CONSULTANT
-  deadline?: Date | null; // Optional in both
+  // Campaign-specific fields for CONSULTANT campaigns
+  hourlyRate?: number;
+  totalHours?: number;
+  meetingPlan?: MeetingPlan | null;
+  expertiseRequired?: string;
 
-  // SELLER Campaign fields (matches SellerCampaign)
-  sellerRequirements?: Deliverable[]; // Optional in both
-  deliverables?: Deliverable[]; // Optional in both
-  meetingPlan?: MeetingPlan | null; // Optional in both
-  deadlineStrict?: boolean; // Optional in both, defaults to false
-  // Note: Using same budget field names as consultant since they map to maxBudget/minBudget
-  sellerMaxBudget?: number; // Maps to maxBudget for seller campaigns
-  sellerMinBudget?: number; // Maps to minBudget for seller campaigns
+  // Campaign-specific fields for SELLER campaigns
+  deliverables?: Deliverable[];
+  deadline?: Date | null;
+  fixedPrice?: number;
 
-  // SALESMAN Campaign fields (matches SalesmanCampaign)
-  commissionPerSale?: number; // Required when type is SALESMAN
-  trackSalesVia?: SalesTrackingMethod | null; // Required when type is SALESMAN
-  codePrefix?: string; // Optional in both
+  // Campaign-specific fields for SALESMAN campaigns
+  commissionRate?: number; // Changed from commissionPerSale
+  salesTrackingMethod?: SalesTrackingMethod | null; // Changed from trackSalesVia
+  couponCode?: string;
+  refLink?: string;
+
+  // Common fields
+  requirements?: string;
+  targetAudience?: string;
+  preferredPlatforms?: SocialPlatform[];
+  minFollowers?: number;
+
+  // Timestamps
+  startsAt?: Date | null;
+  endsAt?: Date | null;
 
   // UI-only fields (not sent to backend)
-  file?: File | null; // For potential file uploads in certain campaign types
-  isPublic: boolean; // Determines if campaign is public or private
+  file?: File | null;
 }
 
 /*
