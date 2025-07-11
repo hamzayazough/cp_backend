@@ -1,43 +1,20 @@
 import { Injectable } from '@nestjs/common';
+import { auth } from '../config/firebase.config';
+import { DecodedIdToken } from 'firebase-admin/lib/auth/token-verifier';
+import { UserRecord } from 'firebase-admin/lib/auth/user-record';
 
 @Injectable()
 export class FirebaseAuthService {
-  constructor() {}
-
   /**
-   * Verify Firebase ID token
+   * Verify Firebase ID token and get user data
    * @param idToken - Firebase ID token from client
-   * @returns Promise with decoded token or throws error
+   * @returns Promise with user record or throws error
    */
-  async verifyIdToken(idToken: string) {
+  async verifyIdToken(idToken: string): Promise<UserRecord> {
     try {
-      // For server-side verification, we need Firebase Admin SDK
-      // But for now, we'll use a basic verification approach
-      // In production, you should use Firebase Admin SDK
-      const response = await fetch(
-        `https://www.googleapis.com/identitytoolkit/v3/relyingparty/getAccountInfo?key=${process.env.FIREBASE_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            idToken: idToken,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error('Invalid token');
-      }
-
-      const data = await response.json();
-
-      if (!data.users || data.users.length === 0) {
-        throw new Error('User not found');
-      }
-
-      return data.users[0];
+      const decodedToken: DecodedIdToken = await auth.verifyIdToken(idToken);
+      const userRecord: UserRecord = await auth.getUser(decodedToken.uid);
+      return userRecord;
     } catch (error) {
       throw new Error(`Token verification failed: ${error.message}`);
     }
@@ -48,20 +25,18 @@ export class FirebaseAuthService {
    * @param firebaseUser - Firebase user object
    * @returns User information object
    */
-  extractUserInfo(firebaseUser: any) {
+  extractUserInfo(firebaseUser: UserRecord) {
     return {
-      uid: firebaseUser.localId,
+      uid: firebaseUser.uid,
       email: firebaseUser.email,
-      emailVerified: firebaseUser.emailVerified === 'true',
+      emailVerified: firebaseUser.emailVerified,
       displayName: firebaseUser.displayName || null,
-      photoURL: firebaseUser.photoUrl || null,
-      disabled: firebaseUser.disabled || false,
-      providerData: firebaseUser.providerUserInfo || [],
-      customClaims: firebaseUser.customAttributes
-        ? JSON.parse(firebaseUser.customAttributes)
-        : {},
-      createdAt: firebaseUser.createdAt,
-      lastLoginAt: firebaseUser.lastLoginAt,
+      photoURL: firebaseUser.photoURL || null,
+      disabled: firebaseUser.disabled,
+      providerData: firebaseUser.providerData || [],
+      customClaims: firebaseUser.customClaims || {},
+      createdAt: firebaseUser.metadata.creationTime,
+      lastLoginAt: firebaseUser.metadata.lastSignInTime,
     };
   }
 }
