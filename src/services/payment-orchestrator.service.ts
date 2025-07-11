@@ -35,30 +35,36 @@ export class PaymentServiceImpl implements PaymentService {
   // Campaign Payment Processing - delegated to PaymentProcessingService
   async chargeCampaignBudget(
     campaign: CampaignEntity,
+    promoterId: string,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge> {
     return this.paymentProcessingService.chargeCampaignBudget(
       campaign,
+      promoterId,
       paymentMethodId,
     );
   }
 
   async executePromoterPayout(
     campaignId: string,
+    promoterId: string,
     finalAmount?: number,
   ): Promise<PayoutRecord> {
     return this.paymentProcessingService.executePromoterPayout(
       campaignId,
+      promoterId,
       finalAmount,
     );
   }
 
   async refundCampaignBudget(
     campaignId: string,
+    promoterId: string,
     amount?: number,
   ): Promise<AdvertiserCharge> {
     return this.paymentProcessingService.refundCampaignBudget(
       campaignId,
+      promoterId,
       amount,
     );
   }

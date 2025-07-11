@@ -9,6 +9,23 @@ import {
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 
+export enum PayoutFrequency {
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+  MANUAL = 'MANUAL',
+}
+
+export enum PreferredPayoutMethod {
+  STRIPE = 'STRIPE',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+}
+
+export enum TaxFormType {
+  W9 = 'W9',
+  FORM_1099 = '1099',
+  OTHER = 'OTHER',
+}
+
 @Entity('payout_settings')
 export class PayoutSettings {
   @PrimaryGeneratedColumn('uuid')
@@ -17,73 +34,93 @@ export class PayoutSettings {
   @Column({ name: 'promoter_id', type: 'uuid', unique: true })
   promoterId: string;
 
+  // Payout preferences
   @Column({
-    name: 'minimum_threshold',
+    name: 'frequency',
+    type: 'enum',
+    enum: PayoutFrequency,
+    default: PayoutFrequency.MONTHLY,
+  })
+  frequency: PayoutFrequency;
+
+  @Column({
+    name: 'minimum_amount',
     type: 'decimal',
-    precision: 10,
+    precision: 8,
     scale: 2,
-    default: 50.0,
+    default: 20.0,
   })
-  minimumThreshold: number;
-
-  @Column({ name: 'auto_payout_enabled', type: 'boolean', default: false })
-  autoPayoutEnabled: boolean;
+  minimumAmount: number;
 
   @Column({
-    name: 'payout_frequency',
+    name: 'preferred_method',
     type: 'enum',
-    enum: ['WEEKLY', 'MONTHLY', 'MANUAL'],
-    default: 'MANUAL',
+    enum: PreferredPayoutMethod,
+    default: PreferredPayoutMethod.STRIPE,
   })
-  payoutFrequency: string;
+  preferredMethod: PreferredPayoutMethod;
 
+  // Bank details (if preferred_method is 'BANK_TRANSFER')
   @Column({
-    name: 'preferred_payout_method',
-    type: 'enum',
-    enum: ['STRIPE', 'BANK_TRANSFER'],
-    default: 'STRIPE',
-  })
-  preferredPayoutMethod: string;
-
-  @Column({
-    name: 'stripe_account_id',
+    name: 'bank_account_holder_name',
     type: 'varchar',
     length: 255,
     nullable: true,
   })
-  stripeAccountId: string;
+  bankAccountHolderName: string | null;
 
   @Column({
-    name: 'bank_account_id',
+    name: 'bank_account_number',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  bankAccountNumber: string | null;
+
+  @Column({
+    name: 'bank_routing_number',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  bankRoutingNumber: string | null;
+
+  @Column({
+    name: 'bank_name',
     type: 'varchar',
     length: 255,
     nullable: true,
   })
-  bankAccountId: string;
+  bankName: string | null;
 
   // Tax information
-  @Column({ name: 'tax_id_provided', type: 'boolean', default: false })
-  taxIdProvided: boolean;
-
-  @Column({ name: 'w9_submitted', type: 'boolean', default: false })
-  w9Submitted: boolean;
-
   @Column({
     name: 'tax_form_type',
     type: 'enum',
-    enum: ['W9', '1099', 'OTHER'],
+    enum: TaxFormType,
     nullable: true,
   })
-  taxFormType: string;
+  taxFormType: TaxFormType | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column({
+    name: 'tax_id',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  taxId: string | null;
+
+  @Column({ name: 'tax_form_submitted', type: 'boolean', default: false })
+  taxFormSubmitted: boolean;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => UserEntity)
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'promoter_id' })
   promoter: UserEntity;
 }

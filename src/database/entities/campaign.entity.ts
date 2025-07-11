@@ -75,25 +75,18 @@ export class CampaignEntity {
     type: 'decimal',
     precision: 10,
     scale: 2,
+    nullable: true,
   })
-  maxBudget: number;
+  maxBudget?: number; // Required for CONSULTANT and SELLER campaigns
 
   @Column({
     name: 'min_budget',
     type: 'decimal',
     precision: 10,
     scale: 2,
+    nullable: true,
   })
-  minBudget: number;
-
-  @Column({
-    name: 'spent_budget',
-    type: 'decimal',
-    precision: 10,
-    scale: 2,
-    default: 0.0,
-  })
-  spentBudget: number;
+  minBudget?: number; // Required for CONSULTANT and SELLER campaigns
 
   // Campaign-specific fields for VISIBILITY campaigns
   @Column({ name: 'max_views', type: 'integer', nullable: true })
@@ -106,20 +99,15 @@ export class CampaignEntity {
     scale: 4,
     nullable: true,
   })
-  cpv?: number;
+  cpv?: number; // Required for VISIBILITY campaigns
+
+  @Column({ name: 'tracking_link', type: 'text', nullable: true })
+  trackingLink?: string; // Required for VISIBILITY campaigns
+
+  @Column({ name: 'current_views', type: 'integer', nullable: true })
+  currentViews?: number;
 
   // Campaign-specific fields for CONSULTANT campaigns
-  @Column({
-    name: 'hourly_rate',
-    type: 'decimal',
-    precision: 8,
-    scale: 2,
-    nullable: true,
-  })
-  hourlyRate?: number;
-
-  @Column({ name: 'total_hours', type: 'integer', nullable: true })
-  totalHours?: number;
 
   @Column({
     name: 'meeting_plan',
@@ -134,6 +122,15 @@ export class CampaignEntity {
 
   @Column({ name: 'expertise_required', type: 'text', nullable: true })
   expertiseRequired?: string;
+
+  @Column({
+    name: 'expected_deliverables',
+    type: 'enum',
+    enum: Deliverable,
+    array: true,
+    nullable: true,
+  })
+  expectedDeliverables?: Deliverable[]; // Required for CONSULTANT campaigns
 
   // Campaign-specific fields for SELLER campaigns
   @Column({
@@ -153,33 +150,21 @@ export class CampaignEntity {
   })
   sellerRequirements?: Deliverable[];
 
-  @Column({ type: 'date', nullable: true })
-  deadline?: Date;
+  @Column({ type: 'date' })
+  deadline: Date;
 
-  @Column({
-    name: 'deadline_strict',
-    type: 'boolean',
-  })
-  deadlineStrict: boolean;
-
-  @Column({
-    name: 'fixed_price',
-    type: 'decimal',
-    precision: 10,
-    scale: 2,
-    nullable: true,
-  })
-  fixedPrice?: number;
+  @Column({ name: 'start_date', type: 'date' })
+  startDate: Date;
 
   // Campaign-specific fields for SALESMAN campaigns
   @Column({
-    name: 'commission_rate',
+    name: 'commission_per_sale',
     type: 'decimal',
     precision: 5,
     scale: 2,
     nullable: true,
   })
-  CommissionPerSale?: number;
+  commissionPerSale?: number; // Required for SALESMAN campaigns
 
   @Column({
     name: 'sales_tracking_method',
@@ -187,17 +172,14 @@ export class CampaignEntity {
     enum: SalesTrackingMethod,
     nullable: true,
   })
-  trackSalesVia?: SalesTrackingMethod;
+  trackSalesVia?: SalesTrackingMethod; // Required for SALESMAN campaigns
 
   @Column({ name: 'code_prefix', type: 'varchar', length: 50, nullable: true })
   codePrefix?: string;
 
-  @Column({ name: 'ref_link', type: 'text', nullable: true })
-  refLink?: string;
-
   // Common fields
-  @Column({ type: 'text', nullable: true })
-  requirements?: string;
+  @Column({ type: 'text', array: true, nullable: true })
+  requirements?: string[];
 
   @Column({ name: 'target_audience', type: 'text', nullable: true })
   targetAudience?: string;
@@ -211,8 +193,8 @@ export class CampaignEntity {
   })
   preferredPlatforms?: SocialPlatform[];
 
-  @Column({ name: 'min_followers', type: 'integer', default: 0 })
-  minFollowers: number;
+  @Column({ name: 'min_followers', type: 'integer', nullable: true })
+  minFollowers?: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
@@ -220,67 +202,15 @@ export class CampaignEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ name: 'starts_at', type: 'timestamptz', nullable: true })
-  startsAt?: Date;
-
-  @Column({ name: 'ends_at', type: 'timestamptz', nullable: true })
-  endsAt?: Date;
-
-  @Column({ name: 'selected_promoter_id', type: 'uuid', nullable: true })
-  selectedPromoterId?: string;
-
   @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
   discordInviteLink?: string;
 
-  @Column({
-    name: 'budget_held',
-    type: 'decimal',
-    precision: 10,
-    scale: 2,
-    default: 0.0,
-  })
-  budgetHeld: number;
-
-  @Column({
-    name: 'final_payout_amount',
-    type: 'decimal',
-    precision: 10,
-    scale: 2,
-    nullable: true,
-  })
-  finalPayoutAmount?: number;
-
-  @Column({ name: 'payout_executed', type: 'boolean', default: false })
-  payoutExecuted: boolean;
-
-  @Column({ name: 'payout_date', type: 'timestamptz', nullable: true })
-  payoutDate?: Date;
-
-  @Column({
-    name: 'stripe_charge_id',
-    type: 'varchar',
-    length: 255,
-    nullable: true,
-  })
-  stripeChargeId?: string;
-
-  @Column({
-    name: 'stripe_transfer_id',
-    type: 'varchar',
-    length: 255,
-    nullable: true,
-  })
-  stripeTransferId?: string;
-
   @Column({ name: 'promoter_links', type: 'text', array: true, nullable: true })
-  PromoterLinks?: string[];
+  promoterLinks?: string[];
+
   // Relations
 
   @ManyToOne(() => UserEntity, (user) => user.id)
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
-
-  @ManyToOne(() => UserEntity, (user) => user.id, { nullable: true })
-  @JoinColumn({ name: 'selected_promoter_id' })
-  selectedPromoter?: UserEntity;
 }

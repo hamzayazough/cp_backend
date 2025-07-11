@@ -15,8 +15,16 @@ export interface PromoterCampaign {
   joinedAt: Date;
   completedAt?: Date;
   updatedAt: Date;
-}
 
+  // Payment tracking fields
+  budgetHeld: number; // Amount currently reserved/held from advertiser
+  spentBudget: number; // Amount spent so far in the campaign
+  finalPayoutAmount?: number; // Actual amount to pay to promoter (negotiated/agreed)
+  payoutExecuted: boolean; // Indicates if transfer to promoter completed
+  payoutDate?: Date; // When payout was executed
+  stripeChargeId?: string; // Stripe charge ID for funds collection
+  stripeTransferId?: string; // Stripe transfer ID for payout to promoter
+}
 // Related DTOs for API responses
 export interface PromoterCampaignDetails extends PromoterCampaign {
   campaignTitle: string;

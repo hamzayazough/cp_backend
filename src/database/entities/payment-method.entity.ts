@@ -37,36 +37,40 @@ export class PaymentMethod {
   })
   type: PaymentMethodType;
 
-  @Column({ name: 'last4', type: 'varchar', length: 4 })
-  last4: string;
+  // Card details (if type is 'card')
+  @Column({ name: 'card_brand', type: 'varchar', length: 50, nullable: true })
+  cardBrand: string | null;
 
-  @Column({ name: 'brand', type: 'varchar', length: 50, nullable: true })
-  brand: string;
+  @Column({ name: 'card_last4', type: 'varchar', length: 4, nullable: true })
+  cardLast4: string | null;
 
-  @Column({ name: 'expiry_month', type: 'integer', nullable: true })
-  expiryMonth: number;
+  @Column({ name: 'card_exp_month', type: 'integer', nullable: true })
+  cardExpMonth: number | null;
 
-  @Column({ name: 'expiry_year', type: 'integer', nullable: true })
-  expiryYear: number;
+  @Column({ name: 'card_exp_year', type: 'integer', nullable: true })
+  cardExpYear: number | null;
 
+  // Bank account details (if type is 'bank_account')
+  @Column({ name: 'bank_name', type: 'varchar', length: 255, nullable: true })
+  bankName: string | null;
+
+  @Column({ name: 'bank_last4', type: 'varchar', length: 4, nullable: true })
+  bankLast4: string | null;
+
+  @Column({
+    name: 'bank_account_type',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  bankAccountType: string | null; // 'checking', 'savings'
+
+  // Common fields
   @Column({ name: 'is_default', type: 'boolean', default: false })
   isDefault: boolean;
 
-  @Column({
-    name: 'billing_country',
-    type: 'varchar',
-    length: 2,
-    nullable: true,
-  })
-  billingCountry: string;
-
-  @Column({
-    name: 'billing_postal_code',
-    type: 'varchar',
-    length: 20,
-    nullable: true,
-  })
-  billingPostalCode: string;
+  @Column({ name: 'is_verified', type: 'boolean', default: false })
+  isVerified: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
@@ -75,7 +79,7 @@ export class PaymentMethod {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => UserEntity, { nullable: false })
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: UserEntity;
 }

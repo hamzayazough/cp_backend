@@ -12,6 +12,7 @@ import { PayoutRecord, AdvertiserCharge } from '../interfaces/payment';
 
 // Entities
 import { CampaignEntity } from '../database/entities/campaign.entity';
+import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import {
   PayoutRecord as PayoutRecordEntity,
   PayoutStatus,
@@ -37,6 +38,8 @@ export class PaymentProcessingService {
   constructor(
     @InjectRepository(CampaignEntity)
     private readonly campaignRepository: Repository<CampaignEntity>,
+    @InjectRepository(PromoterCampaign)
+    private readonly promoterCampaignRepository: Repository<PromoterCampaign>,
     @InjectRepository(PayoutRecordEntity)
     private readonly payoutRepository: Repository<PayoutRecordEntity>,
     @InjectRepository(AdvertiserChargeEntity)
@@ -52,6 +55,7 @@ export class PaymentProcessingService {
    */
   async chargeCampaignBudget(
     campaign: CampaignEntity,
+    promoterId: string,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge> {
     this.logger.log(`Charging campaign budget for campaign ${campaign.id}`);
@@ -141,11 +145,27 @@ export class PaymentProcessingService {
         await this.chargeRepository.save(savedCharge);
 
         if (paymentIntent.status === 'succeeded') {
-          // Update campaign with held budget
-          await this.campaignRepository.update(campaign.id, {
-            budgetHeld: campaignBudget,
-            stripeChargeId: paymentIntent.id,
-          });
+          // Create or update PromoterCampaign record with held budget
+          const existingPromoterCampaign =
+            await this.promoterCampaignRepository.findOne({
+              where: { campaignId: campaign.id, promoterId },
+            });
+
+          if (existingPromoterCampaign) {
+            existingPromoterCampaign.budgetHeld = campaignBudget;
+            existingPromoterCampaign.stripeChargeId = paymentIntent.id;
+            await this.promoterCampaignRepository.save(
+              existingPromoterCampaign,
+            );
+          } else {
+            const promoterCampaign = this.promoterCampaignRepository.create({
+              campaignId: campaign.id,
+              promoterId,
+              budgetHeld: campaignBudget,
+              stripeChargeId: paymentIntent.id,
+            });
+            await this.promoterCampaignRepository.save(promoterCampaign);
+          }
 
           // Update advertiser spend tracking
           await this.accountingService.updateAdvertiserSpend(
@@ -188,6 +208,7 @@ export class PaymentProcessingService {
    */
   async executePromoterPayout(
     campaignId: string,
+    promoterId: string,
     finalAmount?: number,
   ): Promise<PayoutRecord> {
     this.logger.log(`Executing payout for campaign ${campaignId}`);
@@ -195,40 +216,43 @@ export class PaymentProcessingService {
     try {
       const campaign = await this.campaignRepository.findOne({
         where: { id: campaignId },
-        relations: ['selectedPromoter'],
       });
 
       if (!campaign) {
         throw new BadRequestException('Campaign not found');
       }
 
-      if (campaign.payoutExecuted) {
+      // Get the promoter campaign record
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: { campaignId, promoterId },
+      });
+
+      if (!promoterCampaign) {
+        throw new BadRequestException('Promoter campaign record not found');
+      }
+
+      if (promoterCampaign.payoutExecuted) {
         throw new BadRequestException(
           'Payout already executed for this campaign',
         );
       }
 
-      if (!campaign.budgetHeld || campaign.budgetHeld <= 0) {
+      if (!promoterCampaign.budgetHeld || promoterCampaign.budgetHeld <= 0) {
         throw new BadRequestException('No budget held for this campaign');
       }
 
       // Calculate final payout amount
-      const payoutAmount = finalAmount || campaign.budgetHeld;
+      const payoutAmount = finalAmount || promoterCampaign.budgetHeld;
 
-      if (payoutAmount > campaign.budgetHeld) {
+      if (payoutAmount > promoterCampaign.budgetHeld) {
         throw new BadRequestException(
           'Payout amount cannot exceed held budget',
         );
       }
 
       // Validate promoter has Stripe account
-      if (!campaign.selectedPromoterId) {
-        throw new BadRequestException('Campaign must have a selected promoter');
-      }
-
-      const isStripeValid = await this.stripeService.validateStripeAccount(
-        campaign.selectedPromoterId,
-      );
+      const isStripeValid =
+        await this.stripeService.validateStripeAccount(promoterId);
       if (!isStripeValid) {
         throw new BadRequestException(
           'Promoter must have valid Stripe account for payouts',
@@ -237,7 +261,7 @@ export class PaymentProcessingService {
 
       // Create payout record
       const payoutEntity = this.payoutRepository.create({
-        promoterId: campaign.selectedPromoterId,
+        promoterId: promoterId,
         campaignId: campaign.id,
         amount: payoutAmount,
         status: PayoutStatus.PENDING,
@@ -249,7 +273,7 @@ export class PaymentProcessingService {
       try {
         // Execute Stripe transfer
         const promoter = await this.userRepository.findOne({
-          where: { id: campaign.selectedPromoterId },
+          where: { id: promoterId },
         });
 
         if (!promoter?.stripeAccountId) {
@@ -272,25 +296,28 @@ export class PaymentProcessingService {
         savedPayout.status = PayoutStatus.COMPLETED;
         await this.payoutRepository.save(savedPayout);
 
-        // Update campaign
-        await this.campaignRepository.update(campaign.id, {
-          finalPayoutAmount: payoutAmount,
-          payoutExecuted: true,
-          payoutDate: new Date(),
-          stripeTransferId: transfer.id,
-        });
+        // Update promoter campaign record
+        promoterCampaign.finalPayoutAmount = payoutAmount;
+        promoterCampaign.payoutExecuted = true;
+        promoterCampaign.payoutDate = new Date();
+        promoterCampaign.stripeTransferId = transfer.id;
+        await this.promoterCampaignRepository.save(promoterCampaign);
 
         // Update promoter balance
         await this.accountingService.updatePromoterBalance(
-          campaign.selectedPromoterId,
+          promoterId,
           campaign.type,
           payoutAmount,
         );
 
         // Handle any remaining budget (refund if difference)
-        const remainingBudget = campaign.budgetHeld - payoutAmount;
+        const remainingBudget = promoterCampaign.budgetHeld - payoutAmount;
         if (remainingBudget > 0) {
-          await this.refundCampaignBudget(campaignId, remainingBudget);
+          await this.refundCampaignBudget(
+            campaignId,
+            promoterId,
+            remainingBudget,
+          );
         }
 
         this.logger.log(
@@ -303,7 +330,7 @@ export class PaymentProcessingService {
         await this.payoutRepository.save(savedPayout);
         throw stripeError;
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to execute payout: ${error.message}`,
         error.stack,
@@ -320,6 +347,7 @@ export class PaymentProcessingService {
    */
   async refundCampaignBudget(
     campaignId: string,
+    promoterId: string,
     amount?: number,
   ): Promise<AdvertiserCharge> {
     this.logger.log(`Processing refund for campaign ${campaignId}`);
@@ -333,19 +361,28 @@ export class PaymentProcessingService {
         throw new BadRequestException('Campaign not found');
       }
 
-      if (!campaign.stripeChargeId) {
+      // Get the promoter campaign record
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: { campaignId, promoterId },
+      });
+
+      if (!promoterCampaign) {
+        throw new BadRequestException('Promoter campaign record not found');
+      }
+
+      if (!promoterCampaign.stripeChargeId) {
         throw new BadRequestException(
           'No original charge found for this campaign',
         );
       }
 
-      const refundAmount = amount || campaign.budgetHeld;
+      const refundAmount = amount || promoterCampaign.budgetHeld;
 
       if (refundAmount <= 0) {
         throw new BadRequestException('Refund amount must be greater than 0');
       }
 
-      if (refundAmount > campaign.budgetHeld) {
+      if (refundAmount > promoterCampaign.budgetHeld) {
         throw new BadRequestException(
           'Refund amount cannot exceed held budget',
         );
@@ -365,7 +402,7 @@ export class PaymentProcessingService {
       try {
         // Process refund through Stripe
         const refund = await this.stripeService.createRefund({
-          charge: campaign.stripeChargeId,
+          charge: promoterCampaign.stripeChargeId,
           amount: refundAmount,
           metadata: {
             campaignId: campaign.id,
@@ -379,11 +416,10 @@ export class PaymentProcessingService {
         savedRefund.status = ChargeStatus.SUCCEEDED;
         await this.chargeRepository.save(savedRefund);
 
-        // Update campaign budget held
-        const newBudgetHeld = campaign.budgetHeld - refundAmount;
-        await this.campaignRepository.update(campaign.id, {
-          budgetHeld: newBudgetHeld,
-        });
+        // Update promoter campaign budget held
+        const newBudgetHeld = promoterCampaign.budgetHeld - refundAmount;
+        promoterCampaign.budgetHeld = newBudgetHeld;
+        await this.promoterCampaignRepository.save(promoterCampaign);
 
         // Update advertiser spend tracking (subtract refunded amount)
         await this.accountingService.updateAdvertiserSpend(
@@ -402,7 +438,7 @@ export class PaymentProcessingService {
         await this.chargeRepository.save(savedRefund);
         throw stripeError;
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to process refund: ${error.message}`,
         error.stack,

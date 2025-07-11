@@ -6,10 +6,17 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 
-@Entity('billing_period_summary')
+export enum UserType {
+  PROMOTER = 'PROMOTER',
+  ADVERTISER = 'ADVERTISER',
+}
+
+@Entity('billing_period_summaries')
+@Unique(['userId', 'periodStart', 'periodEnd'])
 export class BillingPeriodSummary {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -17,22 +24,72 @@ export class BillingPeriodSummary {
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 
-  @Column({ name: 'user_type', type: 'enum', enum: ['PROMOTER', 'ADVERTISER'] })
-  userType: string;
+  @Column({
+    name: 'user_type',
+    type: 'enum',
+    enum: UserType,
+  })
+  userType: UserType;
 
-  @Column({ name: 'period_start', type: 'timestamp' })
+  @Column({ name: 'period_start', type: 'timestamptz' })
   periodStart: Date;
 
-  @Column({ name: 'period_end', type: 'timestamp' })
+  @Column({ name: 'period_end', type: 'timestamptz' })
   periodEnd: Date;
 
-  // For promoters
+  // Financial summary
+  @Column({ name: 'total_transactions', type: 'integer', default: 0 })
+  totalTransactions: number;
+
+  @Column({
+    name: 'total_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  totalAmount: number;
+
+  @Column({
+    name: 'total_fees',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  totalFees: number;
+
+  @Column({
+    name: 'net_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  netAmount: number;
+
+  // Promoter-specific fields
+  @Column({ name: 'total_views', type: 'integer', default: 0 })
+  totalViews: number;
+
+  @Column({ name: 'total_campaigns', type: 'integer', default: 0 })
+  totalCampaigns: number;
+
+  @Column({
+    name: 'average_cpv',
+    type: 'decimal',
+    precision: 6,
+    scale: 4,
+    default: 0,
+  })
+  averageCpv: number;
+
   @Column({
     name: 'total_earned',
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
   totalEarned: number;
 
@@ -41,7 +98,7 @@ export class BillingPeriodSummary {
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
   totalPaidOut: number;
 
@@ -50,33 +107,39 @@ export class BillingPeriodSummary {
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
   pendingPayouts: number;
 
-  @Column({ name: 'campaigns_completed', type: 'integer', nullable: true })
-  campaignsCompleted: number;
-
-  // For advertisers
   @Column({
-    name: 'total_spent',
+    name: 'below_threshold_earnings',
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
-  totalSpent: number;
+  belowThresholdEarnings: number;
 
+  // Advertiser-specific fields
   @Column({
-    name: 'total_charged',
+    name: 'total_spend',
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
-  totalCharged: number;
+  totalSpend: number;
 
-  @Column({ name: 'campaigns_funded', type: 'integer', nullable: true })
+  @Column({
+    name: 'total_refunds',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  totalRefunds: number;
+
+  @Column({ name: 'campaigns_funded', type: 'integer', default: 0 })
   campaignsFunded: number;
 
   @Column({
@@ -84,18 +147,55 @@ export class BillingPeriodSummary {
     type: 'decimal',
     precision: 12,
     scale: 2,
-    nullable: true,
+    default: 0.0,
   })
   remainingCredits: number;
 
-  @CreateDateColumn({ name: 'created_at' })
+  // Campaign type breakdown
+  @Column({
+    name: 'visibility_earnings',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  visibilityEarnings: number;
+
+  @Column({
+    name: 'consultant_earnings',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  consultantEarnings: number;
+
+  @Column({
+    name: 'seller_earnings',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  sellerEarnings: number;
+
+  @Column({
+    name: 'salesman_earnings',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  salesmanEarnings: number;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => UserEntity)
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: UserEntity;
 }

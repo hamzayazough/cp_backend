@@ -27,8 +27,12 @@ export class PromoterCampaign {
   @Column({ name: 'promoter_id', type: 'uuid' })
   promoterId: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'ONGOING' })
-  status: string;
+  @Column({
+    type: 'enum',
+    enum: PromoterCampaignStatus,
+    default: PromoterCampaignStatus.ONGOING,
+  })
+  status: PromoterCampaignStatus;
 
   @Column({ name: 'views_generated', type: 'integer', default: 0 })
   viewsGenerated: number;
@@ -48,6 +52,56 @@ export class PromoterCampaign {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  // Payment tracking fields
+  @Column({
+    name: 'budget_held',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  budgetHeld: number;
+
+  @Column({
+    name: 'spent_budget',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  spentBudget: number;
+
+  @Column({
+    name: 'final_payout_amount',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  finalPayoutAmount?: number;
+
+  @Column({ name: 'payout_executed', type: 'boolean', default: false })
+  payoutExecuted: boolean;
+
+  @Column({ name: 'payout_date', type: 'timestamptz', nullable: true })
+  payoutDate?: Date;
+
+  @Column({
+    name: 'stripe_charge_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  stripeChargeId?: string;
+
+  @Column({
+    name: 'stripe_transfer_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  stripeTransferId?: string;
 
   // Relations
   @ManyToOne(() => CampaignEntity, { eager: false })

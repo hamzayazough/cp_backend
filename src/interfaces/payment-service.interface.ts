@@ -16,14 +16,17 @@ export interface PaymentService {
   // Campaign funding and payouts
   chargeCampaignBudget(
     campaign: CampaignEntity,
+    promoterId: string,
     paymentMethodId: string,
   ): Promise<AdvertiserCharge>;
   executePromoterPayout(
     campaignId: string,
+    promoterId: string,
     finalAmount?: number,
   ): Promise<PayoutRecord>;
   refundCampaignBudget(
     campaignId: string,
+    promoterId: string,
     amount?: number,
   ): Promise<AdvertiserCharge>;
 

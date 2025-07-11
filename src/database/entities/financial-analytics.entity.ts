@@ -17,119 +17,114 @@ export class FinancialAnalytics {
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
 
-  @Column({ name: 'user_type', type: 'enum', enum: ['PROMOTER', 'ADVERTISER'] })
-  userType: string;
-
-  @Column({ name: 'period_start', type: 'timestamp' })
-  periodStart: Date;
-
-  @Column({ name: 'period_end', type: 'timestamp' })
-  periodEnd: Date;
-
-  // Overview metrics
-  @Column({ name: 'total_transactions', type: 'integer', default: 0 })
-  totalTransactions: number;
-
+  // Revenue metrics
   @Column({
-    name: 'total_amount',
+    name: 'gross_revenue',
     type: 'decimal',
-    precision: 15,
+    precision: 12,
     scale: 2,
-    default: 0,
+    default: 0.0,
   })
-  totalAmount: number;
+  grossRevenue: number;
 
   @Column({
-    name: 'average_transaction_amount',
+    name: 'net_revenue',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
+  netRevenue: number;
+
+  @Column({
+    name: 'platform_fees',
     type: 'decimal',
     precision: 10,
     scale: 2,
-    default: 0,
+    default: 0.0,
   })
-  averageTransactionAmount: number;
+  platformFees: number;
 
   @Column({
-    name: 'largest_transaction',
+    name: 'payment_processing_fees',
     type: 'decimal',
-    precision: 12,
+    precision: 10,
     scale: 2,
-    default: 0,
+    default: 0.0,
   })
-  largestTransaction: number;
+  paymentProcessingFees: number;
 
-  // Trends
+  // Growth metrics
   @Column({
-    name: 'monthly_growth',
+    name: 'revenue_growth_rate',
     type: 'decimal',
     precision: 8,
     scale: 4,
-    default: 0,
+    default: 0.0,
   })
-  monthlyGrowth: number;
+  revenueGrowthRate: number;
 
   @Column({
-    name: 'quarterly_growth',
+    name: 'user_acquisition_cost',
     type: 'decimal',
     precision: 8,
+    scale: 2,
+    default: 0.0,
+  })
+  userAcquisitionCost: number;
+
+  @Column({
+    name: 'lifetime_value',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  lifetimeValue: number;
+
+  // Efficiency metrics
+  @Column({
+    name: 'conversion_rate',
+    type: 'decimal',
+    precision: 5,
     scale: 4,
-    default: 0,
+    default: 0.0,
   })
-  quarterlyGrowth: number;
+  conversionRate: number;
 
   @Column({
-    name: 'yearly_growth',
+    name: 'average_transaction_value',
     type: 'decimal',
-    precision: 8,
+    precision: 10,
+    scale: 2,
+    default: 0.0,
+  })
+  averageTransactionValue: number;
+
+  @Column({
+    name: 'churn_rate',
+    type: 'decimal',
+    precision: 5,
     scale: 4,
-    default: 0,
+    default: 0.0,
   })
-  yearlyGrowth: number;
+  churnRate: number;
 
-  // Breakdown by campaign type
-  @Column({
-    name: 'visibility_amount',
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    nullable: true,
-  })
-  visibilityAmount: number;
+  // Period
+  @Column({ name: 'period_start', type: 'timestamptz' })
+  periodStart: Date;
 
-  @Column({
-    name: 'consultant_amount',
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    nullable: true,
-  })
-  consultantAmount: number;
+  @Column({ name: 'period_end', type: 'timestamptz' })
+  periodEnd: Date;
 
-  @Column({
-    name: 'seller_amount',
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    nullable: true,
-  })
-  sellerAmount: number;
-
-  @Column({
-    name: 'salesman_amount',
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    nullable: true,
-  })
-  salesmanAmount: number;
-
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => UserEntity)
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: UserEntity;
 }
