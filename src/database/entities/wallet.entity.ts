@@ -39,7 +39,7 @@ export class Wallet {
   @Column({
     name: 'total_earned',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
     default: 0,
   })
@@ -48,7 +48,7 @@ export class Wallet {
   @Column({
     name: 'total_withdrawn',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
     default: 0,
   })
@@ -63,17 +63,17 @@ export class Wallet {
   @Column({
     name: 'minimum_threshold',
     type: 'decimal',
-    precision: 10,
+    precision: 6,
     scale: 2,
     default: 20,
   })
   minimumThreshold: number;
 
-  // Direct earnings (consultant/salesman)
+  // Direct earnings (consultant/seller campaigns)
   @Column({
     name: 'direct_total_earned',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
     default: 0,
   })
@@ -82,7 +82,7 @@ export class Wallet {
   @Column({
     name: 'direct_total_paid',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
     default: 0,
   })

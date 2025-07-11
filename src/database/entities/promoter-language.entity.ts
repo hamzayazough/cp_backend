@@ -5,8 +5,10 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  CreateDateColumn,
 } from 'typeorm';
 import { Language } from '../../enums/language';
+import { LanguageProficiency } from '../../enums/language-proficiency';
 import { PromoterDetailsEntity } from './promoter-details.entity';
 
 @Entity('promoter_languages')
@@ -23,6 +25,16 @@ export class PromoterLanguageEntity {
     enum: Language,
   })
   language: Language;
+
+  @Column({
+    type: 'enum',
+    enum: LanguageProficiency,
+    default: LanguageProficiency.NATIVE,
+  })
+  proficiency: LanguageProficiency;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
   // Relations
   @ManyToOne(

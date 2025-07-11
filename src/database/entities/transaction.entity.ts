@@ -8,7 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { Campaign } from './campaign.entity';
+import { CampaignEntity } from './campaign.entity';
 
 export enum TransactionType {
   VIEW_EARNING = 'VIEW_EARNING',
@@ -35,7 +35,7 @@ export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'promoter_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'uuid' })
   promoterId: string;
 
   @Column({ name: 'campaign_id', type: 'uuid', nullable: true })
@@ -67,6 +67,14 @@ export class Transaction {
   })
   estimatedPaymentDate?: Date;
 
+  @Column({
+    name: 'stripe_transaction_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  stripeTransactionId?: string;
+
   @Column({ name: 'processed_at', type: 'timestamptz', nullable: true })
   processedAt?: Date;
 
@@ -78,10 +86,10 @@ export class Transaction {
 
   // Relations
   @ManyToOne(() => UserEntity, { eager: false })
-  @JoinColumn({ name: 'promoter_id' })
+  @JoinColumn({ name: 'user_id' })
   promoter: UserEntity;
 
-  @ManyToOne(() => Campaign, { eager: false })
+  @ManyToOne(() => CampaignEntity, { eager: false })
   @JoinColumn({ name: 'campaign_id' })
-  campaign?: Campaign;
+  campaign?: CampaignEntity;
 }

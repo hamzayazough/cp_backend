@@ -182,7 +182,6 @@ export class UserService {
     existingUser.twitterUrl = createUserDto.twitterUrl;
     existingUser.websiteUrl = createUserDto.websiteUrl;
     existingUser.isSetupDone = false;
-
     const savedUser = await this.userRepository.save(existingUser);
 
     // Handle advertiser details
@@ -562,6 +561,7 @@ export class UserService {
       name: userEntity.name,
       role: userEntity.role,
       createdAt: userEntity.createdAt.toISOString(),
+      updatedAt: userEntity.updatedAt,
       isSetupDone: userEntity.isSetupDone,
       avatarUrl: userEntity.avatarUrl,
       backgroundUrl: userEntity.backgroundUrl,

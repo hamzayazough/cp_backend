@@ -14,7 +14,7 @@ import {
   PromoterWalletDirectEarnings,
 } from '../interfaces/promoter-dashboard';
 import { UserEntity } from '../database/entities/user.entity';
-import { Campaign } from '../database/entities/campaign.entity';
+import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
@@ -26,8 +26,8 @@ export class PromoterService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
-    @InjectRepository(Campaign)
-    private campaignRepository: Repository<Campaign>,
+    @InjectRepository(CampaignEntity)
+    private campaignRepository: Repository<CampaignEntity>,
     @InjectRepository(Transaction)
     private transactionRepository: Repository<Transaction>,
     @InjectRepository(Wallet)
@@ -47,19 +47,15 @@ export class PromoterService {
     const data: PromoterDashboardData = {};
 
     // Find promoter by Firebase UID
-    console.log('Looking for user with Firebase UID:', firebaseUid);
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
     });
-
-    console.log('Found promoter:', promoter);
 
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
 
     const promoterId = promoter.id;
-    console.log('Promoter ID:', promoterId);
 
     // Get actual data from database
     if (request.includeStats) {
@@ -117,7 +113,6 @@ export class PromoterService {
       yesterday.getDate(),
     );
 
-    // Get earnings this week vs last week
     const earningsThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
@@ -135,7 +130,6 @@ export class PromoterService {
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
 
-    // Get views today vs yesterday
     const viewsToday = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .select('SUM(pc.viewsGenerated)', 'total')
@@ -151,7 +145,6 @@ export class PromoterService {
       .andWhere('pc.updatedAt < :startOfToday', { startOfToday })
       .getRawOne();
 
-    // Get sales this week vs last week (assuming salesman commission transactions)
     const salesThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
@@ -171,14 +164,12 @@ export class PromoterService {
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
 
-    // Get active campaigns count
     const activeCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
       .andWhere('pc.status = :status', { status: 'ONGOING' })
       .getCount();
 
-    // Get pending review campaigns count
     const pendingReviewCampaigns = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .where('pc.promoterId = :promoterId', { promoterId })
@@ -394,7 +385,7 @@ export class PromoterService {
     };
   }
 
-  private getCampaignTags(campaign: Campaign): string[] {
+  private getCampaignTags(campaign: CampaignEntity): string[] {
     const tags: string[] = [];
 
     if (campaign.type === CampaignType.VISIBILITY) {
@@ -408,7 +399,7 @@ export class PromoterService {
     return tags;
   }
 
-  private getCampaignRequirements(campaign: Campaign): string[] {
+  private getCampaignRequirements(campaign: CampaignEntity): string[] {
     const requirements: string[] = [];
 
     if (campaign.type === CampaignType.VISIBILITY) {
@@ -422,14 +413,14 @@ export class PromoterService {
     return requirements;
   }
 
-  private calculateEstimatedEarnings(campaign: Campaign): number {
+  private calculateEstimatedEarnings(campaign: CampaignEntity): number {
     if (campaign.type === CampaignType.VISIBILITY && campaign.cpv) {
       return campaign.cpv * 100; // Assuming 100 views as baseline
     }
     return 0;
   }
 
-  private getCampaignBudget(campaign: Campaign): number | undefined {
+  private getCampaignBudget(campaign: CampaignEntity): number | undefined {
     if (
       campaign.type === CampaignType.CONSULTANT ||
       campaign.type === CampaignType.SELLER

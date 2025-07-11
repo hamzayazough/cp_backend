@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { SocialPlatform } from '../../enums/social-platform';
 import { PromoterDetailsEntity } from './promoter-details.entity';
 
 @Entity('promoter_works')
@@ -20,11 +21,21 @@ export class PromoterWorkEntity {
   @Column()
   title: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ name: 'media_url' })
+  @Column({ name: 'media_url', type: 'text' })
   mediaUrl: string;
+
+  @Column({
+    type: 'enum',
+    enum: SocialPlatform,
+    nullable: true,
+  })
+  platform?: SocialPlatform;
+
+  @Column({ name: 'view_count', type: 'integer', default: 0 })
+  viewCount: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

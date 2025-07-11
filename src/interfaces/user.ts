@@ -13,6 +13,7 @@ export interface User {
   role: UserRole;
   createdAt: string;
   isSetupDone: boolean;
+  updatedAt: Date;
 
   avatarUrl?: string; // Profile picture (S3 URL)
   backgroundUrl?: string; // Background banner (S3 URL)
@@ -29,7 +30,7 @@ export interface User {
 
   // Stripe / Financial
   stripeAccountId?: string;
-  walletBalance?: number;
+  walletBalance: number;
 
   // Role-specific fields
   advertiserDetails?: AdvertiserDetails;

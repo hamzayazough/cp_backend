@@ -5,7 +5,9 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  CreateDateColumn,
 } from 'typeorm';
+import { ExperienceLevel } from '../../enums/experience-level';
 import { PromoterDetailsEntity } from './promoter-details.entity';
 
 @Entity('promoter_skills')
@@ -19,6 +21,17 @@ export class PromoterSkillEntity {
 
   @Column()
   skill: string;
+
+  @Column({
+    name: 'experience_level',
+    type: 'enum',
+    enum: ExperienceLevel,
+    default: ExperienceLevel.BEGINNER,
+  })
+  experienceLevel: ExperienceLevel;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
   // Relations
   @ManyToOne(() => PromoterDetailsEntity, (promoter) => promoter.promoterSkills)
