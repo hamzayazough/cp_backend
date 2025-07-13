@@ -50,7 +50,6 @@ export class AdvertiserController {
             pendingApprovalCampaigns: 0,
           },
           activeCampaigns: [],
-          recommendedPromoters: [],
           recentTransactions: [],
           recentMessages: [],
           wallet: {

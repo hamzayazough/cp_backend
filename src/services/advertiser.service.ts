@@ -12,7 +12,6 @@ import {
   AdvertiserDashboardData,
   AdvertiserStats,
   AdvertiserActiveCampaign,
-  AdvertiserRecommendedPromoter,
   AdvertiserTransaction,
   AdvertiserMessage,
   AdvertiserWallet,
@@ -62,7 +61,6 @@ export class AdvertiserService {
         pendingApprovalCampaigns: 0,
       },
       activeCampaigns: [],
-      recommendedPromoters: [],
       recentTransactions: [],
       recentMessages: [],
       wallet: {
@@ -103,13 +101,6 @@ export class AdvertiserService {
       data.activeCampaigns = await this.getActiveCampaigns(
         advertiserId,
         request.activeCampaignLimit || 10,
-      );
-    }
-
-    if (request.includeRecommendations) {
-      data.recommendedPromoters = await this.getRecommendedPromoters(
-        advertiserId,
-        request.recommendedPromoterLimit || 10,
       );
     }
 
@@ -329,60 +320,6 @@ export class AdvertiserService {
     );
 
     return campaignData;
-  }
-
-  private async getRecommendedPromoters(
-    advertiserId: string,
-    limit: number,
-  ): Promise<AdvertiserRecommendedPromoter[]> {
-    // Get top performing promoters
-    const promoters = await this.userRepository
-      .createQueryBuilder('user')
-      .leftJoin('user.promoterDetails', 'details')
-      .where('user.role = :role', { role: 'PROMOTER' })
-      .orderBy('user.createdAt', 'DESC')
-      .limit(limit)
-      .getMany();
-
-    const promoterData = await Promise.all(
-      promoters.map(async (promoter) => {
-        // Get promoter performance metrics
-        const completedCampaigns = await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
-          .andWhere('pc.status = :status', { status: 'COMPLETED' })
-          .getCount();
-
-        const avgViews = (await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .select('AVG(pc.viewsGenerated)', 'avg')
-          .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
-          .getRawOne()) as QueryResult;
-
-        const totalViews = parseInt(avgViews?.avg || '0');
-
-        return {
-          id: promoter.id,
-          name: promoter.name,
-          avatar: promoter.avatarUrl,
-          rating: 4.5, // Default rating, you might want to implement a rating system
-          followers: 10000, // This should come from social media data
-          specialties: ['Marketing', 'Social Media'], // This should come from promoter details
-          location: 'Location', // This should come from promoter details
-          successRate: completedCampaigns > 0 ? 85 : 0, // Calculate based on actual data
-          averageViews: totalViews,
-          completedCampaigns,
-          priceRange: {
-            min: 50,
-            max: 200,
-          },
-          isVerified: true, // This should come from verification status
-          languages: ['English'], // This should come from promoter language preferences
-        };
-      }),
-    );
-
-    return promoterData;
   }
 
   private async getRecentTransactions(
