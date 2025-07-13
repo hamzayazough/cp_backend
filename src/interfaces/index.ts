@@ -1,7 +1,6 @@
 // Core interfaces
 export * from './user';
 export * from './campaign';
-export * from './campaign-application';
 export * from './promoter-campaign';
 export * from './transaction';
 export * from './wallet';

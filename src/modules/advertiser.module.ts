@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
 import { AdvertiserService } from '../services/advertiser.service';
+import { CampaignService } from '../services/campaign.service';
+import { S3Service } from '../services/s3.service';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -22,7 +24,7 @@ import { MessageThread, Message } from '../database/entities/message.entity';
     ]),
   ],
   controllers: [AdvertiserController],
-  providers: [AdvertiserService],
-  exports: [AdvertiserService],
+  providers: [AdvertiserService, CampaignService, S3Service],
+  exports: [AdvertiserService, CampaignService],
 })
 export class AdvertiserModule {}
