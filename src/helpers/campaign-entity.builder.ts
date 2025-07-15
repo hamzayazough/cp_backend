@@ -8,6 +8,7 @@ import {
 } from '../interfaces/campaign';
 import { CampaignStatus } from '../enums/campaign-status';
 import { CampaignType } from '../enums/campaign-type';
+import { SalesTrackingMethod } from 'src/enums/sales-tracking-method';
 
 export class CampaignEntityBuilder {
   /**
@@ -50,7 +51,6 @@ export class CampaignEntityBuilder {
     campaign.title = campaignData.title;
     campaign.description = campaignData.description;
     campaign.type = campaignData.type;
-    campaign.isPublic = campaignData.isPublic;
     campaign.mediaUrl = campaignData.mediaUrl;
     campaign.requirements = campaignData.requirements;
     campaign.targetAudience = campaignData.targetAudience;
@@ -58,7 +58,36 @@ export class CampaignEntityBuilder {
     campaign.deadline = new Date(campaignData.deadline);
     campaign.startDate = new Date(campaignData.startDate);
     campaign.advertiserTypes = campaignData.advertiserTypes;
-    campaign.status = CampaignStatus.PAUSED; // Default to paused until activated
+
+    if (campaignData.type === CampaignType.VISIBILITY) {
+      campaign.isPublic = campaignData.isPublic;
+    } else {
+      campaign.isPublic = false; // Consultant, Seller, Salesman campaigns are not suppose to be public
+    }
+
+    if (
+      campaignData.startDate &&
+      this.isSameDay(new Date(campaignData.startDate), new Date())
+    ) {
+      campaign.status = CampaignStatus.ACTIVE;
+    } else {
+      campaign.status = CampaignStatus.PAUSED;
+    }
+    campaign.createdAt = new Date();
+    campaign.updatedAt = new Date();
+
+    //TODO: generate discord invite link for this campaign
+  }
+
+  /**
+   * Checks if two dates are on the same day
+   */
+  private static isSameDay(date1: Date, date2: Date): boolean {
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    );
   }
 
   /**
@@ -101,9 +130,14 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.cpv = data.cpv;
     campaign.maxViews = data.maxViews;
-    campaign.trackingLink = data.trackingLink;
+    campaign.trackingLink = this.generateTrackingLink(data.trackingLink);
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
+  }
+
+  // TODO: generate tracking link once we have the site URL
+  private static generateTrackingLink(siteUrl: string): string {
+    return siteUrl;
   }
 
   /**
@@ -130,10 +164,12 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.sellerRequirements = data.sellerRequirements;
     campaign.deliverables = data.deliverables;
-    campaign.maxBudget = data.maxBudget;
-    campaign.minBudget = data.minBudget;
+    campaign.maxBudget = data.maxBudget || 0;
+    campaign.minBudget = data.minBudget || 0;
     campaign.minFollowers = data.minFollowers;
     campaign.meetingPlan = data.meetingPlan;
+    campaign.needMeeting = data.needMeeting || false;
+    campaign.meetingCount = data.meetingCount || 0;
   }
 
   /**
@@ -144,7 +180,8 @@ export class CampaignEntityBuilder {
     data: SalesmanCampaign,
   ): void {
     campaign.commissionPerSale = data.commissionPerSale;
-    campaign.trackSalesVia = data.trackSalesVia;
+    campaign.trackSalesVia =
+      data.trackSalesVia || SalesTrackingMethod.COUPON_CODE;
     campaign.codePrefix = data.codePrefix;
     campaign.minFollowers = data.minFollowers;
   }

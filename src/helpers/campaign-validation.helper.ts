@@ -87,6 +87,11 @@ export class CampaignValidationHelper {
     if (!campaignData.cpv || campaignData.cpv <= 0) {
       throw new BadRequestException(CAMPAIGN_VALIDATION_MESSAGES.CPV_REQUIRED);
     }
+    if (!campaignData.maxViews || campaignData.maxViews <= 0) {
+      throw new BadRequestException(
+        CAMPAIGN_VALIDATION_MESSAGES.MAX_VIEWS_REQUIRED,
+      );
+    }
     if (!campaignData.trackingLink) {
       throw new BadRequestException(
         CAMPAIGN_VALIDATION_MESSAGES.TRACKING_LINK_REQUIRED,

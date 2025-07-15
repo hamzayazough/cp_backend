@@ -120,6 +120,9 @@ export class CampaignEntity {
   @Column({ name: 'meeting_count', type: 'integer', nullable: true })
   meetingCount?: number;
 
+  @Column({ name: 'need_meeting', type: 'boolean', nullable: true })
+  needMeeting?: boolean;
+
   @Column({ name: 'expertise_required', type: 'text', nullable: true })
   expertiseRequired?: string;
 

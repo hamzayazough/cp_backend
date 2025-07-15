@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     -- Campaign-specific fields for CONSULTANT campaigns
     meeting_plan meeting_plan,
     meeting_count INTEGER, -- Number of meetings included in the campaign
+    need_meeting BOOLEAN,
     expertise_required TEXT,
     expected_deliverables deliverable[],
     

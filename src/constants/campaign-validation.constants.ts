@@ -10,6 +10,7 @@ export const CAMPAIGN_VALIDATION_MESSAGES = {
   // Visibility campaign validations
   CPV_REQUIRED: 'CPV must be greater than 0',
   TRACKING_LINK_REQUIRED: 'Tracking link is required for visibility campaigns',
+  MAX_VIEWS_REQUIRED: 'Max views must be greater than 0',
 
   // Consultant campaign validations
   EXPECTED_DELIVERABLES_REQUIRED:

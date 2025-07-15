@@ -11,7 +11,6 @@ export interface BaseCampaign {
   description: string;
   advertiserTypes?: AdvertiserType[];
   isPublic: boolean;
-  expiryDate?: Date;
   mediaUrl?: string;
 
   requirements?: string[];
@@ -60,6 +59,9 @@ export interface SellerCampaign extends BaseCampaign {
   isPublic: false;
   minFollowers?: number;
   promoterLinks?: string[];
+
+  needMeeting?: boolean; // If true, the promoter needs to have a meeting with the advertiser before starting the campaign
+  meetingCount?: number;
 }
 
 export interface SalesmanCampaign extends BaseCampaign {
