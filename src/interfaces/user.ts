@@ -58,6 +58,10 @@ export interface PromoterDetails {
   // Statistics
   totalSales?: number;
   numberOfCampaignDone?: number;
+  numberOfVisibilityCampaignDone?: number;
+  numberOfSellerCampaignDone?: number;
+  numberOfSalesmanCampaignDone?: number;
+  numberOfConsultantCampaignDone?: number;
   totalViewsGenerated?: number;
 }
 
@@ -103,4 +107,37 @@ export interface PromoterWorkDto {
   title: string;
   description?: string;
   mediaUrl: string;
+}
+
+export interface Promoter {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+
+  avatarUrl?: string; // Profile picture (S3 URL)
+  backgroundUrl?: string; // Background banner (S3 URL)
+  bio?: string;
+  rating?: number;
+
+  // Social Media Links
+  tiktokUrl?: string;
+  instagramUrl?: string;
+  snapchatUrl?: string;
+  youtubeUrl?: string;
+  twitterUrl?: string;
+  websiteUrl?: string;
+  works: PromoterWork[]; // List of past projects (mp4, images)
+  location?: string;
+  languagesSpoken?: Language[];
+  followersEstimate?: FollowerEstimate[];
+  skills?: string[];
+  verified?: boolean;
+  totalSales?: number;
+  numberOfCampaignDone?: number;
+  numberOfVisibilityCampaignDone?: number;
+  numberOfSellerCampaignDone?: number;
+  numberOfSalesmanCampaignDone?: number;
+  numberOfConsultantCampaignDone?: number;
+  totalViewsGenerated?: number;
 }

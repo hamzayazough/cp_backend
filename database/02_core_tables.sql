@@ -26,10 +26,16 @@ CREATE TABLE IF NOT EXISTS users (
     youtube_url TEXT,
     twitter_url TEXT,
     website_url TEXT, -- Personal or company website
-    
-    -- Financial
+      -- Financial
     stripe_account_id VARCHAR(255),
-    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0)
+    wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0),
+    
+    -- Campaign Statistics
+    number_of_visibility_campaign_done INTEGER DEFAULT 0 CHECK (number_of_visibility_campaign_done >= 0),
+    number_of_seller_campaign_done INTEGER DEFAULT 0 CHECK (number_of_seller_campaign_done >= 0),
+    number_of_salesman_campaign_done INTEGER DEFAULT 0 CHECK (number_of_salesman_campaign_done >= 0),
+    number_of_consultant_campaign_done INTEGER DEFAULT 0 CHECK (number_of_consultant_campaign_done >= 0),
+    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
 );
 
 -- Advertiser details table

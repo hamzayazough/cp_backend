@@ -6,6 +6,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Get,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
@@ -18,8 +19,14 @@ import {
   GetAdvertiserDashboardRequest,
   GetAdvertiserDashboardResponse,
 } from '../interfaces/advertiser-dashboard';
+import {
+  AdvertiserCampaignListRequest,
+  AdvertiserCampaignListResponse,
+  AdvertiserDashboardSummary,
+} from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
+import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 
 @Controller('advertiser')
 export class AdvertiserController {
@@ -110,7 +117,6 @@ export class AdvertiserController {
       firebaseUid,
     );
   }
-
   @Post('create-campaign')
   async createCampaign(
     @Body()
@@ -124,5 +130,74 @@ export class AdvertiserController {
   ): Promise<CreateCampaignResponse> {
     const firebaseUid = req.user.uid;
     return this.campaignService.createCampaign(campaignData, firebaseUid);
+  }
+
+  @Post('campaigns/list')
+  async getCampaignsList(
+    @Body() request: AdvertiserCampaignListRequest,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<AdvertiserCampaignListResponse> {
+    try {
+      console.log('Fetching campaigns list with request:', request);
+      const firebaseUid = req.user.uid;
+      return await this.advertiserService.getCampaignsList(
+        firebaseUid,
+        request,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve campaigns list',
+      );
+    }
+  }
+
+  @Get('dashboard/summary')
+  async getDashboardSummary(@Request() req: { user: FirebaseUser }): Promise<{
+    success: boolean;
+    data: AdvertiserDashboardSummary;
+    message?: string;
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const data =
+        await this.advertiserService.getDashboardSummary(firebaseUid);
+
+      return {
+        success: true,
+        data,
+        message: 'Dashboard summary retrieved successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve dashboard summary',
+      );
+    }
+  }
+
+  @Get('campaigns/filters')
+  getCampaignFilters(): {
+    success: boolean;
+    data: { statuses: CampaignStatus[]; types: CampaignType[] };
+    message?: string;
+  } {
+    try {
+      const data = this.advertiserService.getCampaignFilters();
+
+      return {
+        success: true,
+        data,
+        message: 'Campaign filters retrieved successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve campaign filters',
+      );
+    }
   }
 }

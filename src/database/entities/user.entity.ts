@@ -74,7 +74,6 @@ export class UserEntity {
   // Financial
   @Column({ name: 'stripe_account_id', nullable: true })
   stripeAccountId?: string;
-
   @Column({
     name: 'wallet_balance',
     type: 'decimal',
@@ -83,6 +82,42 @@ export class UserEntity {
     default: 0,
   })
   walletBalance: number;
+
+  // Campaign Statistics
+  @Column({
+    name: 'number_of_visibility_campaign_done',
+    type: 'int',
+    default: 0,
+  })
+  numberOfVisibilityCampaignDone?: number;
+
+  @Column({
+    name: 'number_of_seller_campaign_done',
+    type: 'int',
+    default: 0,
+  })
+  numberOfSellerCampaignDone?: number;
+
+  @Column({
+    name: 'number_of_salesman_campaign_done',
+    type: 'int',
+    default: 0,
+  })
+  numberOfSalesmanCampaignDone?: number;
+
+  @Column({
+    name: 'number_of_consultant_campaign_done',
+    type: 'int',
+    default: 0,
+  })
+  numberOfConsultantCampaignDone?: number;
+
+  @Column({
+    name: 'total_views_generated',
+    type: 'int',
+    default: 0,
+  })
+  totalViewsGenerated?: number;
 
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
