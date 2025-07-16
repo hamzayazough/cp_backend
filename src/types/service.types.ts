@@ -1,3 +1,7 @@
+import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { CampaignType } from 'src/enums/campaign-type';
+import { PromoterCampaignStatus } from 'src/interfaces';
+
 export interface AdvertiserDashboardData {
   stats: AdvertiserStats;
   activeCampaigns: AdvertiserActiveCampaign[];
@@ -23,8 +27,8 @@ export interface AdvertiserStats {
 export interface AdvertiserActiveCampaign {
   id: string;
   title: string;
-  type: 'VISIBILITY' | 'SALESMAN' | 'CONSULTANT';
-  status: 'ACTIVE' | 'ONGOING' | 'AWAITING_PROMOTER' | 'COMPLETED' | 'PAUSED';
+  type: CampaignType;
+  status: PromoterCampaignStatus;
   views: number;
   spent: number;
   applications: number;
@@ -57,7 +61,7 @@ export interface AdvertiserMessage {
   avatar?: string;
   isRead: boolean;
   threadId: string;
-  senderType: 'PROMOTER' | 'ADMIN' | 'SYSTEM';
+  senderType: UserType;
   campaignId?: string;
 }
 

@@ -8,6 +8,10 @@ import {
   ExploreCampaignRequest,
   ExploreCampaignResponse,
 } from '../interfaces/explore-campaign';
+import {
+  GetPromoterCampaignsRequest,
+  PromoterCampaignsListResponse,
+} from '../interfaces/promoter-campaigns';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 
 @Controller('promoter')
@@ -83,6 +87,53 @@ export class PromoterController {
           searchTerm: request.searchTerm || '',
           typeFilter: request.typeFilter || [],
           advertiserTypes: request.advertiserTypes || [],
+        },
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Post('campaigns/list')
+  async getPromoterCampaigns(
+    @Body() request: GetPromoterCampaignsRequest,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    data: PromoterCampaignsListResponse;
+    message?: string;
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const data = await this.promoterService.getPromoterCampaigns(
+        firebaseUid,
+        request,
+      );
+
+      return {
+        success: true,
+        data,
+        message: 'Promoter campaigns data retrieved successfully',
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve promoter campaigns data';
+      return {
+        success: false,
+        data: {
+          campaigns: [],
+          page: request.page || 1,
+          totalPages: 0,
+          totalCount: 0,
+          summary: {
+            totalActive: 0,
+            totalPending: 0,
+            totalCompleted: 0,
+            totalEarnings: 0,
+            totalViews: 0,
+          },
         },
         message: errorMessage,
       };

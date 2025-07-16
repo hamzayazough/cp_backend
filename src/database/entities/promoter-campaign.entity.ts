@@ -14,6 +14,7 @@ export enum PromoterCampaignStatus {
   AWAITING_REVIEW = 'AWAITING_REVIEW',
   COMPLETED = 'COMPLETED',
   PAUSED = 'PAUSED',
+  REFUSED = 'REFUSED',
 }
 
 @Entity('promoter_campaigns')

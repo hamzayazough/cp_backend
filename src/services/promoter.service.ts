@@ -24,6 +24,13 @@ import {
   SellerCampaign,
   SalesmanCampaign,
 } from '../interfaces/explore-campaign';
+import {
+  GetPromoterCampaignsRequest,
+  PromoterCampaignsListResponse,
+  CampaignPromoter,
+  CampaignDetailsUnion,
+  Earnings,
+} from '../interfaces/promoter-campaigns';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -652,5 +659,280 @@ export class PromoterService {
         );
       }
     }
+  }
+
+  async getPromoterCampaigns(
+    firebaseUid: string,
+    request: GetPromoterCampaignsRequest,
+  ): Promise<PromoterCampaignsListResponse> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    const page = request.page || 1;
+    const limit = request.limit || 10;
+    const skip = (page - 1) * limit;
+    const searchTerm = request.searchTerm || '';
+    const sortBy = request.sortBy || 'newest';
+    const sortOrder = request.sortOrder || 'desc';
+
+    // Build query for promoter campaigns
+    let query = this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .leftJoinAndSelect('pc.campaign', 'campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .where('pc.promoterId = :promoterId', { promoterId: promoter.id });
+
+    // Apply status filter
+    if (request.status && request.status.length > 0) {
+      query = query.andWhere('pc.status IN (:...statuses)', {
+        statuses: request.status,
+      });
+    }
+
+    // Apply campaign type filter
+    if (request.type && request.type.length > 0) {
+      query = query.andWhere('campaign.type IN (:...types)', {
+        types: request.type,
+      });
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      query = query.andWhere(
+        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
+        { search: `%${searchTerm}%` },
+      );
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'newest':
+        query = query.orderBy(
+          'pc.joinedAt',
+          sortOrder.toUpperCase() as 'ASC' | 'DESC',
+        );
+        break;
+      case 'deadline':
+        query = query.orderBy(
+          'campaign.deadline',
+          sortOrder.toUpperCase() as 'ASC' | 'DESC',
+        );
+        break;
+      case 'earnings':
+        query = query.orderBy(
+          'pc.earnings',
+          sortOrder.toUpperCase() as 'ASC' | 'DESC',
+        );
+        break;
+      case 'title':
+        query = query.orderBy(
+          'campaign.title',
+          sortOrder.toUpperCase() as 'ASC' | 'DESC',
+        );
+        break;
+      default:
+        query = query.orderBy('pc.joinedAt', 'DESC');
+    }
+
+    const totalCount = await query.getCount();
+    const totalPages = Math.ceil(totalCount / limit);
+    const promoterCampaigns = await query.skip(skip).take(limit).getMany();
+
+    // Transform promoter campaigns to the required format
+    const transformedCampaigns: CampaignPromoter[] = promoterCampaigns.map(
+      (pc) => this.transformPromoterCampaignToInterface(pc),
+    );
+
+    // Calculate summary
+    const summary = await this.calculatePromoterCampaignsSummary(promoter.id);
+
+    return {
+      campaigns: transformedCampaigns,
+      page,
+      totalPages,
+      totalCount,
+      summary,
+    };
+  }
+
+  private transformPromoterCampaignToInterface(
+    pc: PromoterCampaign,
+  ): CampaignPromoter {
+    const advertiser: Advertiser = {
+      id: pc.campaign.advertiser.id,
+      companyName: pc.campaign.advertiser.name || 'Unknown Company',
+      profileUrl: pc.campaign.advertiser.avatarUrl,
+      rating: pc.campaign.advertiser.rating || 0,
+      verified: true, // You may want to add a verified field to UserEntity
+      description: pc.campaign.advertiser.bio || '',
+      website: pc.campaign.advertiser.websiteUrl || '',
+      advertiserTypes: pc.campaign.advertiserTypes || [],
+    };
+
+    const earnings: Earnings = {
+      totalEarned: Number(pc.earnings),
+      viewsGenerated: pc.viewsGenerated,
+      projectedTotal: this.calculateProjectedEarnings(pc),
+    };
+
+    const baseCampaign = {
+      budgetHeld: Number(pc.budgetHeld),
+      spentBudget: Number(pc.spentBudget),
+      targetAudience: pc.campaign.targetAudience,
+      preferredPlatforms: pc.campaign.preferredPlatforms,
+      requirements: pc.campaign.requirements,
+      createdAt: pc.campaign.createdAt,
+      deadline: pc.campaign.deadline
+        ? new Date(pc.campaign.deadline).toISOString()
+        : '',
+      startDate: pc.campaign.startDate
+        ? new Date(pc.campaign.startDate).toISOString()
+        : '',
+      isPublic: pc.campaign.isPublic,
+      discordInviteLink: pc.campaign.discordInviteLink || '',
+    };
+
+    let campaignDetails: CampaignDetailsUnion;
+
+    switch (pc.campaign.type) {
+      case CampaignType.VISIBILITY:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.VISIBILITY,
+          maxViews: pc.campaign.maxViews || 0,
+          currentViews: pc.viewsGenerated, // Use promoter's generated views
+          cpv: pc.campaign.cpv || 0,
+          minFollowers: pc.campaign.minFollowers,
+          trackingLink: pc.campaign.trackingLink || '',
+        };
+        break;
+
+      case CampaignType.CONSULTANT:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.CONSULTANT,
+          meetingPlan: pc.campaign.meetingPlan!,
+          expectedDeliverables: pc.campaign.expectedDeliverables,
+          expertiseRequired: pc.campaign.expertiseRequired,
+          meetingCount: pc.campaign.meetingCount || 0,
+          maxBudget: pc.campaign.maxBudget || 0,
+          minBudget: pc.campaign.minBudget || 0,
+          promoterLinks: [], // You may want to add this field to PromoterCampaign entity
+        };
+        break;
+
+      case CampaignType.SELLER:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.SELLER,
+          sellerRequirements: pc.campaign.sellerRequirements,
+          deliverables: pc.campaign.deliverables,
+          fixedPrice: undefined, // Not in current schema
+          maxBudget: pc.campaign.maxBudget || 0,
+          minBudget: pc.campaign.minBudget || 0,
+          promoterLinks: [], // You may want to add this field to PromoterCampaign entity
+          minFollowers: pc.campaign.minFollowers,
+          needMeeting: pc.campaign.needMeeting || false,
+          meetingPlan: pc.campaign.meetingPlan!,
+          meetingCount: pc.campaign.meetingCount || 0,
+        };
+        break;
+
+      case CampaignType.SALESMAN:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.SALESMAN,
+          commissionPerSale: pc.campaign.commissionPerSale || 0,
+          trackSalesVia: pc.campaign.trackSalesVia!,
+          codePrefix: pc.campaign.codePrefix,
+          refLink: pc.campaign.trackingLink,
+          minFollowers: pc.campaign.minFollowers,
+        };
+        break;
+      default:
+        throw new Error(
+          `Unsupported campaign type: ${String(pc.campaign.type)}`,
+        );
+    }
+
+    return {
+      id: pc.campaign.id,
+      title: pc.campaign.title,
+      type: pc.campaign.type,
+      mediaUrl: pc.campaign.mediaUrl,
+      status: pc.status,
+      description: pc.campaign.description,
+      advertiser,
+      campaign: campaignDetails,
+      earnings,
+      tags: pc.campaign.advertiserTypes || [],
+      meetingDone: false, // You may want to add this logic based on meeting requirements
+    };
+  }
+
+  private calculateProjectedEarnings(pc: PromoterCampaign): number {
+    // Simple projection based on current earnings and campaign progress
+    if (
+      pc.campaign.type === CampaignType.VISIBILITY &&
+      pc.campaign.maxViews &&
+      pc.campaign.cpv
+    ) {
+      const maxPossibleEarnings =
+        (pc.campaign.maxViews / 100) * pc.campaign.cpv;
+      return maxPossibleEarnings;
+    }
+
+    if (
+      pc.campaign.type === CampaignType.CONSULTANT ||
+      pc.campaign.type === CampaignType.SELLER
+    ) {
+      return pc.campaign.maxBudget || Number(pc.earnings);
+    }
+
+    return Number(pc.earnings);
+  }
+
+  private async calculatePromoterCampaignsSummary(promoterId: string) {
+    const summaryQuery = this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .leftJoin('pc.campaign', 'campaign')
+      .where('pc.promoterId = :promoterId', { promoterId });
+
+    const [totalActive, totalPending, totalCompleted] = await Promise.all([
+      summaryQuery
+        .clone()
+        .andWhere('pc.status = :status', { status: 'ONGOING' })
+        .getCount(),
+      summaryQuery
+        .clone()
+        .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
+        .getCount(),
+      summaryQuery
+        .clone()
+        .andWhere('pc.status = :status', { status: 'COMPLETED' })
+        .getCount(),
+    ]);
+    const earningsAndViews:
+      | { totalEarnings: string; totalViews: string }
+      | undefined = await summaryQuery
+      .clone()
+      .select('SUM(pc.earnings)', 'totalEarnings')
+      .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
+      .getRawOne();
+
+    return {
+      totalActive,
+      totalPending,
+      totalCompleted,
+      totalEarnings: parseFloat(earningsAndViews?.totalEarnings || '0'),
+      totalViews: parseInt(earningsAndViews?.totalViews || '0'),
+    };
   }
 }
