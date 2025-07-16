@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     promoter_links TEXT[],
     discord_invite_link TEXT, -- Optional Discord invite link for campaign discussions
     
+    budget_allocated DECIMAL(10,2) NOT NULL, -- Total budget allocated for the campaign
     -- Campaign-specific fields for VISIBILITY campaigns
     cpv DECIMAL(6,4),
     max_views INTEGER CHECK (max_views > 1000),
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     commission_per_sale DECIMAL(5,2) CHECK (commission_per_sale >= 0 AND commission_per_sale <= 100),
     sales_tracking_method sales_tracking_method,
     code_prefix VARCHAR(50),
+    current_sales INTEGER, -- Number of sales made by the promoter so far
     
     -- Common fields
     requirements TEXT[],

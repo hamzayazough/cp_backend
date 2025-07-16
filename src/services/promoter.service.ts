@@ -222,7 +222,6 @@ export class PromoterService {
       .orderBy('pc.updatedAt', 'DESC')
       .limit(limit)
       .getMany();
-
     return promoterCampaigns.map((pc) => ({
       id: pc.campaign.id,
       title: pc.campaign.title,
@@ -231,9 +230,15 @@ export class PromoterService {
       views: pc.viewsGenerated,
       earnings: pc.earnings,
       advertiser: pc.campaign.advertiser?.name || 'Unknown',
-      deadline: pc.campaign.deadline?.toISOString(),
-      createdAt: pc.campaign.createdAt.toISOString(),
-      updatedAt: pc.updatedAt.toISOString(),
+      deadline: pc.campaign.deadline
+        ? new Date(pc.campaign.deadline).toISOString()
+        : undefined,
+      createdAt: pc.campaign.createdAt
+        ? new Date(pc.campaign.createdAt).toISOString()
+        : new Date().toISOString(),
+      updatedAt: pc.updatedAt
+        ? new Date(pc.updatedAt).toISOString()
+        : new Date().toISOString(),
     }));
   }
 
@@ -282,7 +287,9 @@ export class PromoterService {
       description: campaign.description,
       requirements: this.getCampaignRequirements(campaign),
       estimatedEarnings: this.calculateEstimatedEarnings(campaign),
-      applicationDeadline: campaign.deadline?.toISOString(),
+      applicationDeadline: campaign.deadline
+        ? new Date(campaign.deadline).toISOString()
+        : undefined,
     }));
   }
 

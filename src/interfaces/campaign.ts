@@ -26,6 +26,7 @@ export interface BaseCampaign {
   updatedAt?: Date;
   advertiserId?: string;
   discordInviteLink?: string;
+  budgetAllocated?: number; // Total budget allocated for the campaign
 }
 
 export interface VisibilityCampaign extends BaseCampaign {
@@ -71,6 +72,7 @@ export interface SalesmanCampaign extends BaseCampaign {
   codePrefix?: string;
   isPublic: false;
   minFollowers?: number;
+  currentSales?: number; // Number of sales made by the promoter so far
 }
 
 export type Campaign =

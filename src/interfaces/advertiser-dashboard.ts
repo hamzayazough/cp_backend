@@ -1,3 +1,5 @@
+import { CampaignType } from '../enums/campaign-type';
+
 export interface AdvertiserStats {
   spendingThisWeek: number;
   spendingLastWeek: number;
@@ -15,7 +17,7 @@ export interface AdvertiserStats {
 export interface AdvertiserActiveCampaign {
   id: string;
   title: string;
-  type: 'VISIBILITY' | 'SALESMAN' | 'CONSULTANT';
+  type: CampaignType;
   status: 'ONGOING' | 'AWAITING_PROMOTER' | 'COMPLETED' | 'PAUSED';
   views: number;
   spent: number;

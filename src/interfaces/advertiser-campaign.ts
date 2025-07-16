@@ -34,6 +34,7 @@ export interface PromoterApplicationInfo {
   // if campaign is CONSULTANT or SELLER + is in ONGOING or COMPLETED
   numberMeetingsDone?: number; // Number of meetings done by the promoter
   promoterLinks?: string[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones
+  budgetAllocated: number; // Amount currently reserved/held from advertiser
 }
 
 export interface AdvertiserBaseCampaignDetails {
@@ -47,8 +48,8 @@ export interface AdvertiserBaseCampaignDetails {
   deadline: string;
   startDate: string;
   isPublic: boolean; // Indicates if the campaign is visible to all promoters or if the advertiser has selected a specific promoter
-
   discordInviteLink: string; // Discord invite link for the campaign.
+  budgetAllocated?: number; // Total budget allocated for the campaign
 }
 
 export interface AdvertiserVisibilityCampaignDetails
@@ -96,6 +97,7 @@ export interface AdvertiserSalesmanCampaignDetails
   codePrefix?: string;
   refLink?: string;
   minFollowers?: number;
+  currentSales?: number; // Number of sales made by the promoter so far
 }
 
 export type AdvertiserCampaignDetailsUnion =
@@ -216,4 +218,9 @@ export interface ReviewPromoterApplicationRequest {
   campaignId: string;
   promoterId: string;
   status: PromoterCampaignStatus;
+}
+
+export interface CampaignFilters {
+  statuses: CampaignStatus[];
+  types: CampaignType[];
 }

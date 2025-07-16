@@ -71,6 +71,14 @@ export class CampaignEntity {
   advertiserTypes?: AdvertiserType[];
 
   @Column({
+    name: 'budget_allocated',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+  })
+  budgetAllocated: number;
+
+  @Column({
     name: 'max_budget',
     type: 'decimal',
     precision: 10,
@@ -168,6 +176,9 @@ export class CampaignEntity {
     nullable: true,
   })
   commissionPerSale?: number; // Required for SALESMAN campaigns
+
+  @Column({ name: 'current_sales', type: 'integer', nullable: true })
+  currentSales?: number; // Number of sales made by the promoter so far
 
   @Column({
     name: 'sales_tracking_method',

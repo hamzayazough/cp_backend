@@ -133,6 +133,7 @@ export class CampaignEntityBuilder {
     campaign.trackingLink = this.generateTrackingLink(data.trackingLink);
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
+    campaign.budgetAllocated = data.cpv * (data.maxViews || 1000); // TODO: change that
   }
 
   // TODO: generate tracking link once we have the site URL
@@ -153,6 +154,7 @@ export class CampaignEntityBuilder {
     campaign.meetingCount = data.meetingCount;
     campaign.maxBudget = data.maxBudget;
     campaign.minBudget = data.minBudget;
+    campaign.budgetAllocated = campaign.maxBudget;
   }
 
   /**
@@ -170,6 +172,7 @@ export class CampaignEntityBuilder {
     campaign.meetingPlan = data.meetingPlan;
     campaign.needMeeting = data.needMeeting || false;
     campaign.meetingCount = data.meetingCount || 0;
+    campaign.budgetAllocated = campaign.maxBudget;
   }
 
   /**
@@ -184,5 +187,6 @@ export class CampaignEntityBuilder {
       data.trackSalesVia || SalesTrackingMethod.COUPON_CODE;
     campaign.codePrefix = data.codePrefix;
     campaign.minFollowers = data.minFollowers;
+    campaign.budgetAllocated = 0;
   }
 }
