@@ -13,13 +13,25 @@ import {
   PromoterWalletViewEarnings,
   PromoterWalletDirectEarnings,
 } from '../interfaces/promoter-dashboard';
+import {
+  ExploreCampaignRequest,
+  ExploreCampaignResponse,
+  CampaignUnion,
+  Advertiser,
+  BaseCampaignDetails,
+  VisibilityCampaign,
+  ConsultantCampaign,
+  SellerCampaign,
+  SalesmanCampaign,
+} from '../interfaces/explore-campaign';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { MessageThread, Message } from '../database/entities/message.entity';
-import { CampaignType } from '../enums/campaign-type';
+import { CampaignType, CampaignStatus } from '../enums/campaign-type';
+import { PromoterCampaignStatus } from '../interfaces/promoter-campaign';
 
 @Injectable()
 export class PromoterService {
@@ -426,7 +438,6 @@ export class PromoterService {
     }
     return 0;
   }
-
   private getCampaignBudget(campaign: CampaignEntity): number | undefined {
     if (
       campaign.type === CampaignType.CONSULTANT ||
@@ -443,5 +454,203 @@ export class PromoterService {
       return (campaign.cpv * campaign.maxViews) / 100; // Convert per 100 views to total budget
     }
     return undefined;
+  }
+
+  async getExploreCampaigns(
+    firebaseUid: string,
+    request: ExploreCampaignRequest,
+  ): Promise<ExploreCampaignResponse> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    const page = request.page || 1;
+    const limit = request.limit || 10;
+    const skip = (page - 1) * limit;
+    const searchTerm = request.searchTerm || '';
+    const sortBy = request.sortBy || 'newest';
+
+    // Get campaign IDs that the promoter has already joined
+    const joinedCampaignIds = await this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .select('pc.campaignId')
+      .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
+      .getRawMany();
+
+    const joinedIds = joinedCampaignIds.map(
+      (row: { campaignId: string }) => row.campaignId,
+    );
+
+    // Build query for campaigns the promoter hasn't joined
+    let query = this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .where('campaign.status = :status', { status: CampaignStatus.ACTIVE })
+      .andWhere('campaign.isPublic = :isPublic', { isPublic: true });
+
+    // Exclude campaigns the promoter has already joined
+    if (joinedIds.length > 0) {
+      query = query.andWhere('campaign.id NOT IN (:...joinedIds)', {
+        joinedIds,
+      });
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      query = query.andWhere(
+        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
+        { search: `%${searchTerm}%` },
+      );
+    }
+
+    // Apply type filter
+    if (request.typeFilter && request.typeFilter.length > 0) {
+      query = query.andWhere('campaign.type IN (:...types)', {
+        types: request.typeFilter,
+      });
+    }
+
+    // Apply advertiser type filter
+    if (request.advertiserTypes && request.advertiserTypes.length > 0) {
+      query = query.andWhere('campaign.advertiserTypes && :advertiserTypes', {
+        advertiserTypes: request.advertiserTypes,
+      });
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'newest':
+        query = query.orderBy('campaign.createdAt', 'DESC');
+        break;
+      case 'deadline':
+        query = query.orderBy('campaign.deadline', 'ASC');
+        break;
+      case 'budget':
+        query = query.orderBy('campaign.budgetAllocated', 'DESC');
+        break;
+      case 'applicants':
+        // This would require a subquery to count applications
+        query = query.orderBy('campaign.createdAt', 'DESC');
+        break;
+      default:
+        query = query.orderBy('campaign.createdAt', 'DESC');
+    }
+
+    const totalCount = await query.getCount();
+    const totalPages = Math.ceil(totalCount / limit);
+    const campaigns = await query.skip(skip).take(limit).getMany();
+
+    // Transform campaigns to the required format
+    const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
+      this.transformCampaignToUnion(campaign),
+    );
+
+    return {
+      campaigns: transformedCampaigns,
+      page,
+      totalPages,
+      totalCount,
+      sortBy,
+      searchTerm,
+      typeFilter: request.typeFilter || [],
+      advertiserTypes: request.advertiserTypes || [],
+    };
+  }
+  private transformCampaignToUnion(campaign: CampaignEntity): CampaignUnion {
+    const advertiser: Advertiser = {
+      id: campaign.advertiser.id,
+      companyName: campaign.advertiser.name || 'Unknown Company',
+      profileUrl: campaign.advertiser.avatarUrl,
+      rating: campaign.advertiser.rating || 0,
+      verified: true, // You may want to add a verified field to UserEntity
+      description: campaign.advertiser.bio || '',
+      website: campaign.advertiser.websiteUrl || '',
+      advertiserTypes: campaign.advertiserTypes || [],
+    };
+
+    const baseCampaign: BaseCampaignDetails = {
+      id: campaign.id,
+      advertiser,
+      title: campaign.title,
+      type: campaign.type,
+      mediaUrl: campaign.mediaUrl,
+      status: 'ONGOING' as PromoterCampaignStatus,
+      description: campaign.description,
+      targetAudience: campaign.targetAudience,
+      preferredPlatforms: campaign.preferredPlatforms,
+      requirements: campaign.requirements,
+      createdAt: campaign.createdAt,
+      deadline: campaign.deadline
+        ? new Date(campaign.deadline).toISOString()
+        : '',
+      startDate: campaign.startDate
+        ? new Date(campaign.startDate).toISOString()
+        : '',
+      isPublic: campaign.isPublic,
+      tags: campaign.advertiserTypes || [],
+      campaignStatus: campaign.status,
+    };
+
+    switch (campaign.type) {
+      case CampaignType.VISIBILITY:
+        return {
+          ...baseCampaign,
+          type: CampaignType.VISIBILITY,
+          maxViews: campaign.maxViews || 0,
+          currentViews: campaign.currentViews || 0,
+          cpv: campaign.cpv || 0,
+          minFollowers: campaign.minFollowers,
+        } as VisibilityCampaign;
+
+      case CampaignType.CONSULTANT:
+        return {
+          ...baseCampaign,
+          type: CampaignType.CONSULTANT,
+          meetingPlan: campaign.meetingPlan!,
+          expectedDeliverables: campaign.expectedDeliverables,
+          expertiseRequired: campaign.expertiseRequired,
+          meetingCount: campaign.meetingCount || 0,
+          maxBudget: campaign.maxBudget || 0,
+          minBudget: campaign.minBudget || 0,
+        } as ConsultantCampaign;
+
+      case CampaignType.SELLER:
+        return {
+          ...baseCampaign,
+          type: CampaignType.SELLER,
+          sellerRequirements: campaign.sellerRequirements,
+          deliverables: campaign.deliverables,
+          maxBudget: campaign.maxBudget || 0,
+          minBudget: campaign.minBudget || 0,
+          minFollowers: campaign.minFollowers,
+          needMeeting: campaign.needMeeting || false,
+          meetingPlan: campaign.meetingPlan!,
+          meetingCount: campaign.meetingCount || 0,
+        } as SellerCampaign;
+
+      case CampaignType.SALESMAN:
+        return {
+          ...baseCampaign,
+          type: CampaignType.SALESMAN,
+          commissionPerSale: campaign.commissionPerSale || 0,
+          trackSalesVia: campaign.trackSalesVia!,
+          codePrefix: campaign.codePrefix,
+          refLink: campaign.trackingLink,
+          minFollowers: campaign.minFollowers,
+        } as SalesmanCampaign;
+      default: {
+        // This should never happen with proper TypeScript typing
+        const exhaustiveCheck: never = campaign.type;
+        throw new Error(
+          `Unsupported campaign type: ${String(exhaustiveCheck)}`,
+        );
+      }
+    }
   }
 }
