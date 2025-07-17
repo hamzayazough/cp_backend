@@ -527,20 +527,38 @@ export class PromoterService {
     );
     const appliedIds = appliedCampaignIds.map(
       (row: { campaignId: string }) => row.campaignId,
+    ); // Combine both arrays to exclude campaigns that the promoter has joined OR applied for
+    const excludedCampaignIds = [...new Set([...joinedIds, ...appliedIds])]; // Get private campaigns that are already taken by other promoters
+    // Private campaigns (isPublic = false) can only have one promoter, so exclude them if taken
+    // Public campaigns (isPublic = true) can have multiple promoters, so don't exclude them
+    const takenPrivateCampaignIds = await this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .innerJoin('pc.campaign', 'campaign')
+      .select('pc.campaignId', 'campaignId')
+      .where('campaign.isPublic = :isPublic', { isPublic: false })
+      .andWhere('pc.promoterId != :promoterId', { promoterId: promoter.id })
+      .getRawMany();
+
+    const takenPrivateIds = takenPrivateCampaignIds.map(
+      (row: { campaignId: string }) => row.campaignId,
     );
 
-    // Combine both arrays to exclude campaigns that the promoter has joined OR applied for
-    const excludedCampaignIds = [...new Set([...joinedIds, ...appliedIds])]; // Build query for campaigns the promoter hasn't joined or applied for
+    // Combine all exclusions: already interacted with + taken private campaigns
+    const allExcludedCampaignIds = [
+      ...new Set([...excludedCampaignIds, ...takenPrivateIds]),
+    ];
+
+    // Build query for campaigns the promoter hasn't joined or applied for
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
 
-    // Exclude campaigns the promoter has already joined or applied for
-    if (excludedCampaignIds.length > 0) {
+    // Exclude campaigns the promoter has already joined, applied for, or private campaigns taken by others
+    if (allExcludedCampaignIds.length > 0) {
       query = query.andWhere('campaign.id NOT IN (:...excludedCampaignIds)', {
-        excludedCampaignIds,
+        excludedCampaignIds: allExcludedCampaignIds,
       });
     } // Apply search filter
     if (searchTerm) {
@@ -690,7 +708,6 @@ export class PromoterService {
       }
     }
   }
-
   async getPromoterCampaigns(
     firebaseUid: string,
     request: GetPromoterCampaignsRequest,
@@ -711,77 +728,144 @@ export class PromoterService {
     const sortBy = request.sortBy || 'newest';
     const sortOrder = request.sortOrder || 'desc';
 
-    // Build query for promoter campaigns
-    let query = this.promoterCampaignRepository
+    // Get joined campaigns (from PromoterCampaign entity)
+    let joinedQuery = this.promoterCampaignRepository
       .createQueryBuilder('pc')
       .leftJoinAndSelect('pc.campaign', 'campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('pc.promoterId = :promoterId', { promoterId: promoter.id });
 
+    // Get applied campaigns (from CampaignApplicationEntity)
+    let appliedQuery = this.campaignApplicationRepository
+      .createQueryBuilder('ca')
+      .leftJoinAndSelect('ca.campaign', 'campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .where('ca.promoterId = :promoterId', { promoterId: promoter.id });
+
     // Apply status filter
     if (request.status && request.status.length > 0) {
-      query = query.andWhere('pc.status IN (:...statuses)', {
+      // For joined campaigns, filter by PromoterCampaign status
+      joinedQuery = joinedQuery.andWhere('pc.status IN (:...statuses)', {
         statuses: request.status,
       });
+
+      // For applied campaigns, map application status to promoter campaign status
+      // PENDING/ACCEPTED applications should be included if AWAITING_REVIEW is requested
+      if (request.status.includes(PromoterCampaignStatus.AWAITING_REVIEW)) {
+        appliedQuery = appliedQuery.andWhere('ca.status IN (:...appStatuses)', {
+          appStatuses: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED],
+        });
+      } else {
+        // If specific statuses are requested that don't apply to applications, exclude them
+        appliedQuery = appliedQuery.andWhere('1 = 0'); // This will exclude all applications
+      }
     }
 
-    // Apply campaign type filter
+    // Apply campaign type filter to both queries
     if (request.type && request.type.length > 0) {
-      query = query.andWhere('campaign.type IN (:...types)', {
+      joinedQuery = joinedQuery.andWhere('campaign.type IN (:...types)', {
+        types: request.type,
+      });
+      appliedQuery = appliedQuery.andWhere('campaign.type IN (:...types)', {
         types: request.type,
       });
     }
 
-    // Apply search filter
+    // Apply search filter to both queries
     if (searchTerm) {
-      query = query.andWhere(
-        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
-        { search: `%${searchTerm}%` },
-      );
+      const searchCondition =
+        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)';
+      const searchParams = { search: `%${searchTerm}%` };
+
+      joinedQuery = joinedQuery.andWhere(searchCondition, searchParams);
+      appliedQuery = appliedQuery.andWhere(searchCondition, searchParams);
     }
 
-    // Apply sorting
-    switch (sortBy) {
-      case 'newest':
-        query = query.orderBy(
-          'pc.joinedAt',
-          sortOrder.toUpperCase() as 'ASC' | 'DESC',
-        );
-        break;
-      case 'deadline':
-        query = query.orderBy(
-          'campaign.deadline',
-          sortOrder.toUpperCase() as 'ASC' | 'DESC',
-        );
-        break;
-      case 'earnings':
-        query = query.orderBy(
-          'pc.earnings',
-          sortOrder.toUpperCase() as 'ASC' | 'DESC',
-        );
-        break;
-      case 'title':
-        query = query.orderBy(
-          'campaign.title',
-          sortOrder.toUpperCase() as 'ASC' | 'DESC',
-        );
-        break;
-      default:
-        query = query.orderBy('pc.joinedAt', 'DESC');
-    }
+    // Execute both queries
+    const [joinedCampaigns, appliedCampaigns] = await Promise.all([
+      joinedQuery.getMany(),
+      appliedQuery.getMany(),
+    ]);
 
-    const totalCount = await query.getCount();
+    // Create typed objects for combined results
+    type CombinedCampaign =
+      | {
+          source: 'joined';
+          data: PromoterCampaign;
+          sortDate: Date;
+        }
+      | {
+          source: 'applied';
+          data: CampaignApplicationEntity & { campaign: CampaignEntity };
+          sortDate: Date;
+        };
+
+    const allCampaigns: CombinedCampaign[] = [
+      ...joinedCampaigns.map((pc) => ({
+        source: 'joined' as const,
+        data: pc,
+        sortDate: pc.joinedAt,
+      })),
+      ...appliedCampaigns.map((ca) => ({
+        source: 'applied' as const,
+        data: ca as CampaignApplicationEntity & { campaign: CampaignEntity },
+        sortDate: ca.appliedAt,
+      })),
+    ];
+
+    // Apply sorting to combined results
+    allCampaigns.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case 'newest':
+          aValue = a.sortDate;
+          bValue = b.sortDate;
+          break;
+        case 'deadline':
+          aValue = a.data.campaign.deadline;
+          bValue = b.data.campaign.deadline;
+          break;
+        case 'earnings':
+          aValue = a.source === 'joined' ? a.data.earnings : 0;
+          bValue = b.source === 'joined' ? b.data.earnings : 0;
+          break;
+        case 'title':
+          aValue = a.data.campaign.title;
+          bValue = b.data.campaign.title;
+          break;
+        default:
+          aValue = a.sortDate;
+          bValue = b.sortDate;
+      }
+
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Apply pagination
+    const totalCount = allCampaigns.length;
     const totalPages = Math.ceil(totalCount / limit);
-    const promoterCampaigns = await query.skip(skip).take(limit).getMany();
+    const paginatedCampaigns = allCampaigns.slice(skip, skip + limit);
 
-    // Transform promoter campaigns to the required format
-    const transformedCampaigns: CampaignPromoter[] = promoterCampaigns.map(
-      (pc) => this.transformPromoterCampaignToInterface(pc),
+    // Transform campaigns to the required format
+    const transformedCampaigns: CampaignPromoter[] = paginatedCampaigns.map(
+      (item) => {
+        if (item.source === 'joined') {
+          return this.transformPromoterCampaignToInterface(item.data);
+        } else {
+          return this.transformCampaignApplicationToInterface(item.data);
+        }
+      },
     );
 
-    // Calculate summary
-    const summary = await this.calculatePromoterCampaignsSummary(promoter.id);
+    // Calculate summary (including both joined and applied campaigns)
+    const summary =
+      await this.calculatePromoterCampaignsSummaryWithApplications(promoter.id);
 
     return {
       campaigns: transformedCampaigns,
@@ -892,7 +976,6 @@ export class PromoterService {
           `Unsupported campaign type: ${String(pc.campaign.type)}`,
         );
     }
-
     return {
       id: pc.campaign.id,
       title: pc.campaign.title,
@@ -957,6 +1040,60 @@ export class PromoterService {
       .select('SUM(pc.earnings)', 'totalEarnings')
       .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
       .getRawOne();
+    return {
+      totalActive,
+      totalPending,
+      totalCompleted,
+      totalEarnings: parseFloat(earningsAndViews?.totalEarnings || '0'),
+      totalViews: parseInt(earningsAndViews?.totalViews || '0'),
+    };
+  }
+
+  private async calculatePromoterCampaignsSummaryWithApplications(
+    promoterId: string,
+  ) {
+    // Get counts from promoter campaigns (joined campaigns)
+    const joinedSummaryQuery = this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .leftJoin('pc.campaign', 'campaign')
+      .where('pc.promoterId = :promoterId', { promoterId });
+
+    const [totalActive, totalCompleted] = await Promise.all([
+      joinedSummaryQuery
+        .clone()
+        .andWhere('pc.status = :status', { status: 'ONGOING' })
+        .getCount(),
+      joinedSummaryQuery
+        .clone()
+        .andWhere('pc.status = :status', { status: 'COMPLETED' })
+        .getCount(),
+    ]);
+
+    // Get pending count from both promoter campaigns (AWAITING_REVIEW) and applications (PENDING/ACCEPTED)
+    const promoterPending = await joinedSummaryQuery
+      .clone()
+      .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
+      .getCount();
+
+    const applicationPending = await this.campaignApplicationRepository
+      .createQueryBuilder('ca')
+      .where('ca.promoterId = :promoterId', { promoterId })
+      .andWhere('ca.status IN (:...statuses)', {
+        statuses: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED],
+      })
+      .getCount();
+
+    const totalPending = promoterPending + applicationPending;
+
+    // Get earnings and views only from joined campaigns (applications don't have earnings/views yet)
+    const earningsAndViews:
+      | { totalEarnings: string; totalViews: string }
+      | undefined = await joinedSummaryQuery
+      .clone()
+      .select('SUM(pc.earnings)', 'totalEarnings')
+      .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
+      .getRawOne();
+
     return {
       totalActive,
       totalPending,
@@ -1093,5 +1230,161 @@ export class PromoterService {
         acceptedAt: savedContract.joinedAt.toISOString(),
       },
     };
+  }
+
+  private transformCampaignApplicationToInterface(
+    ca: CampaignApplicationEntity & { campaign: CampaignEntity },
+  ): CampaignPromoter {
+    console.log('Transforming Campaign Application:', ca);
+    const advertiser: Advertiser = {
+      id: ca.campaign.advertiser.id,
+      companyName: ca.campaign.advertiser.name || 'Unknown Company',
+      profileUrl: ca.campaign.advertiser.avatarUrl,
+      rating: ca.campaign.advertiser.rating || 0,
+      verified: true, // You may want to add a verified field to UserEntity
+      description: ca.campaign.advertiser.bio || '',
+      website: ca.campaign.advertiser.websiteUrl || '',
+      advertiserTypes: ca.campaign.advertiserTypes || [],
+    };
+
+    // For applications, earnings are zero since no work has been done yet
+    const earnings: Earnings = {
+      totalEarned: 0,
+      viewsGenerated: 0,
+      projectedTotal: this.calculateProjectedEarningsFromCampaign(ca.campaign),
+    };
+
+    const baseCampaign = {
+      budgetHeld: Number(ca.campaign.budgetAllocated) || 0,
+      spentBudget: 0, // No spending for applications
+      targetAudience: ca.campaign.targetAudience,
+      preferredPlatforms: ca.campaign.preferredPlatforms,
+      requirements: ca.campaign.requirements,
+      createdAt: ca.campaign.createdAt,
+      deadline: ca.campaign.deadline
+        ? new Date(ca.campaign.deadline).toISOString()
+        : '',
+      startDate: ca.campaign.startDate
+        ? new Date(ca.campaign.startDate).toISOString()
+        : '',
+      isPublic: ca.campaign.isPublic,
+      discordInviteLink: ca.campaign.discordInviteLink || '',
+    };
+
+    let campaignDetails: CampaignDetailsUnion;
+
+    switch (ca.campaign.type) {
+      case CampaignType.VISIBILITY:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.VISIBILITY,
+          maxViews: ca.campaign.maxViews || 0,
+          currentViews: 0, // Application stage, no views generated yet
+          cpv: ca.campaign.cpv || 0,
+          minFollowers: ca.campaign.minFollowers,
+          trackingLink: ca.campaign.trackingLink || '',
+        };
+        break;
+
+      case CampaignType.CONSULTANT:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.CONSULTANT,
+          meetingPlan: ca.campaign.meetingPlan!,
+          expectedDeliverables: ca.campaign.expectedDeliverables,
+          expertiseRequired: ca.campaign.expertiseRequired,
+          meetingCount: ca.campaign.meetingCount || 0,
+          maxBudget: ca.campaign.maxBudget || 0,
+          minBudget: ca.campaign.minBudget || 0,
+          promoterLinks: [], // No links yet for applications
+        };
+        break;
+
+      case CampaignType.SELLER:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.SELLER,
+          sellerRequirements: ca.campaign.sellerRequirements,
+          deliverables: ca.campaign.deliverables,
+          fixedPrice: undefined, // Not in current schema
+          maxBudget: ca.campaign.maxBudget || 0,
+          minBudget: ca.campaign.minBudget || 0,
+          promoterLinks: [], // No links yet for applications
+          minFollowers: ca.campaign.minFollowers,
+          needMeeting: ca.campaign.needMeeting || false,
+          meetingPlan: ca.campaign.meetingPlan!,
+          meetingCount: ca.campaign.meetingCount || 0,
+        };
+        break;
+
+      case CampaignType.SALESMAN:
+        campaignDetails = {
+          ...baseCampaign,
+          type: CampaignType.SALESMAN,
+          commissionPerSale: ca.campaign.commissionPerSale || 0,
+          trackSalesVia: ca.campaign.trackSalesVia!,
+          codePrefix: ca.campaign.codePrefix,
+          refLink: ca.campaign.trackingLink,
+          minFollowers: ca.campaign.minFollowers,
+        };
+        break;
+      default:
+        throw new Error(
+          `Unsupported campaign type: ${String(ca.campaign.type)}`,
+        );
+    }
+
+    // Map application status to promoter campaign status
+    let status: PromoterCampaignStatus;
+    switch (ca.status) {
+      case ApplicationStatus.PENDING:
+        status = PromoterCampaignStatus.AWAITING_REVIEW;
+        break;
+      case ApplicationStatus.ACCEPTED:
+        status = PromoterCampaignStatus.AWAITING_REVIEW; // Accepted but not yet started
+        break;
+      case ApplicationStatus.REJECTED:
+        status = PromoterCampaignStatus.REFUSED;
+        break;
+      default:
+        status = PromoterCampaignStatus.AWAITING_REVIEW;
+    }
+
+    return {
+      id: ca.campaign.id,
+      title: ca.campaign.title,
+      type: ca.campaign.type,
+      mediaUrl: ca.campaign.mediaUrl,
+      status: status,
+      description: ca.campaign.description,
+      advertiser,
+      campaign: campaignDetails,
+      earnings,
+      tags: ca.campaign.advertiserTypes || [],
+      meetingDone: false, // No meetings done for applications
+    };
+  }
+
+  private calculateProjectedEarningsFromCampaign(
+    campaign: CampaignEntity,
+  ): number {
+    // Simple projection based on campaign type and parameters
+    if (
+      campaign.type === CampaignType.VISIBILITY &&
+      campaign.maxViews &&
+      campaign.cpv
+    ) {
+      const maxPossibleEarnings = (campaign.maxViews / 100) * campaign.cpv;
+      return maxPossibleEarnings;
+    }
+
+    if (
+      campaign.type === CampaignType.CONSULTANT ||
+      campaign.type === CampaignType.SELLER
+    ) {
+      return campaign.maxBudget || 0;
+    }
+
+    return 0;
   }
 }

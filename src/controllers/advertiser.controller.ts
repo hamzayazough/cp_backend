@@ -24,11 +24,11 @@ import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   AdvertiserDashboardSummary,
-  PromoterApplicationInfo,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
+import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
 
 @Controller('advertiser')
 export class AdvertiserController {
@@ -206,22 +206,22 @@ export class AdvertiserController {
     @Param('campaignId') campaignId: string,
     @Param('applicationId') applicationId: string, // Can be either application ID or promoter ID
     @Body()
-    reviewData: { status: 'ACCEPTED' | 'REJECTED'; reviewMessage?: string },
+    reviewData: { action: 'ACCEPTED' | 'REJECTED' },
     @Request() req: { user: FirebaseUser },
   ): Promise<{
     success: boolean;
     message: string;
-    data?: any;
+    data?: ReviewCampaignApplicationResult;
   }> {
     try {
       const firebaseUid = req.user.uid;
-      const result = await this.advertiserService.reviewCampaignApplication(
-        firebaseUid,
-        campaignId,
-        applicationId,
-        reviewData.status,
-        reviewData.reviewMessage,
-      );
+      const result: ReviewCampaignApplicationResult =
+        await this.advertiserService.reviewCampaignApplication(
+          firebaseUid,
+          campaignId,
+          applicationId,
+          reviewData.action,
+        );
 
       return {
         success: true,

@@ -29,6 +29,7 @@ import { AdvertiserStatsService } from './advertiser-stats.service';
 import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
 import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { ReviewCampaignApplicationResult } from '../interfaces/review-campaign-application-result';
 
 @Injectable()
 export class AdvertiserService {
@@ -164,8 +165,7 @@ export class AdvertiserService {
     campaignId: string,
     applicationId: string,
     status: 'ACCEPTED' | 'REJECTED',
-    reviewMessage?: string,
-  ): Promise<any> {
+  ): Promise<ReviewCampaignApplicationResult> {
     // Find advertiser by Firebase UID
     const advertiser = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
@@ -206,7 +206,6 @@ export class AdvertiserService {
         ? ApplicationStatus.ACCEPTED
         : ApplicationStatus.REJECTED;
     await this.campaignApplicationRepository.save(application);
-
     // If accepted, create a PromoterCampaign record
     if (status === 'ACCEPTED') {
       const existingPromoterCampaign =
