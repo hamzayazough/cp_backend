@@ -8,6 +8,7 @@ import {
   BadRequestException,
   Get,
   Param,
+  Delete,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
@@ -232,6 +233,30 @@ export class AdvertiserController {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Failed to review application',
       );
+    }
+  }
+
+  @Delete('campaigns/:campaignId')
+  async deleteCampaign(
+    @Param('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const result = await this.advertiserService.deleteCampaign(
+        firebaseUid,
+        campaignId,
+      );
+      return {
+        success: result.success,
+        message: result.message,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to delete campaign',
+      };
     }
   }
 }

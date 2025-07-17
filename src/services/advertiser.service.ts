@@ -30,6 +30,7 @@ import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
 import { UserType } from 'src/database/entities/billing-period-summary.entity';
 import { ReviewCampaignApplicationResult } from '../interfaces/review-campaign-application-result';
+import { S3Service } from './s3.service';
 
 @Injectable()
 export class AdvertiserService {
@@ -56,6 +57,7 @@ export class AdvertiserService {
     private statsService: AdvertiserStatsService,
     private transactionService: AdvertiserTransactionService,
     private messageService: AdvertiserMessageService,
+    private readonly s3Service: S3Service, // <-- Inject S3Service
   ) {}
 
   async getDashboardData(
@@ -237,5 +239,49 @@ export class AdvertiserService {
       campaignId: campaignId,
       promoterId: application.promoterId,
     };
+  }
+
+  async deleteCampaign(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    // Find advertiser by Firebase UID
+    const advertiser = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
+    });
+    if (!advertiser) {
+      return { success: false, message: 'Advertiser not found' };
+    }
+    // Verify campaign belongs to this advertiser
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId, advertiserId: advertiser.id },
+    });
+    if (!campaign) {
+      return { success: false, message: 'Campaign not found or access denied' };
+    }
+    // Check for any associated PromoterCampaigns
+    const promoterCampaignCount = await this.promoterCampaignRepository.count({
+      where: { campaignId },
+    });
+    if (promoterCampaignCount > 0) {
+      return {
+        success: false,
+        message:
+          'Cannot delete campaign: there are promoters associated with this campaign.',
+      };
+    }
+    // Delete media from S3 if exists
+    if (campaign.mediaUrl) {
+      try {
+        const key = this.s3Service.extractKeyFromUrl(campaign.mediaUrl);
+        await this.s3Service.deleteObject(key);
+      } catch (err) {
+        // Log error but continue with campaign deletion
+        console.error('Error deleting campaign media from S3:', err);
+      }
+    }
+    // Delete campaign
+    await this.campaignRepository.delete(campaignId);
+    return { success: true, message: 'Campaign deleted successfully' };
   }
 }
