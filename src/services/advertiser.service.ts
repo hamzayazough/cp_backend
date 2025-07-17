@@ -8,6 +8,11 @@ import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { MessageThread, Message } from '../database/entities/message.entity';
 import {
+  CampaignApplicationEntity,
+  ApplicationStatus,
+} from '../database/entities/campaign-applications.entity';
+import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
+import {
   GetAdvertiserDashboardRequest,
   AdvertiserDashboardData,
 } from '../interfaces/advertiser-dashboard';
@@ -42,6 +47,8 @@ export class AdvertiserService {
     private messageThreadRepository: Repository<MessageThread>,
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
+    @InjectRepository(CampaignApplicationEntity)
+    private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     private dashboardService: AdvertiserDashboardService,
     private campaignService: AdvertiserCampaignService,
     private walletService: AdvertiserWalletService,
@@ -148,8 +155,88 @@ export class AdvertiserService {
 
     return this.dashboardService.getDashboardSummary(advertiser.id);
   }
-
   getCampaignFilters(): CampaignFilters {
     return this.campaignService.getCampaignFilters();
+  }
+
+  async reviewCampaignApplication(
+    firebaseUid: string,
+    campaignId: string,
+    applicationId: string,
+    status: 'ACCEPTED' | 'REJECTED',
+    reviewMessage?: string,
+  ): Promise<any> {
+    // Find advertiser by Firebase UID
+    const advertiser = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
+    });
+
+    if (!advertiser) {
+      throw new Error('Advertiser not found');
+    }
+
+    // Verify that the campaign belongs to this advertiser
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId, advertiserId: advertiser.id },
+    });
+
+    if (!campaign) {
+      throw new Error('Campaign not found or access denied');
+    } // Find the application - try by application ID first, then by promoter ID
+    let application = await this.campaignApplicationRepository.findOne({
+      where: { id: applicationId, campaignId: campaignId },
+      relations: ['promoter'],
+    });
+
+    // If not found by application ID, try to find by promoter ID
+    if (!application) {
+      application = await this.campaignApplicationRepository.findOne({
+        where: { promoterId: applicationId, campaignId: campaignId },
+        relations: ['promoter'],
+      });
+    }
+
+    if (!application) {
+      throw new Error('Application not found');
+    }
+
+    // Update application status
+    application.status =
+      status === 'ACCEPTED'
+        ? ApplicationStatus.ACCEPTED
+        : ApplicationStatus.REJECTED;
+    await this.campaignApplicationRepository.save(application);
+
+    // If accepted, create a PromoterCampaign record
+    if (status === 'ACCEPTED') {
+      const existingPromoterCampaign =
+        await this.promoterCampaignRepository.findOne({
+          where: {
+            promoterId: application.promoterId,
+            campaignId: campaignId,
+          },
+        });
+
+      if (!existingPromoterCampaign) {
+        const promoterCampaign = this.promoterCampaignRepository.create({
+          promoterId: application.promoterId,
+          campaignId: campaignId,
+          status: PromoterCampaignStatus.ONGOING,
+          viewsGenerated: 0,
+          earnings: 0,
+          budgetHeld: 0,
+          spentBudget: 0,
+          payoutExecuted: false,
+        });
+        await this.promoterCampaignRepository.save(promoterCampaign);
+      }
+    }
+
+    return {
+      applicationId: application.id,
+      status: application.status,
+      campaignId: campaignId,
+      promoterId: application.promoterId,
+    };
   }
 }

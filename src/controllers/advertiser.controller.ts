@@ -7,6 +7,7 @@ import {
   UploadedFile,
   BadRequestException,
   Get,
+  Param,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
@@ -23,6 +24,7 @@ import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   AdvertiserDashboardSummary,
+  PromoterApplicationInfo,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
@@ -138,7 +140,6 @@ export class AdvertiserController {
     @Request() req: { user: FirebaseUser },
   ): Promise<AdvertiserCampaignListResponse> {
     try {
-      console.log('Fetching campaigns list with request:', request);
       const firebaseUid = req.user.uid;
       return await this.advertiserService.getCampaignsList(
         firebaseUid,
@@ -197,6 +198,39 @@ export class AdvertiserController {
         error instanceof Error
           ? error.message
           : 'Failed to retrieve campaign filters',
+      );
+    }
+  }
+  @Post('campaigns/:campaignId/applications/:applicationId/review')
+  async reviewCampaignApplication(
+    @Param('campaignId') campaignId: string,
+    @Param('applicationId') applicationId: string, // Can be either application ID or promoter ID
+    @Body()
+    reviewData: { status: 'ACCEPTED' | 'REJECTED'; reviewMessage?: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const result = await this.advertiserService.reviewCampaignApplication(
+        firebaseUid,
+        campaignId,
+        applicationId,
+        reviewData.status,
+        reviewData.reviewMessage,
+      );
+
+      return {
+        success: true,
+        message: 'Application reviewed successfully',
+        data: result,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Failed to review application',
       );
     }
   }

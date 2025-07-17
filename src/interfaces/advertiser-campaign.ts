@@ -9,6 +9,7 @@ import { CampaignStatus } from 'src/enums/campaign-type';
 import { Promoter } from './user';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { PromoterCampaignStatus } from './promoter-campaign';
+import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
 
 export enum AdvertiserCampaignSortField {
   CREATED_AT = 'createdAt',
@@ -23,6 +24,12 @@ export enum AdvertiserCampaignSortField {
 }
 
 export interface PromoterApplicationInfo {
+  promoter: Promoter;
+  applicationStatus: ApplicationStatus;
+  applicationMessage?: string;
+}
+
+export interface ChosenPromoterInfo {
   promoter: Promoter;
   status: PromoterCampaignStatus;
 
@@ -123,7 +130,8 @@ export interface CampaignAdvertiser {
   tags: AdvertiserType[]; //getting them from Advertiser user -> user.advertiserType
   meetingDone?: boolean; // Indicates if the meeting is done for campaigns that require it. from PromoterCampaign
 
-  promoters?: PromoterApplicationInfo[];
+  applicants?: PromoterApplicationInfo[];
+  chosenPromoters?: ChosenPromoterInfo; // Promoter who have been selected for the campaign
 }
 
 // Pagination and filtering interfaces

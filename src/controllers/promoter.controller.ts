@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Request } from '@nestjs/common';
+import { Controller, Post, Body, Request, Param } from '@nestjs/common';
 import { PromoterService } from '../services/promoter.service';
 import {
   PromoterDashboardRequest,
@@ -12,6 +12,12 @@ import {
   GetPromoterCampaignsRequest,
   PromoterCampaignsListResponse,
 } from '../interfaces/promoter-campaigns';
+import {
+  SendApplicationRequest,
+  SendApplicationResponse,
+  AcceptContractRequest,
+  AcceptContractResponse,
+} from '../interfaces/campaign-actions';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 
 @Controller('promoter')
@@ -135,6 +141,61 @@ export class PromoterController {
             totalViews: 0,
           },
         },
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Post('campaigns/:campaignId/apply')
+  async sendCampaignApplication(
+    @Param('campaignId') campaignId: string,
+    @Body() body: { applicationMessage: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<SendApplicationResponse> {
+    try {
+      const firebaseUid = req.user.uid;
+      const request: SendApplicationRequest = {
+        campaignId,
+        applicationMessage: body.applicationMessage,
+      };
+
+      const result = await this.promoterService.sendCampaignApplication(
+        firebaseUid,
+        request,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to send campaign application';
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Post('campaigns/accept-contract')
+  async acceptContract(
+    @Body() request: AcceptContractRequest,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<AcceptContractResponse> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.acceptContract(
+        firebaseUid,
+        request,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to accept contract';
+      return {
+        success: false,
         message: errorMessage,
       };
     }

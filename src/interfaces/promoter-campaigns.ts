@@ -4,7 +4,7 @@ import { SocialPlatform } from '../enums/social-platform';
 import { Deliverable } from '../enums/deliverable';
 import { MeetingPlan } from '../enums/meeting-plan';
 import { SalesTrackingMethod } from '../enums/sales-tracking-method';
-import { PromoterCampaignStatus } from './promoter-campaign';
+import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
 
 export interface GetPromoterCampaignsRequest {
   // Pagination

@@ -31,14 +31,27 @@ import {
   CampaignDetailsUnion,
   Earnings,
 } from '../interfaces/promoter-campaigns';
+import {
+  SendApplicationRequest,
+  SendApplicationResponse,
+  AcceptContractRequest,
+  AcceptContractResponse,
+} from '../interfaces/campaign-actions';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import {
+  PromoterCampaign,
+  PromoterCampaignStatus,
+} from '../database/entities/promoter-campaign.entity';
 import { MessageThread, Message } from '../database/entities/message.entity';
+import {
+  CampaignApplicationEntity,
+  ApplicationStatus,
+} from '../database/entities/campaign-applications.entity';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
-import { PromoterCampaignStatus } from '../interfaces/promoter-campaign';
+import { UserType } from 'src/database/entities/billing-period-summary.entity';
 
 @Injectable()
 export class PromoterService {
@@ -57,6 +70,8 @@ export class PromoterService {
     private messageThreadRepository: Repository<MessageThread>,
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
+    @InjectRepository(CampaignApplicationEntity)
+    private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
   ) {}
 
   async getDashboardData(
@@ -195,12 +210,24 @@ export class PromoterService {
       .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
       .getCount();
 
-    const earningsThisWeekNum = parseFloat(earningsThisWeek?.total || '0');
-    const earningsLastWeekNum = parseFloat(earningsLastWeek?.total || '0');
-    const viewsTodayNum = parseInt(viewsToday?.total || '0');
-    const viewsYesterdayNum = parseInt(viewsYesterday?.total || '0');
-    const salesThisWeekNum = parseInt(salesThisWeek?.total || '0');
-    const salesLastWeekNum = parseInt(salesLastWeek?.total || '0');
+    const earningsThisWeekNum = parseFloat(
+      (earningsThisWeek as { total?: string })?.total || '0',
+    );
+    const earningsLastWeekNum = parseFloat(
+      (earningsLastWeek as { total?: string })?.total || '0',
+    );
+    const viewsTodayNum = parseInt(
+      (viewsToday as { total?: string })?.total || '0',
+    );
+    const viewsYesterdayNum = parseInt(
+      (viewsYesterday as { total?: string })?.total || '0',
+    );
+    const salesThisWeekNum = parseInt(
+      (salesThisWeek as { total?: string })?.total || '0',
+    );
+    const salesLastWeekNum = parseInt(
+      (salesLastWeek as { total?: string })?.total || '0',
+    );
 
     return {
       earningsThisWeek: earningsThisWeekNum,
@@ -280,8 +307,7 @@ export class PromoterService {
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .where('campaign.status = :status', { status: 'ACTIVE' })
-      .andWhere('campaign.isPublic = :isPublic', { isPublic: true });
+      .where('campaign.status = :status', { status: 'ACTIVE' });
 
     // Exclude campaigns the promoter has already joined
     if (joinedIds.length > 0) {
@@ -469,7 +495,7 @@ export class PromoterService {
   ): Promise<ExploreCampaignResponse> {
     // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
 
     if (!promoter) {
@@ -485,30 +511,38 @@ export class PromoterService {
     // Get campaign IDs that the promoter has already joined
     const joinedCampaignIds = await this.promoterCampaignRepository
       .createQueryBuilder('pc')
-      .select('pc.campaignId')
+      .select('pc.campaignId', 'campaignId')
       .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
+      .getRawMany();
+
+    // Get campaign IDs that the promoter has already applied for
+    const appliedCampaignIds = await this.campaignApplicationRepository
+      .createQueryBuilder('ca')
+      .select('ca.campaignId', 'campaignId')
+      .where('ca.promoterId = :promoterId', { promoterId: promoter.id })
       .getRawMany();
 
     const joinedIds = joinedCampaignIds.map(
       (row: { campaignId: string }) => row.campaignId,
     );
+    const appliedIds = appliedCampaignIds.map(
+      (row: { campaignId: string }) => row.campaignId,
+    );
 
-    // Build query for campaigns the promoter hasn't joined
+    // Combine both arrays to exclude campaigns that the promoter has joined OR applied for
+    const excludedCampaignIds = [...new Set([...joinedIds, ...appliedIds])]; // Build query for campaigns the promoter hasn't joined or applied for
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .where('campaign.status = :status', { status: CampaignStatus.ACTIVE })
-      .andWhere('campaign.isPublic = :isPublic', { isPublic: true });
+      .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
 
-    // Exclude campaigns the promoter has already joined
-    if (joinedIds.length > 0) {
-      query = query.andWhere('campaign.id NOT IN (:...joinedIds)', {
-        joinedIds,
+    // Exclude campaigns the promoter has already joined or applied for
+    if (excludedCampaignIds.length > 0) {
+      query = query.andWhere('campaign.id NOT IN (:...excludedCampaignIds)', {
+        excludedCampaignIds,
       });
-    }
-
-    // Apply search filter
+    } // Apply search filter
     if (searchTerm) {
       query = query.andWhere(
         '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
@@ -528,9 +562,7 @@ export class PromoterService {
       query = query.andWhere('campaign.advertiserTypes && :advertiserTypes', {
         advertiserTypes: request.advertiserTypes,
       });
-    }
-
-    // Apply sorting
+    } // Apply sorting
     switch (sortBy) {
       case 'newest':
         query = query.orderBy('campaign.createdAt', 'DESC');
@@ -551,9 +583,7 @@ export class PromoterService {
 
     const totalCount = await query.getCount();
     const totalPages = Math.ceil(totalCount / limit);
-    const campaigns = await query.skip(skip).take(limit).getMany();
-
-    // Transform campaigns to the required format
+    const campaigns = await query.skip(skip).take(limit).getMany(); // Transform campaigns to the required format
     const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
       this.transformCampaignToUnion(campaign),
     );
@@ -667,7 +697,7 @@ export class PromoterService {
   ): Promise<PromoterCampaignsListResponse> {
     // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
 
     if (!promoter) {
@@ -765,6 +795,7 @@ export class PromoterService {
   private transformPromoterCampaignToInterface(
     pc: PromoterCampaign,
   ): CampaignPromoter {
+    console.log('Transforming Promoter Campaign:', pc);
     const advertiser: Advertiser = {
       id: pc.campaign.advertiser.id,
       companyName: pc.campaign.advertiser.name || 'Unknown Company',
@@ -783,7 +814,7 @@ export class PromoterService {
     };
 
     const baseCampaign = {
-      budgetHeld: Number(pc.budgetHeld),
+      budgetHeld: Number(pc.campaign.budgetAllocated),
       spentBudget: Number(pc.spentBudget),
       targetAudience: pc.campaign.targetAudience,
       preferredPlatforms: pc.campaign.preferredPlatforms,
@@ -926,13 +957,141 @@ export class PromoterService {
       .select('SUM(pc.earnings)', 'totalEarnings')
       .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
       .getRawOne();
-
     return {
       totalActive,
       totalPending,
       totalCompleted,
       totalEarnings: parseFloat(earningsAndViews?.totalEarnings || '0'),
       totalViews: parseInt(earningsAndViews?.totalViews || '0'),
+    };
+  }
+
+  async sendCampaignApplication(
+    firebaseUid: string,
+    request: SendApplicationRequest,
+  ): Promise<SendApplicationResponse> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Check if campaign exists and is active
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: request.campaignId, status: CampaignStatus.ACTIVE },
+      relations: ['advertiser'],
+    });
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or not active');
+    } // Check if promoter has already applied to this campaign
+    const existingApplication =
+      await this.campaignApplicationRepository.findOne({
+        where: {
+          promoterId: promoter.id,
+          campaignId: request.campaignId,
+        },
+      });
+
+    if (existingApplication) {
+      throw new Error('You have already applied to this campaign');
+    }
+
+    // Create campaign application record with PENDING status
+    const campaignApplication = this.campaignApplicationRepository.create({
+      promoterId: promoter.id,
+      campaignId: request.campaignId,
+      applicationMessage: request.applicationMessage,
+      status: ApplicationStatus.PENDING,
+    });
+
+    const savedApplication =
+      await this.campaignApplicationRepository.save(campaignApplication);
+
+    return {
+      success: true,
+      message: 'Application sent successfully',
+      data: {
+        applicationId: savedApplication.id,
+        status: savedApplication.status,
+      },
+    };
+  }
+
+  async acceptContract(
+    firebaseUid: string,
+    request: AcceptContractRequest,
+  ): Promise<AcceptContractResponse> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Check if campaign exists and is active
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: request.campaignId, status: CampaignStatus.ACTIVE },
+      relations: ['advertiser'],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or not active');
+    }
+
+    // Check if campaign is public (only public campaigns can be accepted directly)
+    if (!campaign.isPublic) {
+      throw new Error('This campaign is private and requires approval process');
+    }
+
+    // Check if promoter has already joined this campaign
+    const existingContract = await this.promoterCampaignRepository.findOne({
+      where: {
+        promoterId: promoter.id,
+        campaignId: request.campaignId,
+      },
+    });
+    if (existingContract) {
+      if (existingContract.status === PromoterCampaignStatus.ONGOING) {
+        throw new Error('You have already joined this campaign');
+      } else if (
+        existingContract.status === PromoterCampaignStatus.AWAITING_REVIEW
+      ) {
+        throw new Error('Your application is pending review');
+      } else if (existingContract.status === PromoterCampaignStatus.COMPLETED) {
+        throw new Error('You have already completed this campaign');
+      } else if (existingContract.status === PromoterCampaignStatus.REFUSED) {
+        throw new Error('Your application was refused for this campaign');
+      }
+    }
+
+    // Create promoter campaign record with ONGOING status for direct acceptance
+    const promoterCampaign = this.promoterCampaignRepository.create({
+      promoterId: promoter.id,
+      campaignId: request.campaignId,
+      status: PromoterCampaignStatus.ONGOING,
+      viewsGenerated: 0,
+      earnings: 0,
+      budgetHeld: 0,
+      spentBudget: 0,
+      payoutExecuted: false,
+    });
+    const savedContract =
+      await this.promoterCampaignRepository.save(promoterCampaign);
+
+    return {
+      success: true,
+      message: 'Contract accepted successfully',
+      data: {
+        contractId: savedContract.id,
+        campaignId: savedContract.campaignId,
+        status: savedContract.status,
+        acceptedAt: savedContract.joinedAt.toISOString(),
+      },
     };
   }
 }

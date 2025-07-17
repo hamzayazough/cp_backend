@@ -18,6 +18,7 @@ import { PromoterCampaign } from '../database/entities/promoter-campaign.entity'
 import { MessageThread, Message } from '../database/entities/message.entity';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
 import { AdvertiserTypeMappingEntity } from '../database/entities/advertiser-type-mapping.entity';
+import { CampaignApplicationEntity } from '../database/entities/campaign-applications.entity';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AdvertiserTypeMappingEntity } from '../database/entities/advertiser-typ
       Message,
       AdvertiserDetailsEntity,
       AdvertiserTypeMappingEntity,
+      CampaignApplicationEntity,
     ]),
   ],
   controllers: [AdvertiserController],
