@@ -30,6 +30,7 @@ import {
   CampaignPromoter,
   CampaignDetailsUnion,
   Earnings,
+  CampaignWork,
 } from '../interfaces/promoter-campaigns';
 import {
   SendApplicationRequest,
@@ -52,6 +53,8 @@ import {
 } from '../database/entities/campaign-applications.entity';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
+import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 
 @Injectable()
 export class PromoterService {
@@ -72,6 +75,11 @@ export class PromoterService {
     private messageRepository: Repository<Message>,
     @InjectRepository(CampaignApplicationEntity)
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
+    @InjectRepository(CampaignWorkEntity)
+    private readonly workRepository: Repository<CampaignWorkEntity>,
+
+    @InjectRepository(CampaignWorkCommentEntity)
+    private readonly commentRepository: Repository<CampaignWorkCommentEntity>,
   ) {}
 
   async getDashboardData(
@@ -881,6 +889,30 @@ export class PromoterService {
     };
   }
 
+  private mapPromoterLinks(campaign: CampaignEntity): CampaignWork[] {
+    if (!campaign.promoterWork?.length) {
+      return [];
+    }
+
+    return campaign.promoterWork.map((work: CampaignWorkEntity) => ({
+      id: work.id,
+      campaignId: work.campaignId,
+      promoterLink: work.promoterLink,
+      description: work.description,
+      createdAt: work.createdAt,
+      updatedAt: work.updatedAt,
+      comments:
+        work.comments?.map((c: CampaignWorkCommentEntity) => ({
+          id: c.id,
+          workId: c.workId,
+          commentMessage: c.commentMessage,
+          commentatorId: c.commentatorId,
+          commentatorName: c.commentatorName,
+          createdAt: c.createdAt,
+        })) ?? [],
+    }));
+  }
+
   private transformPromoterCampaignToInterface(
     pc: PromoterCampaign,
   ): CampaignPromoter {
@@ -944,7 +976,7 @@ export class PromoterService {
           meetingCount: pc.campaign.meetingCount || 0,
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: pc.campaign.promoterLinks || [], // Use campaign's promoter links
+          promoterLinks: this.mapPromoterLinks(pc.campaign), // Use campaign's promoter links
         };
         break;
 
@@ -957,7 +989,7 @@ export class PromoterService {
           fixedPrice: undefined, // Not in current schema
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: pc.campaign.promoterLinks || [], // Use campaign's promoter links
+          promoterLinks: this.mapPromoterLinks(pc.campaign), // Use campaign's promoter links
           minFollowers: pc.campaign.minFollowers,
           needMeeting: pc.campaign.needMeeting || false,
           meetingPlan: pc.campaign.meetingPlan!,
@@ -1399,270 +1431,126 @@ export class PromoterService {
   async addCampaignLink(
     firebaseUid: string,
     campaignId: string,
-    link: string,
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
-    // Find promoter by Firebase UID
+    dto: { promoterLink: string; description?: string },
+  ): Promise<{ success: boolean; message: string; data?: any[] }> {
+    // 1) promoter exists?
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid, role: 'PROMOTER' },
     });
-
     if (!promoter) {
-      throw new NotFoundException('Promoter not found');
+      return { success: false, message: 'Promoter not found', data: [] };
     }
 
-    // Verify the promoter is participating in this campaign
-    const promoterCampaign = await this.promoterCampaignRepository.findOne({
-      where: {
-        promoterId: promoter.id,
-        campaignId: campaignId,
-      },
+    const participation = await this.promoterCampaignRepository.findOne({
+      where: { promoterId: promoter.id, campaignId },
     });
-
-    if (!promoterCampaign) {
+    if (!participation) {
       return {
         success: false,
-        message: 'Promoter campaign participation not found',
+        message: 'You are not registered on this campaign',
+        data: [],
       };
     }
 
-    // Find the campaign
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
+      relations: ['promoterWork', 'promoterWork.comments'],
     });
-
     if (!campaign) {
-      return {
-        success: false,
-        message: 'Campaign not found',
-      };
+      return { success: false, message: 'Campaign not found', data: [] };
     }
 
-    // Check if link already exists
-    const existingLinks = campaign.promoterLinks || [];
-    if (existingLinks.includes(link)) {
-      return {
-        success: false,
-        message: 'Link already exists',
-      };
-    }
+    const work = this.workRepository.create({
+      campaignId,
+      promoterLink: dto.promoterLink,
+      description: dto.description,
+    });
+    await this.workRepository.save(work);
 
-    // Add the new link
-    campaign.promoterLinks = [...existingLinks, link];
-    await this.campaignRepository.save(campaign);
+    const all = await this.workRepository.find({
+      where: { campaignId },
+      relations: ['comments'],
+    });
 
     return {
       success: true,
-      message: 'Campaign link added successfully',
-      data: campaign.promoterLinks,
+      message: 'Link added successfully',
+      data: all.map((w) => this.campaignWorkToDto(w)),
     };
   }
 
-  /**
-   * Update an existing campaign link
-   */
   async updateCampaignLink(
     firebaseUid: string,
     campaignId: string,
-    oldLink: string,
-    newLink: string,
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
-    // Find promoter by Firebase UID
-    const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    workId: string,
+    dto: { promoterLink: string; description?: string },
+  ): Promise<{ success: boolean; message: string; data?: any[] }> {
+    //TODO: need to verify the promoter before updating campaignLink
+
+    const work = await this.workRepository.findOne({
+      where: { id: workId, campaignId },
+      relations: ['comments'],
     });
-
-    if (!promoter) {
-      throw new NotFoundException('Promoter not found');
+    if (!work) {
+      return { success: false, message: 'Work item not found', data: [] };
     }
 
-    // Verify the promoter is participating in this campaign
-    const promoterCampaign = await this.promoterCampaignRepository.findOne({
-      where: {
-        promoterId: promoter.id,
-        campaignId: campaignId,
-      },
+    work.promoterLink = dto.promoterLink;
+    work.description = dto.description;
+    await this.workRepository.save(work);
+
+    const all = await this.workRepository.find({
+      where: { campaignId },
+      relations: ['comments'],
     });
-
-    if (!promoterCampaign) {
-      return {
-        success: false,
-        message: 'Promoter campaign participation not found',
-      };
-    }
-
-    // Find the campaign
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId },
-    });
-
-    if (!campaign) {
-      return {
-        success: false,
-        message: 'Campaign not found',
-      };
-    }
-
-    const existingLinks = campaign.promoterLinks || [];
-    const linkIndex = existingLinks.indexOf(oldLink);
-
-    if (linkIndex === -1) {
-      return {
-        success: false,
-        message: 'Original link not found',
-      };
-    }
-
-    // Check if new link already exists (and it's not the same as old link)
-    if (newLink !== oldLink && existingLinks.includes(newLink)) {
-      return {
-        success: false,
-        message: 'New link already exists',
-      };
-    }
-
-    // Update the link
-    existingLinks[linkIndex] = newLink;
-    campaign.promoterLinks = existingLinks;
-    await this.campaignRepository.save(campaign);
-
     return {
       success: true,
-      message: 'Campaign link updated successfully',
-      data: campaign.promoterLinks,
+      message: 'Link updated successfully',
+      data: all.map((w) => this.campaignWorkToDto(w)),
     };
   }
 
-  /**
-   * Delete a campaign link
-   */
   async deleteCampaignLink(
     firebaseUid: string,
     campaignId: string,
-    link: string,
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
-    // Find promoter by Firebase UID
-    const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    workId: string,
+  ): Promise<{ success: boolean; message: string; data?: any[] }> {
+    //TODO: need to verify the promoter before updating campaignLink
+
+    const result = await this.workRepository.delete({ id: workId, campaignId });
+    if (result.affected === 0) {
+      return { success: false, message: 'Work item not found', data: [] };
+    }
+
+    const all = await this.workRepository.find({
+      where: { campaignId },
+      relations: ['comments'],
     });
-
-    if (!promoter) {
-      throw new NotFoundException('Promoter not found');
-    }
-
-    // Verify the promoter is participating in this campaign
-    const promoterCampaign = await this.promoterCampaignRepository.findOne({
-      where: {
-        promoterId: promoter.id,
-        campaignId: campaignId,
-      },
-    });
-
-    if (!promoterCampaign) {
-      return {
-        success: false,
-        message: 'Promoter campaign participation not found',
-      };
-    }
-
-    // Find the campaign
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId },
-    });
-
-    if (!campaign) {
-      return {
-        success: false,
-        message: 'Campaign not found',
-      };
-    }
-
-    const existingLinks = campaign.promoterLinks || [];
-    const linkIndex = existingLinks.indexOf(link);
-
-    if (linkIndex === -1) {
-      return {
-        success: false,
-        message: 'Link not found',
-      };
-    }
-
-    // Remove the link
-    existingLinks.splice(linkIndex, 1);
-    campaign.promoterLinks = existingLinks;
-    await this.campaignRepository.save(campaign);
-
     return {
       success: true,
-      message: 'Campaign link deleted successfully',
-      data: campaign.promoterLinks,
+      message: 'Link deleted successfully',
+      data: all.map((w) => this.campaignWorkToDto(w)),
     };
   }
 
-  /**
-   * Get all campaign links for a promoter
-   */
-  async getCampaignLinks(
-    firebaseUid: string,
-    campaignId: string,
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data: string[];
-  }> {
-    // Find promoter by Firebase UID
-    const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
-    });
-
-    if (!promoter) {
-      throw new NotFoundException('Promoter not found');
-    }
-
-    // Verify the promoter is participating in this campaign
-    const promoterCampaign = await this.promoterCampaignRepository.findOne({
-      where: {
-        promoterId: promoter.id,
-        campaignId: campaignId,
-      },
-    });
-
-    if (!promoterCampaign) {
-      return {
-        success: false,
-        message: 'Promoter campaign participation not found',
-        data: [],
-      };
-    }
-
-    // Find the campaign
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId },
-    });
-
-    if (!campaign) {
-      return {
-        success: false,
-        message: 'Campaign not found',
-        data: [],
-      };
-    }
-
+  /** Convert entity → plain JSON shape matching your CampaignWork interface */
+  private campaignWorkToDto(w: CampaignWorkEntity): CampaignWork {
     return {
-      success: true,
-      message: 'Campaign links retrieved successfully',
-      data: campaign.promoterLinks || [],
+      id: w.id,
+      campaignId: w.campaignId,
+      promoterLink: w.promoterLink,
+      description: w.description,
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+      comments:
+        w.comments?.map((c: CampaignWorkCommentEntity) => ({
+          id: c.id,
+          workId: c.workId,
+          commentMessage: c.commentMessage,
+          commentatorId: c.commentatorId,
+          commentatorName: c.commentatorName,
+          createdAt: c.createdAt,
+        })) ?? [],
     };
   }
 }

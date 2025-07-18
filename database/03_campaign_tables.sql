@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     is_public BOOLEAN DEFAULT FALSE,
     expiry_date TIMESTAMP WITH TIME ZONE,
     media_url TEXT, -- S3 URL for campaign media (image/video)
-    promoter_links TEXT[],
+    promoter_work UUID[], -- List of campaign_works IDs
     discord_invite_link TEXT, -- Optional Discord invite link for campaign discussions
     
     budget_allocated DECIMAL(10,2) NOT NULL, -- Total budget allocated for the campaign
@@ -142,4 +142,24 @@ CREATE TABLE IF NOT EXISTS campaign_budget_allocations (
     
     -- Unique constraint for campaign-promoter pair
     UNIQUE(campaign_id, promoter_id)
+);
+
+-- New table: campaign_works
+CREATE TABLE IF NOT EXISTS campaign_works (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    promoter_link TEXT,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- New table: campaign_work_comments
+CREATE TABLE IF NOT EXISTS campaign_work_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    work_id UUID REFERENCES campaign_works(id) ON DELETE CASCADE,
+    comment_message TEXT NOT NULL,
+    commentator_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    commentator_name TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

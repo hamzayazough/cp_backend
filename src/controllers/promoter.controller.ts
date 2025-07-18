@@ -5,7 +5,7 @@ import {
   Request,
   Param,
   Put,
-  Get,
+  Delete,
 } from '@nestjs/common';
 import { PromoterService } from '../services/promoter.service';
 import {
@@ -17,6 +17,7 @@ import {
   ExploreCampaignResponse,
 } from '../interfaces/explore-campaign';
 import {
+  CampaignWork,
   GetPromoterCampaignsRequest,
   PromoterCampaignsListResponse,
 } from '../interfaces/promoter-campaigns';
@@ -212,127 +213,66 @@ export class PromoterController {
   @Post('campaigns/:campaignId/links')
   async addCampaignLink(
     @Param('campaignId') campaignId: string,
-    @Body() body: { link: string },
+    @Body() dto: { promoterLink: string; description?: string },
     @Request() req: { user: FirebaseUser },
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      const firebaseUid = req.user.uid;
-      const { link } = body;
-
-      const result = await this.promoterService.addCampaignLink(
-        firebaseUid,
+      return await this.promoterService.addCampaignLink(
+        req.user.uid,
         campaignId,
-        link,
+        dto,
       );
-
-      return result;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to add campaign link';
+    } catch (err) {
       return {
         success: false,
-        message: errorMessage,
+        message:
+          err instanceof Error ? err.message : 'Failed to add campaign link',
+        data: [],
       };
     }
   }
 
-  @Put('campaigns/:campaignId/links')
+  @Put('campaigns/:campaignId/links/:workId')
   async updateCampaignLink(
     @Param('campaignId') campaignId: string,
-    @Body() body: { oldLink: string; newLink: string },
+    @Param('workId') workId: string,
+    @Body() dto: { promoterLink: string; description?: string },
     @Request() req: { user: FirebaseUser },
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      const firebaseUid = req.user.uid;
-      const { oldLink, newLink } = body;
-
-      const result = await this.promoterService.updateCampaignLink(
-        firebaseUid,
+      return await this.promoterService.updateCampaignLink(
+        req.user.uid,
         campaignId,
-        oldLink,
-        newLink,
+        workId,
+        dto,
       );
-
-      return result;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to update campaign link';
+    } catch (err) {
       return {
         success: false,
-        message: errorMessage,
+        message:
+          err instanceof Error ? err.message : 'Failed to update campaign link',
+        data: [],
       };
     }
   }
 
-  @Post('campaigns/:campaignId/links/delete')
+  @Delete('campaigns/:campaignId/links/:workId')
   async deleteCampaignLink(
     @Param('campaignId') campaignId: string,
-    @Body() body: { link: string },
+    @Param('workId') workId: string,
     @Request() req: { user: FirebaseUser },
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data?: string[];
-  }> {
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      const firebaseUid = req.user.uid;
-      const { link } = body;
-
-      const result = await this.promoterService.deleteCampaignLink(
-        firebaseUid,
+      return await this.promoterService.deleteCampaignLink(
+        req.user.uid,
         campaignId,
-        link,
+        workId,
       );
-
-      return result;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to delete campaign link';
+    } catch (err) {
       return {
         success: false,
-        message: errorMessage,
-      };
-    }
-  }
-
-  @Get('campaigns/:campaignId/links')
-  async getCampaignLinks(
-    @Param('campaignId') campaignId: string,
-    @Request() req: { user: FirebaseUser },
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data: string[];
-  }> {
-    try {
-      const firebaseUid = req.user.uid;
-
-      const result = await this.promoterService.getCampaignLinks(
-        firebaseUid,
-        campaignId,
-      );
-
-      return result;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to fetch campaign links';
-      return {
-        success: false,
-        message: errorMessage,
+        message:
+          err instanceof Error ? err.message : 'Failed to delete campaign link',
         data: [],
       };
     }

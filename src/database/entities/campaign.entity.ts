@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { CampaignType } from '../../enums/campaign-type';
@@ -15,6 +16,7 @@ import { SalesTrackingMethod } from '../../enums/sales-tracking-method';
 import { Deliverable } from '../../enums/deliverable';
 import { SocialPlatform } from '../../enums/social-platform';
 import { AdvertiserType } from 'src/enums/advertiser-type';
+import { CampaignWorkEntity } from './campaign-work.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -219,11 +221,13 @@ export class CampaignEntity {
   @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
   discordInviteLink?: string;
 
-  @Column({ name: 'promoter_links', type: 'text', array: true, nullable: true })
-  promoterLinks?: string[];
+  @OneToMany<CampaignWorkEntity>(
+    () => CampaignWorkEntity,
+    (work): CampaignEntity => work.campaign,
+  )
+  promoterWork!: CampaignWorkEntity[];
 
   // Relations
-
   @ManyToOne(() => UserEntity, (user) => user.id)
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;

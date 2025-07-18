@@ -23,6 +23,25 @@ export interface GetPromoterCampaignsRequest {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface CampaignWork {
+  id: string;
+  campaignId: string;
+  promoterLink: string;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  comments?: CampaignWorkComment[]; // Comments on the work
+}
+
+export interface CampaignWorkComment {
+  id: string;
+  workId: string;
+  commentMessage: string;
+  commentatorId?: string;
+  commentatorName?: string;
+  createdAt: Date;
+}
+
 export interface Advertiser {
   id: string; // Optional ID for the advertiser
   companyName: string;
@@ -66,7 +85,7 @@ export interface ConsultantCampaignDetails extends BaseCampaignDetails {
   meetingCount: number;
   maxBudget: number;
   minBudget: number;
-  promoterLinks?: string[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones
+  promoterLinks?: CampaignWork[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones
 }
 
 export interface SellerCampaignDetails extends BaseCampaignDetails {
@@ -76,7 +95,7 @@ export interface SellerCampaignDetails extends BaseCampaignDetails {
   fixedPrice?: number;
   maxBudget: number;
   minBudget: number;
-  promoterLinks?: string[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones¸ field available from PromoterCampaign interface
+  promoterLinks?: CampaignWork[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones¸ field available from PromoterCampaign interface
   minFollowers?: number;
 
   //new
