@@ -193,8 +193,7 @@ export class AdvertiserCampaignService {
               (mapping) => mapping.advertiserType,
             ) || [],
           applicants: applicantInfos,
-          chosenPromoters:
-            chosenPromoterInfos.length > 0 ? chosenPromoterInfos[0] : undefined,
+          chosenPromoters: chosenPromoterInfos,
         };
       }),
     ); // Calculate summary statistics

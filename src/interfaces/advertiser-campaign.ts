@@ -131,7 +131,7 @@ export interface CampaignAdvertiser {
   meetingDone?: boolean; // Indicates if the meeting is done for campaigns that require it. from PromoterCampaign
 
   applicants?: PromoterApplicationInfo[];
-  chosenPromoters?: ChosenPromoterInfo; // Promoter who have been selected for the campaign
+  chosenPromoters?: ChosenPromoterInfo[]; // Promoter who have been selected for the campaign
 }
 
 // Pagination and filtering interfaces
