@@ -751,16 +751,21 @@ export class PromoterService {
         statuses: request.status,
       });
 
-      // For applied campaigns, map application status to promoter campaign status
-      // PENDING/ACCEPTED applications should be included if AWAITING_REVIEW is requested
+      // For applied campaigns, only include PENDING applications when AWAITING_REVIEW is requested
+      // ACCEPTED applications should not be included as they will appear as joined campaigns
       if (request.status.includes(PromoterCampaignStatus.AWAITING_REVIEW)) {
-        appliedQuery = appliedQuery.andWhere('ca.status IN (:...appStatuses)', {
-          appStatuses: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED],
+        appliedQuery = appliedQuery.andWhere('ca.status = :appStatus', {
+          appStatus: ApplicationStatus.PENDING,
         });
       } else {
         // If specific statuses are requested that don't apply to applications, exclude them
         appliedQuery = appliedQuery.andWhere('1 = 0'); // This will exclude all applications
       }
+    } else {
+      // When no status filter is applied, still exclude ACCEPTED applications to avoid duplicates
+      appliedQuery = appliedQuery.andWhere('ca.status != :acceptedStatus', {
+        acceptedStatus: ApplicationStatus.ACCEPTED,
+      });
     }
 
     // Apply campaign type filter to both queries
@@ -1078,8 +1083,8 @@ export class PromoterService {
     const applicationPending = await this.campaignApplicationRepository
       .createQueryBuilder('ca')
       .where('ca.promoterId = :promoterId', { promoterId })
-      .andWhere('ca.status IN (:...statuses)', {
-        statuses: [ApplicationStatus.PENDING, ApplicationStatus.ACCEPTED],
+      .andWhere('ca.status = :status', {
+        status: ApplicationStatus.PENDING,
       })
       .getCount();
 
