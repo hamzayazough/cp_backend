@@ -944,7 +944,7 @@ export class PromoterService {
           meetingCount: pc.campaign.meetingCount || 0,
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: [], // You may want to add this field to PromoterCampaign entity
+          promoterLinks: pc.campaign.promoterLinks || [], // Use campaign's promoter links
         };
         break;
 
@@ -957,7 +957,7 @@ export class PromoterService {
           fixedPrice: undefined, // Not in current schema
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: [], // You may want to add this field to PromoterCampaign entity
+          promoterLinks: pc.campaign.promoterLinks || [], // Use campaign's promoter links
           minFollowers: pc.campaign.minFollowers,
           needMeeting: pc.campaign.needMeeting || false,
           meetingPlan: pc.campaign.meetingPlan!,
@@ -1391,5 +1391,278 @@ export class PromoterService {
     }
 
     return 0;
+  }
+
+  /**
+   * Add a new link to a promoter's campaign
+   */
+  async addCampaignLink(
+    firebaseUid: string,
+    campaignId: string,
+    link: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Verify the promoter is participating in this campaign
+    const promoterCampaign = await this.promoterCampaignRepository.findOne({
+      where: {
+        promoterId: promoter.id,
+        campaignId: campaignId,
+      },
+    });
+
+    if (!promoterCampaign) {
+      return {
+        success: false,
+        message: 'Promoter campaign participation not found',
+      };
+    }
+
+    // Find the campaign
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+    });
+
+    if (!campaign) {
+      return {
+        success: false,
+        message: 'Campaign not found',
+      };
+    }
+
+    // Check if link already exists
+    const existingLinks = campaign.promoterLinks || [];
+    if (existingLinks.includes(link)) {
+      return {
+        success: false,
+        message: 'Link already exists',
+      };
+    }
+
+    // Add the new link
+    campaign.promoterLinks = [...existingLinks, link];
+    await this.campaignRepository.save(campaign);
+
+    return {
+      success: true,
+      message: 'Campaign link added successfully',
+      data: campaign.promoterLinks,
+    };
+  }
+
+  /**
+   * Update an existing campaign link
+   */
+  async updateCampaignLink(
+    firebaseUid: string,
+    campaignId: string,
+    oldLink: string,
+    newLink: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Verify the promoter is participating in this campaign
+    const promoterCampaign = await this.promoterCampaignRepository.findOne({
+      where: {
+        promoterId: promoter.id,
+        campaignId: campaignId,
+      },
+    });
+
+    if (!promoterCampaign) {
+      return {
+        success: false,
+        message: 'Promoter campaign participation not found',
+      };
+    }
+
+    // Find the campaign
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+    });
+
+    if (!campaign) {
+      return {
+        success: false,
+        message: 'Campaign not found',
+      };
+    }
+
+    const existingLinks = campaign.promoterLinks || [];
+    const linkIndex = existingLinks.indexOf(oldLink);
+
+    if (linkIndex === -1) {
+      return {
+        success: false,
+        message: 'Original link not found',
+      };
+    }
+
+    // Check if new link already exists (and it's not the same as old link)
+    if (newLink !== oldLink && existingLinks.includes(newLink)) {
+      return {
+        success: false,
+        message: 'New link already exists',
+      };
+    }
+
+    // Update the link
+    existingLinks[linkIndex] = newLink;
+    campaign.promoterLinks = existingLinks;
+    await this.campaignRepository.save(campaign);
+
+    return {
+      success: true,
+      message: 'Campaign link updated successfully',
+      data: campaign.promoterLinks,
+    };
+  }
+
+  /**
+   * Delete a campaign link
+   */
+  async deleteCampaignLink(
+    firebaseUid: string,
+    campaignId: string,
+    link: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Verify the promoter is participating in this campaign
+    const promoterCampaign = await this.promoterCampaignRepository.findOne({
+      where: {
+        promoterId: promoter.id,
+        campaignId: campaignId,
+      },
+    });
+
+    if (!promoterCampaign) {
+      return {
+        success: false,
+        message: 'Promoter campaign participation not found',
+      };
+    }
+
+    // Find the campaign
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+    });
+
+    if (!campaign) {
+      return {
+        success: false,
+        message: 'Campaign not found',
+      };
+    }
+
+    const existingLinks = campaign.promoterLinks || [];
+    const linkIndex = existingLinks.indexOf(link);
+
+    if (linkIndex === -1) {
+      return {
+        success: false,
+        message: 'Link not found',
+      };
+    }
+
+    // Remove the link
+    existingLinks.splice(linkIndex, 1);
+    campaign.promoterLinks = existingLinks;
+    await this.campaignRepository.save(campaign);
+
+    return {
+      success: true,
+      message: 'Campaign link deleted successfully',
+      data: campaign.promoterLinks,
+    };
+  }
+
+  /**
+   * Get all campaign links for a promoter
+   */
+  async getCampaignLinks(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: string[];
+  }> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Verify the promoter is participating in this campaign
+    const promoterCampaign = await this.promoterCampaignRepository.findOne({
+      where: {
+        promoterId: promoter.id,
+        campaignId: campaignId,
+      },
+    });
+
+    if (!promoterCampaign) {
+      return {
+        success: false,
+        message: 'Promoter campaign participation not found',
+        data: [],
+      };
+    }
+
+    // Find the campaign
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+    });
+
+    if (!campaign) {
+      return {
+        success: false,
+        message: 'Campaign not found',
+        data: [],
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Campaign links retrieved successfully',
+      data: campaign.promoterLinks || [],
+    };
   }
 }

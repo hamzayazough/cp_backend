@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Request, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Request,
+  Param,
+  Put,
+  Get,
+} from '@nestjs/common';
 import { PromoterService } from '../services/promoter.service';
 import {
   PromoterDashboardRequest,
@@ -197,6 +205,135 @@ export class PromoterController {
       return {
         success: false,
         message: errorMessage,
+      };
+    }
+  }
+
+  @Post('campaigns/:campaignId/links')
+  async addCampaignLink(
+    @Param('campaignId') campaignId: string,
+    @Body() body: { link: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const { link } = body;
+
+      const result = await this.promoterService.addCampaignLink(
+        firebaseUid,
+        campaignId,
+        link,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to add campaign link';
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Put('campaigns/:campaignId/links')
+  async updateCampaignLink(
+    @Param('campaignId') campaignId: string,
+    @Body() body: { oldLink: string; newLink: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const { oldLink, newLink } = body;
+
+      const result = await this.promoterService.updateCampaignLink(
+        firebaseUid,
+        campaignId,
+        oldLink,
+        newLink,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to update campaign link';
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Post('campaigns/:campaignId/links/delete')
+  async deleteCampaignLink(
+    @Param('campaignId') campaignId: string,
+    @Body() body: { link: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: string[];
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+      const { link } = body;
+
+      const result = await this.promoterService.deleteCampaignLink(
+        firebaseUid,
+        campaignId,
+        link,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to delete campaign link';
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  @Get('campaigns/:campaignId/links')
+  async getCampaignLinks(
+    @Param('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: string[];
+  }> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.getCampaignLinks(
+        firebaseUid,
+        campaignId,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to fetch campaign links';
+      return {
+        success: false,
+        message: errorMessage,
+        data: [],
       };
     }
   }

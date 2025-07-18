@@ -47,7 +47,6 @@ export interface ConsultantCampaign extends BaseCampaign {
   maxBudget: number;
   minBudget: number;
   isPublic: false;
-  promoterLinks?: string[];
 }
 
 export interface SellerCampaign extends BaseCampaign {
@@ -59,7 +58,6 @@ export interface SellerCampaign extends BaseCampaign {
   minBudget: number;
   isPublic: false;
   minFollowers?: number;
-  promoterLinks?: string[];
 
   needMeeting?: boolean; // If true, the promoter needs to have a meeting with the advertiser before starting the campaign
   meetingCount?: number;
