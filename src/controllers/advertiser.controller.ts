@@ -9,9 +9,11 @@ import {
   Get,
   Param,
   Delete,
+  Put,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
+import { PromoterService } from '../services/promoter.service';
 import {
   CampaignService,
   CreateCampaignResponse,
@@ -27,6 +29,7 @@ import {
   AdvertiserDashboardSummary,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
+import { CampaignWork } from '../interfaces/promoter-campaigns';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
@@ -36,6 +39,7 @@ export class AdvertiserController {
   constructor(
     private readonly advertiserService: AdvertiserService,
     private readonly campaignService: CampaignService,
+    private readonly promoterService: PromoterService,
   ) {}
 
   @Post('dashboard')
@@ -256,6 +260,66 @@ export class AdvertiserController {
         success: false,
         message:
           error instanceof Error ? error.message : 'Failed to delete campaign',
+      };
+    }
+  }
+
+  @Post(
+    'campaigns/:campaignId/deliverables/:deliverableId/work/:workId/comments',
+  )
+  async addCommentToWork(
+    @Param('campaignId') campaignId: string,
+    @Param('deliverableId') deliverableId: string,
+    @Param('workId') workId: string,
+    @Body() body: { commentMessage: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.addCommentToWorkAsAdvertiser(
+        firebaseUid,
+        campaignId,
+        deliverableId,
+        workId,
+        body.commentMessage,
+      );
+
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to add comment to work',
+      };
+    }
+  }
+
+  @Put('campaigns/:campaignId/deliverables/:deliverableId/finish')
+  async markDeliverableAsFinished(
+    @Param('campaignId') campaignId: string,
+    @Param('deliverableId') deliverableId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{ success: boolean; message: string; data?: any }> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.markDeliverableAsFinished(
+        firebaseUid,
+        campaignId,
+        deliverableId,
+      );
+
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to mark deliverable as finished',
       };
     }
   }

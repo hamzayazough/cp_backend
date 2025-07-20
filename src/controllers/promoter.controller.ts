@@ -304,4 +304,38 @@ export class PromoterController {
       };
     }
   }
+
+  @Post(
+    'campaigns/:campaignId/deliverables/:deliverableId/work/:workId/comments',
+  )
+  async addCommentToWork(
+    @Param('campaignId') campaignId: string,
+    @Param('deliverableId') deliverableId: string,
+    @Param('workId') workId: string,
+    @Body() body: { commentMessage: string },
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.addCommentToWork(
+        firebaseUid,
+        campaignId,
+        deliverableId,
+        workId,
+        body.commentMessage,
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to add comment to work';
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
 }

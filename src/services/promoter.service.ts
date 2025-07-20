@@ -1629,6 +1629,10 @@ export class PromoterService {
 
       await this.workRepository.save(newWork);
 
+      // Mark the deliverable as submitted since work has been added
+      deliverable.isSubmitted = true;
+      await this.deliverableRepository.save(deliverable);
+
       // Return all work items for this deliverable
       const allWork = await this.workRepository.find({
         where: { deliverableId },
@@ -1834,6 +1838,298 @@ export class PromoterService {
         success: false,
         message:
           error instanceof Error ? error.message : 'Failed to delete work',
+      };
+    }
+  }
+
+  /**
+   * Add a comment to a work item in a specific deliverable
+   */
+  async addCommentToWork(
+    firebaseUid: string,
+    campaignId: string,
+    deliverableId: string,
+    workId: string,
+    commentMessage: string,
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      // Find promoter
+      const promoter = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      });
+
+      if (!promoter) {
+        return {
+          success: false,
+          message: 'Promoter not found',
+        };
+      }
+
+      // Verify the promoter has access to this campaign
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: {
+          promoterId: promoter.id,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!promoterCampaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the deliverable exists and belongs to this campaign
+      const deliverable = await this.deliverableRepository.findOne({
+        where: {
+          id: deliverableId,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!deliverable) {
+        return {
+          success: false,
+          message: 'Deliverable not found',
+        };
+      }
+
+      // Verify the work exists and belongs to this deliverable
+      const work = await this.workRepository.findOne({
+        where: {
+          id: workId,
+          deliverableId: deliverableId,
+        },
+      });
+
+      if (!work) {
+        return {
+          success: false,
+          message: 'Work not found',
+        };
+      }
+
+      // Create the comment
+      const comment = this.commentRepository.create({
+        workId: workId,
+        commentMessage: commentMessage,
+        commentatorId: promoter.id,
+        commentatorName: promoter.name || promoter.email,
+      });
+
+      await this.commentRepository.save(comment);
+
+      // Return all works for this deliverable with updated comments
+      const allWorks = await this.workRepository.find({
+        where: { deliverableId },
+        relations: ['comments'],
+        order: { createdAt: 'ASC' },
+      });
+
+      const workDtos = allWorks.map((w) =>
+        this.campaignWorkToDto(w, campaignId),
+      );
+
+      return {
+        success: true,
+        message: 'Comment added successfully',
+        data: workDtos,
+      };
+    } catch (error) {
+      console.error('Error adding comment to work:', error);
+      return {
+        success: false,
+        message: 'Failed to add comment to work',
+      };
+    }
+  }
+
+  /**
+   * Add a comment to a work item in a specific deliverable (for advertisers)
+   */
+  async addCommentToWorkAsAdvertiser(
+    firebaseUid: string,
+    campaignId: string,
+    deliverableId: string,
+    workId: string,
+    commentMessage: string,
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      // Find advertiser
+      const advertiser = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'ADVERTISER' },
+      });
+
+      if (!advertiser) {
+        return {
+          success: false,
+          message: 'Advertiser not found',
+        };
+      }
+
+      // Verify the campaign belongs to this advertiser
+      const campaign = await this.campaignRepository.findOne({
+        where: {
+          id: campaignId,
+          advertiserId: advertiser.id,
+        },
+      });
+
+      if (!campaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the deliverable exists and belongs to this campaign
+      const deliverable = await this.deliverableRepository.findOne({
+        where: {
+          id: deliverableId,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!deliverable) {
+        return {
+          success: false,
+          message: 'Deliverable not found',
+        };
+      }
+
+      // Verify the work exists and belongs to this deliverable
+      const work = await this.workRepository.findOne({
+        where: {
+          id: workId,
+          deliverableId: deliverableId,
+        },
+      });
+
+      if (!work) {
+        return {
+          success: false,
+          message: 'Work not found',
+        };
+      }
+
+      // Create the comment
+      const comment = this.commentRepository.create({
+        workId: workId,
+        commentMessage: commentMessage,
+        commentatorId: advertiser.id,
+        commentatorName: advertiser.name || advertiser.email,
+      });
+
+      await this.commentRepository.save(comment);
+
+      // Return all works for this deliverable with updated comments
+      const allWorks = await this.workRepository.find({
+        where: { deliverableId },
+        relations: ['comments'],
+        order: { createdAt: 'ASC' },
+      });
+
+      const workDtos = allWorks.map((w) =>
+        this.campaignWorkToDto(w, campaignId),
+      );
+
+      return {
+        success: true,
+        message: 'Comment added successfully',
+        data: workDtos,
+      };
+    } catch (error) {
+      console.error('Error adding comment to work:', error);
+      return {
+        success: false,
+        message: 'Failed to add comment to work',
+      };
+    }
+  }
+
+  /**
+   * Mark a campaign deliverable as finished (for advertisers)
+   */
+  async markDeliverableAsFinished(
+    firebaseUid: string,
+    campaignId: string,
+    deliverableId: string,
+  ): Promise<{ success: boolean; message: string; data?: any }> {
+    try {
+      // Find advertiser
+      const advertiser = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'ADVERTISER' },
+      });
+
+      if (!advertiser) {
+        return {
+          success: false,
+          message: 'Advertiser not found',
+        };
+      }
+
+      // Verify the campaign belongs to this advertiser
+      const campaign = await this.campaignRepository.findOne({
+        where: {
+          id: campaignId,
+          advertiserId: advertiser.id,
+        },
+      });
+
+      if (!campaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the deliverable exists and belongs to this campaign
+      const deliverable = await this.deliverableRepository.findOne({
+        where: {
+          id: deliverableId,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!deliverable) {
+        return {
+          success: false,
+          message: 'Deliverable not found',
+        };
+      }
+
+      // Check if deliverable is already finished
+      if (deliverable.isFinished) {
+        return {
+          success: false,
+          message: 'Deliverable is already marked as finished',
+        };
+      }
+
+      // Mark the deliverable as finished
+      deliverable.isFinished = true;
+      await this.deliverableRepository.save(deliverable);
+
+      // Return the updated deliverable
+      return {
+        success: true,
+        message: 'Deliverable marked as finished successfully',
+        data: {
+          id: deliverable.id,
+          campaignId: deliverable.campaignId,
+          deliverable: deliverable.deliverable,
+          isSubmitted: deliverable.isSubmitted,
+          isFinished: deliverable.isFinished,
+          createdAt: deliverable.createdAt,
+          updatedAt: deliverable.updatedAt,
+        },
+      };
+    } catch (error) {
+      console.error('Error marking deliverable as finished:', error);
+      return {
+        success: false,
+        message: 'Failed to mark deliverable as finished',
       };
     }
   }

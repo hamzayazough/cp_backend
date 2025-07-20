@@ -10,6 +10,7 @@ import { AdvertiserTransactionService } from '../services/advertiser-transaction
 import { AdvertiserMessageService } from '../services/advertiser-message.service';
 import { CampaignService } from '../services/campaign.service';
 import { S3Service } from '../services/s3.service';
+import { PromoterModule } from './promoter.module';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -40,6 +41,7 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
     ]),
+    PromoterModule,
   ],
   controllers: [AdvertiserController],
   providers: [
