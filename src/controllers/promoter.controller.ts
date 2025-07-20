@@ -210,70 +210,97 @@ export class PromoterController {
     }
   }
 
-  @Post('campaigns/:campaignId/links')
-  async addCampaignLink(
+  @Post('campaigns/:campaignId/deliverables/:deliverableId/work')
+  async addCampaignWorkToDeliverable(
     @Param('campaignId') campaignId: string,
-    @Body() dto: { promoterLink: string; description?: string },
+    @Param('deliverableId') deliverableId: string,
+    @Body() body: { promoterLink: string; description?: string },
     @Request() req: { user: FirebaseUser },
   ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      return await this.promoterService.addCampaignLink(
-        req.user.uid,
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.addCampaignWorkToDeliverable(
+        firebaseUid,
         campaignId,
-        dto,
+        deliverableId,
+        body.promoterLink,
+        body.description,
       );
-    } catch (err) {
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to add work to deliverable';
       return {
         success: false,
-        message:
-          err instanceof Error ? err.message : 'Failed to add campaign link',
-        data: [],
+        message: errorMessage,
       };
     }
   }
 
-  @Put('campaigns/:campaignId/links/:workId')
-  async updateCampaignLink(
+  @Put('campaigns/:campaignId/deliverables/:deliverableId/work/:workId')
+  async updateCampaignWorkInDeliverable(
     @Param('campaignId') campaignId: string,
+    @Param('deliverableId') deliverableId: string,
     @Param('workId') workId: string,
-    @Body() dto: { promoterLink: string; description?: string },
+    @Body() body: { promoterLink: string; description?: string },
     @Request() req: { user: FirebaseUser },
   ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      return await this.promoterService.updateCampaignLink(
-        req.user.uid,
+      const firebaseUid = req.user.uid;
+
+      const result = await this.promoterService.updateCampaignWorkInDeliverable(
+        firebaseUid,
         campaignId,
+        deliverableId,
         workId,
-        dto,
+        body.promoterLink,
+        body.description,
       );
-    } catch (err) {
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to update work in deliverable';
       return {
         success: false,
-        message:
-          err instanceof Error ? err.message : 'Failed to update campaign link',
-        data: [],
+        message: errorMessage,
       };
     }
   }
 
-  @Delete('campaigns/:campaignId/links/:workId')
-  async deleteCampaignLink(
+  @Delete('campaigns/:campaignId/deliverables/:deliverableId/work/:workId')
+  async deleteCampaignWorkFromDeliverable(
     @Param('campaignId') campaignId: string,
+    @Param('deliverableId') deliverableId: string,
     @Param('workId') workId: string,
     @Request() req: { user: FirebaseUser },
   ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
     try {
-      return await this.promoterService.deleteCampaignLink(
-        req.user.uid,
-        campaignId,
-        workId,
-      );
-    } catch (err) {
+      const firebaseUid = req.user.uid;
+
+      const result =
+        await this.promoterService.deleteCampaignWorkFromDeliverable(
+          firebaseUid,
+          campaignId,
+          deliverableId,
+          workId,
+        );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to delete work from deliverable';
       return {
         success: false,
-        message:
-          err instanceof Error ? err.message : 'Failed to delete campaign link',
-        data: [],
+        message: errorMessage,
       };
     }
   }

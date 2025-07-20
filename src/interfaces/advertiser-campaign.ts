@@ -10,6 +10,7 @@ import { Promoter } from './user';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { PromoterCampaignStatus } from './promoter-campaign';
 import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
+import { CampaignDeliverable } from './promoter-campaigns';
 
 export enum AdvertiserCampaignSortField {
   CREATED_AT = 'createdAt',
@@ -40,7 +41,6 @@ export interface ChosenPromoterInfo {
 
   // if campaign is CONSULTANT or SELLER + is in ONGOING or COMPLETED
   numberMeetingsDone?: number; // Number of meetings done by the promoter
-  promoterLinks?: string[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones
   budgetAllocated: number; // Amount currently reserved/held from advertiser
 }
 
@@ -73,7 +73,7 @@ export interface AdvertiserConsultantCampaignDetails
   extends AdvertiserBaseCampaignDetails {
   type: CampaignType.CONSULTANT;
   meetingPlan: MeetingPlan;
-  expectedDeliverables?: Deliverable[];
+  expectedDeliverables?: CampaignDeliverable[];
   expertiseRequired?: string;
   meetingCount: number;
   maxBudget: number;
@@ -84,7 +84,7 @@ export interface AdvertiserSellerCampaignDetails
   extends AdvertiserBaseCampaignDetails {
   type: CampaignType.SELLER;
   sellerRequirements?: Deliverable[];
-  deliverables?: Deliverable[];
+  deliverables?: CampaignDeliverable[];
   fixedPrice?: number;
   maxBudget: number;
   minBudget: number;

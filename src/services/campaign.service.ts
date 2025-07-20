@@ -9,8 +9,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { UserEntity } from '../database/entities/user.entity';
+import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { S3Service, S3FileType } from './s3.service';
-import { Campaign } from '../interfaces/campaign';
+import {
+  Campaign,
+  ConsultantCampaign,
+  SellerCampaign,
+} from '../interfaces/campaign';
+import { CampaignType } from '../enums/campaign-type';
+import { Deliverable } from '../enums/deliverable';
 
 // Helpers
 import { FileValidationHelper } from '../helpers/file-validation.helper';
@@ -44,6 +51,8 @@ export class CampaignService {
     private campaignRepository: Repository<CampaignEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(CampaignDeliverableEntity)
+    private deliverableRepository: Repository<CampaignDeliverableEntity>,
     private s3Service: S3Service,
   ) {}
 
@@ -149,8 +158,47 @@ export class CampaignService {
         user.id,
       );
 
-      // Save campaign
+      // Save campaign first to get its ID
       const savedCampaign = await this.campaignRepository.save(campaign);
+
+      // Create deliverable entities based on campaign type
+      if (campaignData.type === CampaignType.CONSULTANT) {
+        const consultantData = campaignData as ConsultantCampaign;
+        if (consultantData.expectedDeliverables?.length > 0) {
+          // Extract deliverable enum values from CampaignDeliverable objects
+          const deliverableEnums = consultantData.expectedDeliverables.map(
+            (cd) => cd.deliverable,
+          );
+          const deliverableEntities = await this.createDeliverableEntities(
+            savedCampaign.id,
+            deliverableEnums,
+          );
+
+          // Update the campaign with deliverable IDs
+          savedCampaign.expectedDeliverableIds = deliverableEntities.map(
+            (d) => d.id,
+          );
+          await this.campaignRepository.save(savedCampaign);
+        }
+      }
+
+      if (campaignData.type === CampaignType.SELLER) {
+        const sellerData = campaignData as SellerCampaign;
+        if (sellerData.deliverables && sellerData.deliverables.length > 0) {
+          // Extract deliverable enum values from CampaignDeliverable objects
+          const deliverableEnums = sellerData.deliverables.map(
+            (cd) => cd.deliverable,
+          );
+          const deliverableEntities = await this.createDeliverableEntities(
+            savedCampaign.id,
+            deliverableEnums,
+          );
+
+          // Update the campaign with deliverable IDs
+          savedCampaign.deliverableIds = deliverableEntities.map((d) => d.id);
+          await this.campaignRepository.save(savedCampaign);
+        }
+      }
 
       // Convert entity to interface using helper
       const campaignResponse =
@@ -175,5 +223,24 @@ export class CampaignService {
           : CAMPAIGN_ERROR_MESSAGES.CAMPAIGN_CREATION_FAILED,
       );
     }
+  }
+
+  /**
+   * Creates deliverable entities from deliverable enum values
+   */
+  private async createDeliverableEntities(
+    campaignId: string,
+    deliverables: Deliverable[],
+  ): Promise<CampaignDeliverableEntity[]> {
+    const deliverableEntities = deliverables.map((deliverable) => {
+      const entity = new CampaignDeliverableEntity();
+      entity.campaignId = campaignId;
+      entity.deliverable = deliverable;
+      entity.isSubmitted = false;
+      entity.isFinished = false;
+      return entity;
+    });
+
+    return await this.deliverableRepository.save(deliverableEntities);
   }
 }

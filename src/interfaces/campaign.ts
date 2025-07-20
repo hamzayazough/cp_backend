@@ -5,6 +5,7 @@ import { SalesTrackingMethod } from '../enums/sales-tracking-method';
 import { Deliverable } from '../enums/deliverable';
 import { SocialPlatform } from '../enums/social-platform';
 import { AdvertiserType } from 'src/enums/advertiser-type';
+import { CampaignDeliverable } from './promoter-campaigns';
 // Base Campaign interface - now abstract, not used directly
 export interface BaseCampaign {
   title: string;
@@ -42,7 +43,7 @@ export interface ConsultantCampaign extends BaseCampaign {
   type: CampaignType.CONSULTANT;
   meetingPlan?: MeetingPlan;
   expertiseRequired?: string;
-  expectedDeliverables: Deliverable[];
+  expectedDeliverables: CampaignDeliverable[];
   meetingCount?: number;
   maxBudget: number;
   minBudget: number;
@@ -52,7 +53,7 @@ export interface ConsultantCampaign extends BaseCampaign {
 export interface SellerCampaign extends BaseCampaign {
   type: CampaignType.SELLER;
   sellerRequirements?: Deliverable[];
-  deliverables?: Deliverable[];
+  deliverables?: CampaignDeliverable[];
   meetingPlan?: MeetingPlan;
   maxBudget: number;
   minBudget: number;

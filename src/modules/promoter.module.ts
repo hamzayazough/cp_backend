@@ -9,6 +9,9 @@ import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { MessageThread, Message } from '../database/entities/message.entity';
 import { CampaignApplicationEntity } from '../database/entities/campaign-applications.entity';
+import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
+import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
+import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
       MessageThread,
       Message,
       CampaignApplicationEntity,
+      CampaignWorkEntity,
+      CampaignWorkCommentEntity,
+      CampaignDeliverableEntity,
     ]),
   ],
   controllers: [PromoterController],

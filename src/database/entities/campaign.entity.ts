@@ -16,7 +16,8 @@ import { SalesTrackingMethod } from '../../enums/sales-tracking-method';
 import { Deliverable } from '../../enums/deliverable';
 import { SocialPlatform } from '../../enums/social-platform';
 import { AdvertiserType } from 'src/enums/advertiser-type';
-import { CampaignWorkEntity } from './campaign-work.entity';
+import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
+import { PromoterCampaign } from './promoter-campaign.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -136,23 +137,23 @@ export class CampaignEntity {
   @Column({ name: 'expertise_required', type: 'text', nullable: true })
   expertiseRequired?: string;
 
+  // Store the IDs for filtering, but we'll use the relationship for querying
   @Column({
     name: 'expected_deliverables',
-    type: 'enum',
-    enum: Deliverable,
+    type: 'uuid',
     array: true,
     nullable: true,
   })
-  expectedDeliverables?: Deliverable[]; // Required for CONSULTANT campaigns
+  expectedDeliverableIds?: string[]; // Array of CampaignDeliverable IDs
 
   // Campaign-specific fields for SELLER campaigns
   @Column({
-    type: 'enum',
-    enum: Deliverable,
+    name: 'deliverables',
+    type: 'uuid',
     array: true,
     nullable: true,
   })
-  deliverables?: Deliverable[];
+  deliverableIds?: string[]; // Array of CampaignDeliverable IDs
 
   @Column({
     name: 'seller_requirements',
@@ -221,11 +222,36 @@ export class CampaignEntity {
   @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
   discordInviteLink?: string;
 
-  @OneToMany<CampaignWorkEntity>(
-    () => CampaignWorkEntity,
-    (work): CampaignEntity => work.campaign,
+  @OneToMany(
+    () => CampaignDeliverableEntity,
+    (deliverable) => deliverable.campaign,
   )
-  promoterWork!: CampaignWorkEntity[];
+  campaignDeliverables!: CampaignDeliverableEntity[];
+
+  @OneToMany(
+    () => PromoterCampaign,
+    (promoterCampaign) => promoterCampaign.campaign,
+  )
+  promoterCampaigns!: PromoterCampaign[];
+
+  // Getter methods to filter deliverables based on the stored IDs
+  get expectedDeliverables(): CampaignDeliverableEntity[] {
+    if (!this.expectedDeliverableIds || !this.campaignDeliverables) {
+      return [];
+    }
+    return this.campaignDeliverables.filter((cd) =>
+      this.expectedDeliverableIds!.includes(cd.id),
+    );
+  }
+
+  get deliverables(): CampaignDeliverableEntity[] {
+    if (!this.deliverableIds || !this.campaignDeliverables) {
+      return [];
+    }
+    return this.campaignDeliverables.filter((cd) =>
+      this.deliverableIds!.includes(cd.id),
+    );
+  }
 
   // Relations
   @ManyToOne(() => UserEntity, (user) => user.id)

@@ -8,16 +8,16 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { CampaignEntity } from './campaign.entity';
 import { CampaignWorkCommentEntity } from './campaign-work-comment.entity';
+import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 
 @Entity('campaign_works')
 export class CampaignWorkEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'campaign_id' })
-  campaignId: string;
+  @Column({ name: 'deliverable_id' })
+  deliverableId: string;
 
   @Column({ name: 'promoter_link', type: 'text' })
   promoterLink: string;
@@ -31,12 +31,12 @@ export class CampaignWorkEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @ManyToOne<CampaignEntity>(
-    () => CampaignEntity,
-    (campaign): CampaignWorkEntity => campaign.promoterWork,
+  @ManyToOne(
+    () => CampaignDeliverableEntity,
+    (deliverable) => deliverable.promoterWork,
   )
-  @JoinColumn({ name: 'campaign_id' })
-  campaign!: CampaignEntity;
+  @JoinColumn({ name: 'deliverable_id' })
+  deliverable!: CampaignDeliverableEntity;
 
   @OneToMany<CampaignWorkCommentEntity>(
     () => CampaignWorkCommentEntity,

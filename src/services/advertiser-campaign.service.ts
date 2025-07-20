@@ -6,12 +6,16 @@ import { PromoterCampaign } from '../database/entities/promoter-campaign.entity'
 import { Transaction } from '../database/entities/transaction.entity';
 import { CampaignApplicationEntity } from 'src/database/entities/campaign-applications.entity';
 import { UserEntity } from '../database/entities/user.entity';
+import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
+import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
+import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   CampaignFilters,
 } from '../interfaces/advertiser-campaign';
 import { AdvertiserActiveCampaign } from '../interfaces/advertiser-dashboard';
+import { CampaignDeliverable } from '../interfaces/promoter-campaigns';
 import { CampaignStatus, CampaignType } from '../enums/campaign-type';
 import { transformUserToPromoter } from '../helpers/user-transformer.helper';
 
@@ -28,6 +32,12 @@ export class AdvertiserCampaignService {
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    @InjectRepository(CampaignDeliverableEntity)
+    private deliverableRepository: Repository<CampaignDeliverableEntity>,
+    @InjectRepository(CampaignWorkEntity)
+    private workRepository: Repository<CampaignWorkEntity>,
+    @InjectRepository(CampaignWorkCommentEntity)
+    private commentRepository: Repository<CampaignWorkCommentEntity>,
   ) {}
 
   async getActiveCampaigns(
@@ -108,6 +118,9 @@ export class AdvertiserCampaignService {
         'advertiserDetails.advertiserTypeMappings',
         'advertiserTypeMappings',
       )
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'work')
+      .leftJoinAndSelect('work.comments', 'comments')
       .where('campaign.advertiserId = :advertiserId', { advertiserId });
 
     if (request.status && request.status.length > 0) {
@@ -229,8 +242,8 @@ export class AdvertiserCampaignService {
   }
   private mapCampaignDetails(campaign: CampaignEntity): any {
     const baseDetails = {
-      budgetHeld: 0, // This should come from budget allocation
-      spentBudget: 0, // This should come from transactions
+      budgetHeld: 0, // TODO: This should come from budget allocation
+      spentBudget: 0, // TODO: This should come from transactions
       targetAudience: campaign.targetAudience,
       preferredPlatforms: campaign.preferredPlatforms,
       requirements: campaign.requirements,
@@ -261,7 +274,9 @@ export class AdvertiserCampaignService {
         return {
           ...baseDetails,
           meetingPlan: campaign.meetingPlan,
-          expectedDeliverables: campaign.expectedDeliverables,
+          expectedDeliverables: this.transformCampaignDeliverables(
+            campaign.expectedDeliverables,
+          ),
           expertiseRequired: campaign.expertiseRequired,
           meetingCount: campaign.meetingCount || 0,
           maxBudget: campaign.maxBudget || 0,
@@ -271,7 +286,9 @@ export class AdvertiserCampaignService {
         return {
           ...baseDetails,
           sellerRequirements: campaign.sellerRequirements,
-          deliverables: campaign.deliverables,
+          deliverables: this.transformCampaignDeliverables(
+            campaign.deliverables,
+          ),
           maxBudget: campaign.maxBudget || 0,
           minBudget: campaign.minBudget || 0,
           minFollowers: campaign.minFollowers,
@@ -291,6 +308,43 @@ export class AdvertiserCampaignService {
         return baseDetails;
     }
   }
+
+  private transformCampaignDeliverables(
+    deliverableEntities: CampaignDeliverableEntity[] | undefined,
+  ): CampaignDeliverable[] {
+    if (!deliverableEntities || deliverableEntities.length === 0) {
+      return [];
+    }
+
+    return deliverableEntities.map((entity) => ({
+      id: entity.id,
+      campaignId: entity.campaignId,
+      deliverable: entity.deliverable,
+      isSubmitted: entity.isSubmitted,
+      isFinished: entity.isFinished,
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+      promoterWork:
+        entity.promoterWork?.map((work) => ({
+          id: work.id,
+          campaignId: entity.campaignId, // Get campaign ID from the parent deliverable
+          promoterLink: work.promoterLink,
+          description: work.description,
+          createdAt: work.createdAt,
+          updatedAt: work.updatedAt,
+          comments:
+            work.comments?.map((comment) => ({
+              id: comment.id,
+              workId: comment.workId,
+              commentMessage: comment.commentMessage,
+              commentatorId: comment.commentatorId,
+              commentatorName: comment.commentatorName,
+              createdAt: comment.createdAt,
+            })) || [],
+        })) || [],
+    }));
+  }
+
   private async calculateCampaignSummary(advertiserId: string) {
     // Calculate total active campaigns
     const totalActiveCampaigns = await this.campaignRepository
@@ -305,14 +359,15 @@ export class AdvertiserCampaignService {
       .where('campaign.advertiserId = :advertiserId', { advertiserId })
       .andWhere('campaign.status = :status', { status: CampaignStatus.ENDED })
       .getCount(); // Calculate total allocated budget across all campaigns
-    const budgetResult = await this.campaignRepository
-      .createQueryBuilder('campaign')
-      .select('SUM(campaign.budgetAllocated)', 'totalAllocated')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .getRawOne();
+    const budgetResult: { totalAllocated: string } | undefined =
+      await this.campaignRepository
+        .createQueryBuilder('campaign')
+        .select('SUM(campaign.budgetAllocated)', 'totalAllocated')
+        .where('campaign.advertiserId = :advertiserId', { advertiserId })
+        .getRawOne();
 
     const totalAllocatedBudget = budgetResult
-      ? Number(budgetResult['totalAllocated']) || 0
+      ? Number(budgetResult.totalAllocated) || 0
       : 0;
 
     // Calculate total spent this month from promoter campaigns
@@ -327,27 +382,29 @@ export class AdvertiserCampaignService {
       currentMonth.getMonth() + 1,
       0,
     );
-    const spentResult = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoin('pc.campaign', 'campaign')
-      .select('SUM(pc.spentBudget)', 'totalSpent')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('pc.updatedAt >= :startOfMonth', { startOfMonth })
-      .andWhere('pc.updatedAt <= :endOfMonth', { endOfMonth })
-      .getRawOne();
+    const spentResult: { totalSpent: string } | undefined =
+      await this.promoterCampaignRepository
+        .createQueryBuilder('pc')
+        .leftJoin('pc.campaign', 'campaign')
+        .select('SUM(pc.spentBudget)', 'totalSpent')
+        .where('campaign.advertiserId = :advertiserId', { advertiserId })
+        .andWhere('pc.updatedAt >= :startOfMonth', { startOfMonth })
+        .andWhere('pc.updatedAt <= :endOfMonth', { endOfMonth })
+        .getRawOne();
 
     const totalSpentThisMonth = spentResult
-      ? Number(spentResult['totalSpent']) || 0
+      ? Number(spentResult.totalSpent) || 0
       : 0; // Calculate total remaining budget (allocated - spent across all campaigns)
-    const totalSpentResult = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoin('pc.campaign', 'campaign')
-      .select('SUM(pc.spentBudget)', 'totalSpent')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .getRawOne();
+    const totalSpentResult: { totalSpent: string } | undefined =
+      await this.promoterCampaignRepository
+        .createQueryBuilder('pc')
+        .leftJoin('pc.campaign', 'campaign')
+        .select('SUM(pc.spentBudget)', 'totalSpent')
+        .where('campaign.advertiserId = :advertiserId', { advertiserId })
+        .getRawOne();
 
     const totalSpent = totalSpentResult
-      ? Number(totalSpentResult['totalSpent']) || 0
+      ? Number(totalSpentResult.totalSpent) || 0
       : 0;
     const totalRemainingBudget = totalAllocatedBudget - totalSpent;
 

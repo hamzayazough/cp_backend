@@ -55,6 +55,8 @@ import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { UserType } from 'src/database/entities/billing-period-summary.entity';
 import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
+import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
+import { Deliverable } from '../enums/deliverable';
 
 @Injectable()
 export class PromoterService {
@@ -80,6 +82,9 @@ export class PromoterService {
 
     @InjectRepository(CampaignWorkCommentEntity)
     private readonly commentRepository: Repository<CampaignWorkCommentEntity>,
+
+    @InjectRepository(CampaignDeliverableEntity)
+    private readonly deliverableRepository: Repository<CampaignDeliverableEntity>,
   ) {}
 
   async getDashboardData(
@@ -561,6 +566,8 @@ export class PromoterService {
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('campaign.promoterCampaigns', 'promoterCampaigns')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
 
     // Exclude campaigns the promoter has already joined, applied for, or private campaigns taken by others
@@ -611,7 +618,7 @@ export class PromoterService {
     const totalPages = Math.ceil(totalCount / limit);
     const campaigns = await query.skip(skip).take(limit).getMany(); // Transform campaigns to the required format
     const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
-      this.transformCampaignToUnion(campaign),
+      this.transformCampaignToUnion(campaign, promoter.id),
     );
 
     return {
@@ -625,7 +632,10 @@ export class PromoterService {
       advertiserTypes: request.advertiserTypes || [],
     };
   }
-  private transformCampaignToUnion(campaign: CampaignEntity): CampaignUnion {
+  private transformCampaignToUnion(
+    campaign: CampaignEntity,
+    promoterId: string,
+  ): CampaignUnion {
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
       companyName: campaign.advertiser.name || 'Unknown Company',
@@ -643,7 +653,9 @@ export class PromoterService {
       title: campaign.title,
       type: campaign.type,
       mediaUrl: campaign.mediaUrl,
-      status: 'ONGOING' as PromoterCampaignStatus,
+      status:
+        campaign.promoterCampaigns?.find((pm) => pm.promoterId === promoterId)
+          ?.status || PromoterCampaignStatus.ONGOING,
       description: campaign.description,
       targetAudience: campaign.targetAudience,
       preferredPlatforms: campaign.preferredPlatforms,
@@ -676,7 +688,9 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.CONSULTANT,
           meetingPlan: campaign.meetingPlan!,
-          expectedDeliverables: campaign.expectedDeliverables,
+          expectedDeliverables: campaign.expectedDeliverables.map(
+            (cd) => cd.deliverable,
+          ),
           expertiseRequired: campaign.expertiseRequired,
           meetingCount: campaign.meetingCount || 0,
           maxBudget: campaign.maxBudget || 0,
@@ -688,7 +702,7 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.SELLER,
           sellerRequirements: campaign.sellerRequirements,
-          deliverables: campaign.deliverables,
+          deliverables: campaign.deliverables.map((cd) => cd.deliverable),
           maxBudget: campaign.maxBudget || 0,
           minBudget: campaign.minBudget || 0,
           minFollowers: campaign.minFollowers,
@@ -742,6 +756,9 @@ export class PromoterService {
       .leftJoinAndSelect('pc.campaign', 'campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
+      .leftJoinAndSelect('promoterWork.comments', 'comments')
       .where('pc.promoterId = :promoterId', { promoterId: promoter.id });
 
     // Get applied campaigns (from CampaignApplicationEntity)
@@ -750,6 +767,9 @@ export class PromoterService {
       .leftJoinAndSelect('ca.campaign', 'campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
+      .leftJoinAndSelect('promoterWork.comments', 'comments')
       .where('ca.promoterId = :promoterId', { promoterId: promoter.id });
 
     // Apply status filter
@@ -889,34 +909,57 @@ export class PromoterService {
     };
   }
 
-  private mapPromoterLinks(campaign: CampaignEntity): CampaignWork[] {
-    if (!campaign.promoterWork?.length) {
-      return [];
+  private async mapPromoterLinks(
+    campaign: CampaignEntity,
+  ): Promise<CampaignWork[]> {
+    // Since campaigns no longer have direct promoterWork relationships,
+    // we need to get work through deliverables
+    const deliverables = await this.deliverableRepository.find({
+      where: { campaignId: campaign.id },
+      relations: ['promoterWork', 'promoterWork.comments'],
+    });
+
+    const allWork: CampaignWork[] = [];
+
+    for (const deliverable of deliverables) {
+      for (const work of deliverable.promoterWork) {
+        allWork.push({
+          id: work.id,
+          campaignId: campaign.id, // Use the campaign ID from the parameter
+          promoterLink: work.promoterLink,
+          description: work.description,
+          createdAt: work.createdAt,
+          updatedAt: work.updatedAt,
+          comments:
+            work.comments?.map((c: CampaignWorkCommentEntity) => ({
+              id: c.id,
+              workId: c.workId,
+              commentMessage: c.commentMessage,
+              commentatorId: c.commentatorId,
+              commentatorName: c.commentatorName,
+              createdAt: c.createdAt,
+            })) ?? [],
+        });
+      }
     }
 
-    return campaign.promoterWork.map((work: CampaignWorkEntity) => ({
-      id: work.id,
-      campaignId: work.campaignId,
-      promoterLink: work.promoterLink,
-      description: work.description,
-      createdAt: work.createdAt,
-      updatedAt: work.updatedAt,
-      comments:
-        work.comments?.map((c: CampaignWorkCommentEntity) => ({
-          id: c.id,
-          workId: c.workId,
-          commentMessage: c.commentMessage,
-          commentatorId: c.commentatorId,
-          commentatorName: c.commentatorName,
-          createdAt: c.createdAt,
-        })) ?? [],
-    }));
+    return allWork;
   }
+
+  // private async getDeliverablesForCampaign(
+  //   campaign: CampaignEntity,
+  // ): Promise<import('../enums/deliverable').Deliverable[]> {
+  //   const deliverables = await this.deliverableRepository.find({
+  //     where: { campaignId: campaign.id },
+  //     select: ['deliverable'],
+  //   });
+
+  //   return deliverables.map((d) => d.deliverable);
+  // }
 
   private transformPromoterCampaignToInterface(
     pc: PromoterCampaign,
   ): CampaignPromoter {
-    console.log('Transforming Promoter Campaign:', pc);
     const advertiser: Advertiser = {
       id: pc.campaign.advertiser.id,
       companyName: pc.campaign.advertiser.name || 'Unknown Company',
@@ -971,12 +1014,37 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.CONSULTANT,
           meetingPlan: pc.campaign.meetingPlan!,
-          expectedDeliverables: pc.campaign.expectedDeliverables,
+          expectedDeliverables: pc.campaign.expectedDeliverables.map((cd) => ({
+            id: cd.id,
+            campaignId: cd.campaignId,
+            deliverable: cd.deliverable,
+            isSubmitted: cd.isSubmitted,
+            isFinished: cd.isFinished,
+            createdAt: cd.createdAt,
+            updatedAt: cd.updatedAt,
+            promoterWork:
+              cd.promoterWork?.map((work) => ({
+                id: work.id,
+                deliverableId: work.deliverableId,
+                promoterLink: work.promoterLink,
+                description: work.description,
+                createdAt: work.createdAt,
+                updatedAt: work.updatedAt,
+                comments:
+                  work.comments?.map((comment) => ({
+                    id: comment.id,
+                    workId: comment.workId,
+                    commentMessage: comment.commentMessage,
+                    commentatorId: comment.commentatorId,
+                    commentatorName: comment.commentatorName,
+                    createdAt: comment.createdAt,
+                  })) || [],
+              })) || [],
+          })),
           expertiseRequired: pc.campaign.expertiseRequired,
           meetingCount: pc.campaign.meetingCount || 0,
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: this.mapPromoterLinks(pc.campaign), // Use campaign's promoter links
         };
         break;
 
@@ -985,11 +1053,36 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.SELLER,
           sellerRequirements: pc.campaign.sellerRequirements,
-          deliverables: pc.campaign.deliverables,
+          deliverables: pc.campaign.deliverables.map((cd) => ({
+            id: cd.id,
+            campaignId: cd.campaignId,
+            deliverable: cd.deliverable,
+            isSubmitted: cd.isSubmitted,
+            isFinished: cd.isFinished,
+            createdAt: cd.createdAt,
+            updatedAt: cd.updatedAt,
+            promoterWork:
+              cd.promoterWork?.map((work) => ({
+                id: work.id,
+                deliverableId: work.deliverableId,
+                promoterLink: work.promoterLink,
+                description: work.description,
+                createdAt: work.createdAt,
+                updatedAt: work.updatedAt,
+                comments:
+                  work.comments?.map((comment) => ({
+                    id: comment.id,
+                    workId: comment.workId,
+                    commentMessage: comment.commentMessage,
+                    commentatorId: comment.commentatorId,
+                    commentatorName: comment.commentatorName,
+                    createdAt: comment.createdAt,
+                  })) || [],
+              })) || [],
+          })),
           fixedPrice: undefined, // Not in current schema
           maxBudget: pc.campaign.maxBudget || 0,
           minBudget: pc.campaign.minBudget || 0,
-          promoterLinks: this.mapPromoterLinks(pc.campaign), // Use campaign's promoter links
           minFollowers: pc.campaign.minFollowers,
           needMeeting: pc.campaign.needMeeting || false,
           meetingPlan: pc.campaign.meetingPlan!,
@@ -1272,7 +1365,6 @@ export class PromoterService {
   private transformCampaignApplicationToInterface(
     ca: CampaignApplicationEntity & { campaign: CampaignEntity },
   ): CampaignPromoter {
-    console.log('Transforming Campaign Application:', ca);
     const advertiser: Advertiser = {
       id: ca.campaign.advertiser.id,
       companyName: ca.campaign.advertiser.name || 'Unknown Company',
@@ -1328,12 +1420,37 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.CONSULTANT,
           meetingPlan: ca.campaign.meetingPlan!,
-          expectedDeliverables: ca.campaign.expectedDeliverables,
+          expectedDeliverables: ca.campaign.expectedDeliverables.map((cd) => ({
+            id: cd.id,
+            campaignId: cd.campaignId,
+            deliverable: cd.deliverable,
+            isSubmitted: cd.isSubmitted,
+            isFinished: cd.isFinished,
+            createdAt: cd.createdAt,
+            updatedAt: cd.updatedAt,
+            promoterWork:
+              cd.promoterWork?.map((work) => ({
+                id: work.id,
+                campaignId: cd.campaignId,
+                promoterLink: work.promoterLink,
+                description: work.description,
+                createdAt: work.createdAt,
+                updatedAt: work.updatedAt,
+                comments:
+                  work.comments?.map((comment) => ({
+                    id: comment.id,
+                    workId: comment.workId,
+                    commentMessage: comment.commentMessage,
+                    commentatorId: comment.commentatorId,
+                    commentatorName: comment.commentatorName,
+                    createdAt: comment.createdAt,
+                  })) || [],
+              })) || [],
+          })),
           expertiseRequired: ca.campaign.expertiseRequired,
           meetingCount: ca.campaign.meetingCount || 0,
           maxBudget: ca.campaign.maxBudget || 0,
           minBudget: ca.campaign.minBudget || 0,
-          promoterLinks: [], // No links yet for applications
         };
         break;
 
@@ -1342,11 +1459,36 @@ export class PromoterService {
           ...baseCampaign,
           type: CampaignType.SELLER,
           sellerRequirements: ca.campaign.sellerRequirements,
-          deliverables: ca.campaign.deliverables,
+          deliverables: ca.campaign.deliverables.map((cd) => ({
+            id: cd.id,
+            campaignId: cd.campaignId,
+            deliverable: cd.deliverable,
+            isSubmitted: cd.isSubmitted,
+            isFinished: cd.isFinished,
+            createdAt: cd.createdAt,
+            updatedAt: cd.updatedAt,
+            promoterWork:
+              cd.promoterWork?.map((work) => ({
+                id: work.id,
+                campaignId: cd.campaignId,
+                promoterLink: work.promoterLink,
+                description: work.description,
+                createdAt: work.createdAt,
+                updatedAt: work.updatedAt,
+                comments:
+                  work.comments?.map((comment) => ({
+                    id: comment.id,
+                    workId: comment.workId,
+                    commentMessage: comment.commentMessage,
+                    commentatorId: comment.commentatorId,
+                    commentatorName: comment.commentatorName,
+                    createdAt: comment.createdAt,
+                  })) || [],
+              })) || [],
+          })),
           fixedPrice: undefined, // Not in current schema
           maxBudget: ca.campaign.maxBudget || 0,
           minBudget: ca.campaign.minBudget || 0,
-          promoterLinks: [], // No links yet for applications
           minFollowers: ca.campaign.minFollowers,
           needMeeting: ca.campaign.needMeeting || false,
           meetingPlan: ca.campaign.meetingPlan!,
@@ -1426,131 +1568,297 @@ export class PromoterService {
   }
 
   /**
-   * Add a new link to a promoter's campaign
+   * Add a new work item to a specific deliverable
    */
-  async addCampaignLink(
+  async addCampaignWorkToDeliverable(
     firebaseUid: string,
     campaignId: string,
-    dto: { promoterLink: string; description?: string },
-  ): Promise<{ success: boolean; message: string; data?: any[] }> {
-    // 1) promoter exists?
-    const promoter = await this.userRepository.findOne({
-      where: { firebaseUid, role: 'PROMOTER' },
-    });
-    if (!promoter) {
-      return { success: false, message: 'Promoter not found', data: [] };
-    }
+    deliverableId: string,
+    promoterLink: string,
+    description?: string,
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      // Find promoter
+      const promoter = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      });
 
-    const participation = await this.promoterCampaignRepository.findOne({
-      where: { promoterId: promoter.id, campaignId },
-    });
-    if (!participation) {
+      if (!promoter) {
+        return {
+          success: false,
+          message: 'Promoter not found',
+        };
+      }
+
+      // Verify the promoter has access to this campaign
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: {
+          promoterId: promoter.id,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!promoterCampaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the deliverable exists and belongs to this campaign
+      const deliverable = await this.deliverableRepository.findOne({
+        where: {
+          id: deliverableId,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!deliverable) {
+        return {
+          success: false,
+          message: 'Deliverable not found for this campaign',
+        };
+      }
+
+      // Create the new work item
+      const newWork = this.workRepository.create({
+        deliverableId,
+        promoterLink,
+        description,
+      });
+
+      await this.workRepository.save(newWork);
+
+      // Return all work items for this deliverable
+      const allWork = await this.workRepository.find({
+        where: { deliverableId },
+        relations: ['comments'],
+        order: { createdAt: 'DESC' },
+      });
+
+      const workData = allWork.map((w) =>
+        this.campaignWorkToDto(w, campaignId),
+      );
+
+      return {
+        success: true,
+        message: 'Work added successfully',
+        data: workData,
+      };
+    } catch (error) {
       return {
         success: false,
-        message: 'You are not registered on this campaign',
-        data: [],
+        message: error instanceof Error ? error.message : 'Failed to add work',
       };
     }
-
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId },
-      relations: ['promoterWork', 'promoterWork.comments'],
-    });
-    if (!campaign) {
-      return { success: false, message: 'Campaign not found', data: [] };
-    }
-
-    const work = this.workRepository.create({
-      campaignId,
-      promoterLink: dto.promoterLink,
-      description: dto.description,
-    });
-    await this.workRepository.save(work);
-
-    const all = await this.workRepository.find({
-      where: { campaignId },
-      relations: ['comments'],
-    });
-
-    return {
-      success: true,
-      message: 'Link added successfully',
-      data: all.map((w) => this.campaignWorkToDto(w)),
-    };
   }
 
-  async updateCampaignLink(
+  /**
+   * Update an existing work item in a specific deliverable
+   */
+  async updateCampaignWorkInDeliverable(
     firebaseUid: string,
     campaignId: string,
+    deliverableId: string,
     workId: string,
-    dto: { promoterLink: string; description?: string },
-  ): Promise<{ success: boolean; message: string; data?: any[] }> {
-    //TODO: need to verify the promoter before updating campaignLink
+    promoterLink: string,
+    description?: string,
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      // Find promoter
+      const promoter = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      });
 
-    const work = await this.workRepository.findOne({
-      where: { id: workId, campaignId },
-      relations: ['comments'],
-    });
-    if (!work) {
-      return { success: false, message: 'Work item not found', data: [] };
+      if (!promoter) {
+        return {
+          success: false,
+          message: 'Promoter not found',
+        };
+      }
+
+      // Verify the promoter has access to this campaign
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: {
+          promoterId: promoter.id,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!promoterCampaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the work item exists and belongs to the correct deliverable
+      const existingWork = await this.workRepository.findOne({
+        where: {
+          id: workId,
+          deliverableId: deliverableId,
+        },
+        relations: ['deliverable'],
+      });
+
+      if (!existingWork) {
+        return {
+          success: false,
+          message: 'Work item not found',
+        };
+      }
+
+      // Verify the deliverable belongs to this campaign
+      if (existingWork.deliverable.campaignId !== campaignId) {
+        return {
+          success: false,
+          message: 'Work item does not belong to this campaign',
+        };
+      }
+
+      // Update the work item
+      existingWork.promoterLink = promoterLink;
+      if (description !== undefined) {
+        existingWork.description = description;
+      }
+
+      await this.workRepository.save(existingWork);
+
+      // Return all work items for this deliverable
+      const allWork = await this.workRepository.find({
+        where: { deliverableId },
+        relations: ['comments'],
+        order: { createdAt: 'DESC' },
+      });
+
+      const workData = allWork.map((w) =>
+        this.campaignWorkToDto(w, campaignId),
+      );
+
+      return {
+        success: true,
+        message: 'Work updated successfully',
+        data: workData,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to update work',
+      };
     }
-
-    work.promoterLink = dto.promoterLink;
-    work.description = dto.description;
-    await this.workRepository.save(work);
-
-    const all = await this.workRepository.find({
-      where: { campaignId },
-      relations: ['comments'],
-    });
-    return {
-      success: true,
-      message: 'Link updated successfully',
-      data: all.map((w) => this.campaignWorkToDto(w)),
-    };
   }
 
-  async deleteCampaignLink(
+  /**
+   * Delete a work item from a specific deliverable
+   */
+  async deleteCampaignWorkFromDeliverable(
     firebaseUid: string,
     campaignId: string,
+    deliverableId: string,
     workId: string,
-  ): Promise<{ success: boolean; message: string; data?: any[] }> {
-    //TODO: need to verify the promoter before updating campaignLink
+  ): Promise<{ success: boolean; message: string; data?: CampaignWork[] }> {
+    try {
+      // Find promoter
+      const promoter = await this.userRepository.findOne({
+        where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      });
 
-    const result = await this.workRepository.delete({ id: workId, campaignId });
-    if (result.affected === 0) {
-      return { success: false, message: 'Work item not found', data: [] };
+      if (!promoter) {
+        return {
+          success: false,
+          message: 'Promoter not found',
+        };
+      }
+
+      // Verify the promoter has access to this campaign
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: {
+          promoterId: promoter.id,
+          campaignId: campaignId,
+        },
+      });
+
+      if (!promoterCampaign) {
+        return {
+          success: false,
+          message: 'You do not have access to this campaign',
+        };
+      }
+
+      // Verify the work item exists and belongs to the correct deliverable
+      const existingWork = await this.workRepository.findOne({
+        where: {
+          id: workId,
+          deliverableId: deliverableId,
+        },
+        relations: ['deliverable'],
+      });
+
+      if (!existingWork) {
+        return {
+          success: false,
+          message: 'Work item not found',
+        };
+      }
+
+      // Verify the deliverable belongs to this campaign
+      if (existingWork.deliverable.campaignId !== campaignId) {
+        return {
+          success: false,
+          message: 'Work item does not belong to this campaign',
+        };
+      }
+
+      // Delete the work item (this will also cascade delete comments if configured)
+      await this.workRepository.remove(existingWork);
+
+      // Return remaining work items for this deliverable
+      const remainingWork = await this.workRepository.find({
+        where: { deliverableId },
+        relations: ['comments'],
+        order: { createdAt: 'DESC' },
+      });
+
+      const workData = remainingWork.map((w) =>
+        this.campaignWorkToDto(w, campaignId),
+      );
+
+      return {
+        success: true,
+        message: 'Work deleted successfully',
+        data: workData,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to delete work',
+      };
     }
-
-    const all = await this.workRepository.find({
-      where: { campaignId },
-      relations: ['comments'],
-    });
-    return {
-      success: true,
-      message: 'Link deleted successfully',
-      data: all.map((w) => this.campaignWorkToDto(w)),
-    };
   }
 
   /** Convert entity → plain JSON shape matching your CampaignWork interface */
-  private campaignWorkToDto(w: CampaignWorkEntity): CampaignWork {
+  private campaignWorkToDto(
+    w: CampaignWorkEntity,
+    campaignId: string,
+  ): CampaignWork {
     return {
       id: w.id,
-      campaignId: w.campaignId,
+      campaignId: campaignId,
       promoterLink: w.promoterLink,
       description: w.description,
       createdAt: w.createdAt,
       updatedAt: w.updatedAt,
       comments:
-        w.comments?.map((c: CampaignWorkCommentEntity) => ({
-          id: c.id,
-          workId: c.workId,
-          commentMessage: c.commentMessage,
-          commentatorId: c.commentatorId,
-          commentatorName: c.commentatorName,
-          createdAt: c.createdAt,
-        })) ?? [],
+        w.comments?.map((comment) => ({
+          id: comment.id,
+          workId: comment.workId,
+          commentMessage: comment.commentMessage,
+          commentatorId: comment.commentatorId,
+          commentatorName: comment.commentatorName,
+          createdAt: comment.createdAt,
+        })) || [],
     };
   }
 }

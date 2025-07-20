@@ -24,8 +24,8 @@ export interface GetPromoterCampaignsRequest {
 }
 
 export interface CampaignWork {
-  id: string;
-  campaignId: string;
+  id?: string;
+  campaignId?: string;
   promoterLink: string;
   description?: string;
   createdAt: Date;
@@ -34,12 +34,23 @@ export interface CampaignWork {
 }
 
 export interface CampaignWorkComment {
-  id: string;
-  workId: string;
+  id?: string;
+  workId?: string;
   commentMessage: string;
   commentatorId?: string;
   commentatorName?: string;
   createdAt: Date;
+}
+
+export interface CampaignDeliverable {
+  id?: string;
+  campaignId?: string;
+  deliverable: Deliverable;
+  isSubmitted: boolean;
+  isFinished: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  promoterWork?: CampaignWork[]; // Work submissions for this deliverable
 }
 
 export interface Advertiser {
@@ -80,22 +91,20 @@ export interface VisibilityCampaignDetails extends BaseCampaignDetails {
 export interface ConsultantCampaignDetails extends BaseCampaignDetails {
   type: CampaignType.CONSULTANT;
   meetingPlan: MeetingPlan;
-  expectedDeliverables?: Deliverable[];
+  expectedDeliverables?: CampaignDeliverable[];
   expertiseRequired?: string;
   meetingCount: number;
   maxBudget: number;
   minBudget: number;
-  promoterLinks?: CampaignWork[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones
 }
 
 export interface SellerCampaignDetails extends BaseCampaignDetails {
   type: CampaignType.SELLER;
   sellerRequirements?: Deliverable[];
-  deliverables?: Deliverable[];
+  deliverables?: CampaignDeliverable[];
   fixedPrice?: number;
   maxBudget: number;
   minBudget: number;
-  promoterLinks?: CampaignWork[]; // Promoter added links for the campaign (example Instagram post, TikTok video, drive doc, etc.) Promoter can add new links, update or delete existing ones¸ field available from PromoterCampaign interface
   minFollowers?: number;
 
   //new

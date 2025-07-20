@@ -19,6 +19,9 @@ import { MessageThread, Message } from '../database/entities/message.entity';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
 import { AdvertiserTypeMappingEntity } from '../database/entities/advertiser-type-mapping.entity';
 import { CampaignApplicationEntity } from '../database/entities/campaign-applications.entity';
+import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
+import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
+import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 
 @Module({
   imports: [
@@ -33,6 +36,9 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
       AdvertiserDetailsEntity,
       AdvertiserTypeMappingEntity,
       CampaignApplicationEntity,
+      CampaignDeliverableEntity,
+      CampaignWorkEntity,
+      CampaignWorkCommentEntity,
     ]),
   ],
   controllers: [AdvertiserController],

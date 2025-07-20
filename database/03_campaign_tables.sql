@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
     meeting_count INTEGER, -- Number of meetings included in the campaign
     need_meeting BOOLEAN,
     expertise_required TEXT,
-    expected_deliverables deliverable[],
+    expected_deliverables UUID[], -- Array of campaign_deliverables IDs
     
     -- Campaign-specific fields for SELLER campaigns
-    deliverables deliverable[],
+    deliverables UUID[], -- Array of campaign_deliverables IDs
     seller_requirements deliverable[] DEFAULT '{}',
     deadline DATE NOT NULL,
     start_date DATE NOT NULL,
@@ -144,10 +144,21 @@ CREATE TABLE IF NOT EXISTS campaign_budget_allocations (
     UNIQUE(campaign_id, promoter_id)
 );
 
+-- New table: campaign_deliverables
+CREATE TABLE IF NOT EXISTS campaign_deliverables (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    deliverable deliverable NOT NULL,
+    is_submitted BOOLEAN DEFAULT FALSE,
+    is_finished BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- New table: campaign_works
 CREATE TABLE IF NOT EXISTS campaign_works (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    deliverable_id UUID REFERENCES campaign_deliverables(id) ON DELETE CASCADE,
     promoter_link TEXT,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

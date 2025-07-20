@@ -150,7 +150,9 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.meetingPlan = data.meetingPlan;
     campaign.expertiseRequired = data.expertiseRequired;
-    campaign.expectedDeliverables = data.expectedDeliverables;
+    // Note: expectedDeliverables will be created as separate entities in the service
+    // Store the deliverable enum values temporarily - they'll be converted to entity IDs later
+    campaign.expectedDeliverableIds = []; // Will be populated after deliverable entities are created
     campaign.meetingCount = data.meetingCount;
     campaign.maxBudget = data.maxBudget;
     campaign.minBudget = data.minBudget;
@@ -165,7 +167,9 @@ export class CampaignEntityBuilder {
     data: SellerCampaign,
   ): void {
     campaign.sellerRequirements = data.sellerRequirements;
-    campaign.deliverables = data.deliverables;
+    // Note: deliverables will be created as separate entities in the service
+    // Store the deliverable enum values temporarily - they'll be converted to entity IDs later
+    campaign.deliverableIds = []; // Will be populated after deliverable entities are created
     campaign.maxBudget = data.maxBudget || 0;
     campaign.minBudget = data.minBudget || 0;
     campaign.minFollowers = data.minFollowers;
