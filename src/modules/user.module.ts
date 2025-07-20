@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserService } from '../services/user.service';
 import { S3Service } from '../services/s3.service';
 import { AuthController } from '../controllers/auth.controller';
+import { UserController } from '../controllers/user.controller';
 import {
   UserEntity,
   AdvertiserDetailsEntity,
@@ -29,7 +30,7 @@ import {
       PromoterWorkEntity,
     ]),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, UserController],
   providers: [UserService, S3Service],
   exports: [UserService, S3Service],
 })

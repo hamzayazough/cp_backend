@@ -332,10 +332,11 @@ export class AuthController {
       'video/mp4',
       'video/webm',
       'video/quicktime',
+      'application/pdf',
     ];
     if (!allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(
-        'Invalid file type. Only images (JPEG, PNG, WebP, GIF) and videos (MP4, WebM, MOV) are allowed.',
+        'Invalid file type. Only images (JPEG, PNG, WebP, GIF), videos (MP4, WebM, MOV), and PDFs are allowed.',
       );
     }
 
