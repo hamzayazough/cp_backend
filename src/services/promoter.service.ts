@@ -2157,4 +2157,94 @@ export class PromoterService {
         })) || [],
     };
   }
+
+  async getCampaignById(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<CampaignUnion> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Get the campaign by ID
+    const campaign = await this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('campaign.promoterCampaigns', 'promoterCampaigns')
+      .where('campaign.id = :campaignId', { campaignId })
+      .getOne();
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    // Transform campaign to the required format
+    const transformedCampaign = this.transformCampaignToUnion(
+      campaign,
+      promoter.id,
+    );
+
+    return transformedCampaign;
+  }
+
+  async getPromoterCampaignById(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<CampaignPromoter> {
+    // Find promoter by Firebase UID
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // First, try to find the campaign in PromoterCampaign (joined campaigns)
+    const promoterCampaign = await this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .leftJoinAndSelect('pc.campaign', 'campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
+      .leftJoinAndSelect('promoterWork.comments', 'comments')
+      .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
+      .andWhere('pc.campaignId = :campaignId', { campaignId })
+      .getOne();
+
+    if (promoterCampaign) {
+      return this.transformPromoterCampaignToInterface(promoterCampaign);
+    }
+
+    // If not found in joined campaigns, try to find in applications
+    const applicationCampaign = await this.campaignApplicationRepository
+      .createQueryBuilder('ca')
+      .leftJoinAndSelect('ca.campaign', 'campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
+      .leftJoinAndSelect('promoterWork.comments', 'comments')
+      .where('ca.promoterId = :promoterId', { promoterId: promoter.id })
+      .andWhere('ca.campaignId = :campaignId', { campaignId })
+      .getOne();
+
+    if (applicationCampaign) {
+      return this.transformCampaignApplicationToInterface(
+        applicationCampaign as CampaignApplicationEntity & {
+          campaign: CampaignEntity;
+        },
+      );
+    }
+
+    throw new NotFoundException('Campaign not found for this promoter');
+  }
 }

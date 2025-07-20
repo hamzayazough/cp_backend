@@ -13,6 +13,7 @@ import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   CampaignFilters,
+  CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
 import { AdvertiserActiveCampaign } from '../interfaces/advertiser-dashboard';
 import { CampaignDeliverable } from '../interfaces/promoter-campaigns';
@@ -223,6 +224,93 @@ export class AdvertiserCampaignService {
         hasPrev: page > 1,
       },
       summary,
+    };
+  }
+
+  async getCampaignById(
+    advertiserId: string,
+    campaignId: string,
+  ): Promise<CampaignAdvertiser> {
+    const campaign = await this.campaignRepository
+      .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
+      .leftJoinAndSelect(
+        'advertiserDetails.advertiserTypeMappings',
+        'advertiserTypeMappings',
+      )
+      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
+      .leftJoinAndSelect('deliverables.promoterWork', 'work')
+      .leftJoinAndSelect('work.comments', 'comments')
+      .where('campaign.id = :campaignId', { campaignId })
+      .andWhere('campaign.advertiserId = :advertiserId', { advertiserId })
+      .getOne();
+
+    if (!campaign) {
+      throw new Error('Campaign not found');
+    }
+
+    // Fetch applicants from campaign_applications table
+    const applicants = await this.campaignApplicationRepository
+      .createQueryBuilder('app')
+      .leftJoinAndSelect('app.promoter', 'promoter')
+      .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
+      .where('app.campaignId = :campaignId', { campaignId: campaign.id })
+      .getMany();
+
+    // Fetch chosen promoters from promoter_campaigns table
+    const chosenPromoters = await this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .leftJoinAndSelect('pc.promoter', 'promoter')
+      .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
+      .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
+      .andWhere('pc.status IN (:...statuses)', {
+        statuses: ['ONGOING', 'COMPLETED'],
+      })
+      .getMany();
+
+    // Transform applicants
+    const applicantInfos = applicants.map((app) => ({
+      promoter: transformUserToPromoter(app.promoter),
+      applicationStatus: app.status,
+      applicationMessage: app.applicationMessage,
+    }));
+
+    // Transform chosen promoters
+    const chosenPromoterInfos = chosenPromoters.map((pc) => ({
+      promoter: transformUserToPromoter(pc.promoter),
+      status: pc.status,
+      viewsGenerated: pc.viewsGenerated,
+      joinedAt: pc.joinedAt,
+      earnings: pc.earnings,
+      budgetAllocated: pc.budgetHeld,
+    }));
+
+    return {
+      id: campaign.id,
+      title: campaign.title,
+      type: campaign.type,
+      mediaUrl: campaign.mediaUrl,
+      status: campaign.status,
+      description: campaign.description,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      campaign: this.mapCampaignDetails(campaign),
+      performance: {
+        totalViewsGained:
+          campaign.type === CampaignType.VISIBILITY
+            ? campaign.currentViews || 0
+            : undefined,
+        totalSalesMade:
+          campaign.type === CampaignType.SALESMAN
+            ? campaign.currentSales || 0
+            : undefined,
+      },
+      tags:
+        campaign.advertiser?.advertiserDetails?.advertiserTypeMappings?.map(
+          (mapping) => mapping.advertiserType,
+        ) || [],
+      applicants: applicantInfos,
+      chosenPromoters: chosenPromoterInfos,
     };
   }
 

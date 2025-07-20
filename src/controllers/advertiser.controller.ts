@@ -27,6 +27,7 @@ import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   AdvertiserDashboardSummary,
+  CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
 import { CampaignWork } from '../interfaces/promoter-campaigns';
@@ -322,5 +323,28 @@ export class AdvertiserController {
             : 'Failed to mark deliverable as finished',
       };
     }
+  }
+
+  @Get('campaigns/:campaignId')
+  async getCampaignById(
+    @Param('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    data: CampaignAdvertiser;
+    message?: string;
+  }> {
+    const firebaseUid = req.user.uid;
+
+    const data = await this.advertiserService.getCampaignById(
+      firebaseUid,
+      campaignId,
+    );
+
+    return {
+      success: true,
+      data,
+      message: 'Campaign retrieved successfully',
+    };
   }
 }

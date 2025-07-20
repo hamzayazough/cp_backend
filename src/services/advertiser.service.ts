@@ -21,6 +21,7 @@ import {
   AdvertiserCampaignListResponse,
   AdvertiserDashboardSummary,
   CampaignFilters,
+  CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
 import { AdvertiserDashboardService } from './advertiser-dashboard.service';
 import { AdvertiserCampaignService } from './advertiser-campaign.service';
@@ -283,5 +284,20 @@ export class AdvertiserService {
     // Delete campaign
     await this.campaignRepository.delete(campaignId);
     return { success: true, message: 'Campaign deleted successfully' };
+  }
+
+  async getCampaignById(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<CampaignAdvertiser> {
+    const advertiser = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
+    });
+
+    if (!advertiser) {
+      throw new Error('Advertiser not found');
+    }
+
+    return this.campaignService.getCampaignById(advertiser.id, campaignId);
   }
 }

@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Delete,
+  Get,
 } from '@nestjs/common';
 import { PromoterService } from '../services/promoter.service';
 import {
@@ -20,6 +21,7 @@ import {
   CampaignWork,
   GetPromoterCampaignsRequest,
   PromoterCampaignsListResponse,
+  CampaignPromoter,
 } from '../interfaces/promoter-campaigns';
 import {
   SendApplicationRequest,
@@ -28,6 +30,7 @@ import {
   AcceptContractResponse,
 } from '../interfaces/campaign-actions';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
+import { CampaignUnion } from '../interfaces/explore-campaign';
 
 @Controller('promoter')
 export class PromoterController {
@@ -337,5 +340,51 @@ export class PromoterController {
         message: errorMessage,
       };
     }
+  }
+
+  @Get('campaigns/explore/:campaignId')
+  async getCampaignById(
+    @Param('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    data: CampaignUnion;
+    message?: string;
+  }> {
+    const firebaseUid = req.user.uid;
+
+    const data = await this.promoterService.getCampaignById(
+      firebaseUid,
+      campaignId,
+    );
+
+    return {
+      success: true,
+      data,
+      message: 'Campaign retrieved successfully',
+    };
+  }
+
+  @Get('campaigns/list/:campaignId')
+  async getPromoterCampaignById(
+    @Param('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{
+    success: boolean;
+    data: CampaignPromoter;
+    message?: string;
+  }> {
+    const firebaseUid = req.user.uid;
+
+    const data = await this.promoterService.getPromoterCampaignById(
+      firebaseUid,
+      campaignId,
+    );
+
+    return {
+      success: true,
+      data,
+      message: 'Promoter campaign retrieved successfully',
+    };
   }
 }
