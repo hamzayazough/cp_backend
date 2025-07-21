@@ -16,6 +16,7 @@ export { Wallet } from './wallet.entity';
 export { PromoterCampaign } from './promoter-campaign.entity';
 export { CampaignApplicationEntity } from './campaign-applications.entity';
 export { ViewStatEntity } from './view-stat.entity';
+export { UniqueViewEntity } from './unique-view.entity';
 export { MessageThread, Message } from './message.entity';
 export { PayoutRecord } from './payout-record.entity';
 export { AdvertiserCharge } from './advertiser-charge.entity';

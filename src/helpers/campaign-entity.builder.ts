@@ -130,15 +130,26 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.cpv = data.cpv;
     campaign.maxViews = data.maxViews;
-    campaign.trackingLink = this.generateTrackingLink(data.trackingLink);
+    // Store the advertiser's destination URL - this is where users will be redirected after tracking
+    campaign.trackingLink = data.trackingLink;
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
     campaign.budgetAllocated = (data.cpv * (data.maxViews || 1000)) / 100; // TODO: change that
   }
 
-  // TODO: generate tracking link once we have the site URL
-  private static generateTrackingLink(siteUrl: string): string {
-    return siteUrl;
+  /**
+   * Generates a visit tracking link with promoter ID that promoters will share
+   * This links to our tracking endpoint which will redirect to the campaign's trackingLink
+   * Flow: User clicks this link → Our tracking endpoint → Redirect to campaign.trackingLink
+   */
+  static generateVisitTrackingLink(
+    campaignId: string,
+    promoterId: string,
+  ): string {
+    const serverUrl = process.env.SERVER_URL || 'http://localhost:3000';
+    // Remove trailing slash if present
+    const baseUrl = serverUrl.replace(/\/$/, '');
+    return `${baseUrl}/api/visit/${campaignId}/${promoterId}`;
   }
 
   /**

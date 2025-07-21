@@ -889,9 +889,15 @@ export class PromoterService {
     const transformedCampaigns: CampaignPromoter[] = paginatedCampaigns.map(
       (item) => {
         if (item.source === 'joined') {
-          return this.transformPromoterCampaignToInterface(item.data);
+          return this.transformPromoterCampaignToInterface(
+            item.data,
+            promoter.id,
+          );
         } else {
-          return this.transformCampaignApplicationToInterface(item.data);
+          return this.transformCampaignApplicationToInterface(
+            item.data,
+            promoter.id,
+          );
         }
       },
     );
@@ -959,6 +965,7 @@ export class PromoterService {
 
   private transformPromoterCampaignToInterface(
     pc: PromoterCampaign,
+    promoterId: string,
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: pc.campaign.advertiser.id,
@@ -1005,7 +1012,7 @@ export class PromoterService {
           currentViews: pc.viewsGenerated, // Use promoter's generated views
           cpv: pc.campaign.cpv || 0,
           minFollowers: pc.campaign.minFollowers,
-          trackingLink: pc.campaign.trackingLink || '',
+          trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${pc.campaign.id}/${promoterId}`,
         };
         break;
 
@@ -1364,6 +1371,7 @@ export class PromoterService {
 
   private transformCampaignApplicationToInterface(
     ca: CampaignApplicationEntity & { campaign: CampaignEntity },
+    promoterId: string,
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: ca.campaign.advertiser.id,
@@ -1411,7 +1419,7 @@ export class PromoterService {
           currentViews: 0, // Application stage, no views generated yet
           cpv: ca.campaign.cpv || 0,
           minFollowers: ca.campaign.minFollowers,
-          trackingLink: ca.campaign.trackingLink || '',
+          trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${ca.campaign.id}/${promoterId}`,
         };
         break;
 
@@ -2221,7 +2229,10 @@ export class PromoterService {
       .getOne();
 
     if (promoterCampaign) {
-      return this.transformPromoterCampaignToInterface(promoterCampaign);
+      return this.transformPromoterCampaignToInterface(
+        promoterCampaign,
+        promoter.id,
+      );
     }
 
     // If not found in joined campaigns, try to find in applications
@@ -2242,6 +2253,7 @@ export class PromoterService {
         applicationCampaign as CampaignApplicationEntity & {
           campaign: CampaignEntity;
         },
+        promoter.id,
       );
     }
 

@@ -174,3 +174,16 @@ CREATE TABLE IF NOT EXISTS campaign_work_comments (
     commentator_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+
+
+CREATE TABLE unique_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  promoter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint VARCHAR(255) NOT NULL,     -- e.g. SHA-256(ip|ua|browserToken)
+  ip        INET      NOT NULL,
+  user_agent TEXT     NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(campaign_id, promoter_id, fingerprint)
+);
