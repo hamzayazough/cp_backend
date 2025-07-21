@@ -8,6 +8,7 @@ import { PromoterCampaign } from '../database/entities/promoter-campaign.entity'
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
 import { CampaignStatus } from '../enums/campaign-status';
+import { CampaignCompletionService } from './campaign-completion.service';
 
 @Injectable()
 export class ViewsService {
@@ -22,6 +23,7 @@ export class ViewsService {
     private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(CampaignBudgetAllocation)
     private readonly budgetAllocationRepo: Repository<CampaignBudgetAllocation>,
+    private readonly campaignCompletionService: CampaignCompletionService,
   ) {}
 
   private makeFingerprint(ip: string, ua: string, token: string): string {
@@ -134,6 +136,18 @@ export class ViewsService {
           1,
         );
         console.log('✅ User total views updated');
+
+        // Check if campaign has reached maxViews limit and complete if needed
+        console.log('🔍 Checking if campaign needs to be completed...');
+        const wasCompleted =
+          await this.campaignCompletionService.checkAndCompleteCampaignIfNeeded(
+            campaignId,
+          );
+        if (wasCompleted) {
+          console.log(
+            '🏁 Campaign was completed due to reaching maxViews limit',
+          );
+        }
       } else {
         console.log('⚠️  No CPV found, using fallback counters only');
         // Fallback: just increment counters without budget calculations
@@ -155,6 +169,20 @@ export class ViewsService {
           1,
         );
         console.log('✅ Fallback counters updated');
+
+        // Check if campaign has reached maxViews limit and complete if needed
+        console.log(
+          '🔍 Checking if campaign needs to be completed (fallback)...',
+        );
+        const wasCompleted =
+          await this.campaignCompletionService.checkAndCompleteCampaignIfNeeded(
+            campaignId,
+          );
+        if (wasCompleted) {
+          console.log(
+            '🏁 Campaign was completed due to reaching maxViews limit (fallback)',
+          );
+        }
       }
     } catch (error) {
       console.log('🔄 Duplicate fingerprint detected - view already tracked');
