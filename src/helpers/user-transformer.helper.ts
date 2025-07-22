@@ -29,6 +29,6 @@ export function transformUserToPromoter(user: UserEntity): Promoter {
     numberOfSellerCampaignDone: user.numberOfSellerCampaignDone,
     numberOfSalesmanCampaignDone: user.numberOfSalesmanCampaignDone,
     numberOfConsultantCampaignDone: user.numberOfConsultantCampaignDone,
-    totalViewsGenerated: user.totalViewsGenerated,
+    totalViewsGenerated: user.promoterDetails?.totalViewsGenerated,
   };
 }

@@ -1302,7 +1302,7 @@ export class PromoterService {
   ): Promise<AcceptContractResponse> {
     // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
 
     if (!promoter) {

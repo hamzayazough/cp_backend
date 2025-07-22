@@ -112,13 +112,6 @@ export class UserEntity {
   })
   numberOfConsultantCampaignDone?: number;
 
-  @Column({
-    name: 'total_views_generated',
-    type: 'int',
-    default: 0,
-  })
-  totalViewsGenerated?: number;
-
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
     cascade: true,

@@ -6,6 +6,7 @@ import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { UserEntity } from '../database/entities/user.entity';
+import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
 import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
 import { CampaignStatus } from '../enums/campaign-status';
 import { CampaignCompletionService } from './campaign-completion.service';
@@ -21,6 +22,8 @@ export class ViewsService {
     private readonly promoterCampaignRepo: Repository<PromoterCampaign>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(PromoterDetailsEntity)
+    private readonly promoterDetailsRepo: Repository<PromoterDetailsEntity>,
     @InjectRepository(CampaignBudgetAllocation)
     private readonly budgetAllocationRepo: Repository<CampaignBudgetAllocation>,
     private readonly campaignCompletionService: CampaignCompletionService,
@@ -132,10 +135,10 @@ export class ViewsService {
         );
         console.log('✅ Promoter campaign stats updated');
 
-        // Update user's total views generated
-        console.log('🙋‍♂️ Updating user total views generated...');
-        await this.userRepo.increment(
-          { id: cleanPromoterId },
+        // Update promoter's total views generated in promoter details
+        console.log('🙋‍♂️ Updating promoter details total views generated...');
+        await this.promoterDetailsRepo.increment(
+          { userId: cleanPromoterId },
           'totalViewsGenerated',
           1,
         );
@@ -166,9 +169,9 @@ export class ViewsService {
           1,
         );
 
-        // Update user's total views generated
-        await this.userRepo.increment(
-          { id: cleanPromoterId },
+        // Update promoter's total views generated in promoter details
+        await this.promoterDetailsRepo.increment(
+          { userId: cleanPromoterId },
           'totalViewsGenerated',
           1,
         );
