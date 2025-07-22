@@ -56,7 +56,7 @@ import { UserType } from 'src/database/entities/billing-period-summary.entity';
 import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
-import { Deliverable } from '../enums/deliverable';
+import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 
 @Injectable()
 export class PromoterService {
@@ -85,6 +85,8 @@ export class PromoterService {
 
     @InjectRepository(CampaignDeliverableEntity)
     private readonly deliverableRepository: Repository<CampaignDeliverableEntity>,
+    @InjectRepository(UniqueViewEntity)
+    private readonly uniqueViewRepository: Repository<UniqueViewEntity>,
   ) {}
 
   async getDashboardData(
@@ -177,19 +179,19 @@ export class PromoterService {
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
 
-    const viewsToday = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .select('SUM(pc.viewsGenerated)', 'total')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .andWhere('pc.updatedAt >= :startOfToday', { startOfToday })
+    const viewsToday = await this.uniqueViewRepository
+      .createQueryBuilder('uv')
+      .select('COUNT(*)', 'total')
+      .where('uv.promoterId = :promoterId', { promoterId })
+      .andWhere('uv.createdAt >= :startOfToday', { startOfToday })
       .getRawOne();
 
-    const viewsYesterday = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .select('SUM(pc.viewsGenerated)', 'total')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .andWhere('pc.updatedAt >= :startOfYesterday', { startOfYesterday })
-      .andWhere('pc.updatedAt < :startOfToday', { startOfToday })
+    const viewsYesterday = await this.uniqueViewRepository
+      .createQueryBuilder('uv')
+      .select('COUNT(*)', 'total')
+      .where('uv.promoterId = :promoterId', { promoterId })
+      .andWhere('uv.createdAt >= :startOfYesterday', { startOfYesterday })
+      .andWhere('uv.createdAt < :startOfToday', { startOfToday })
       .getRawOne();
 
     const salesThisWeek = await this.transactionRepository

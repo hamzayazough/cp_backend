@@ -33,7 +33,7 @@ export class VisitController {
           httpOnly: true,
           maxAge: 31536000000, // 1 year
           sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+          secure: process.env.NODE_ENV === 'production',
         });
       }
 
@@ -57,7 +57,6 @@ export class VisitController {
       // 4) Redirect the user
       return res.redirect(302, redirectUrl);
     } catch (error: any) {
-      // Log the error for debugging
       console.error('Error in visit controller:', error);
 
       const isNotFoundException =

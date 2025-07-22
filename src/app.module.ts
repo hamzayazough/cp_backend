@@ -9,7 +9,6 @@ import { UserModule } from './modules/user.module';
 import { PromoterModule } from './modules/promoter.module';
 import { AdvertiserModule } from './modules/advertiser.module';
 import { ViewsModule } from './modules/views.module';
-import { ProtectedController } from './controllers/protected.controller';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 
 @Module({
@@ -32,13 +31,13 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
     AdvertiserModule,
     ViewsModule,
   ],
-  controllers: [AppController, ProtectedController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(FirebaseAuthMiddleware)
-      .forRoutes('protected', 'auth/*', 'promoter/*', 'advertiser/*');
+      .forRoutes('auth/*', 'promoter/*', 'advertiser/*');
   }
 }

@@ -12,6 +12,7 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
+import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { CampaignDeliverableEntity } from '../database/entities/campaign-deliver
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
       CampaignDeliverableEntity,
+      UniqueViewEntity,
     ]),
   ],
   controllers: [PromoterController],

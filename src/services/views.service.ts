@@ -116,6 +116,10 @@ export class ViewsService {
 
         // Update promoter's view count and earnings
         console.log('👤 Updating promoter campaign stats...');
+        await this.promoterCampaignRepo.update(
+          { campaignId, promoterId: cleanPromoterId },
+          { updatedAt: new Date() },
+        );
         await this.promoterCampaignRepo.increment(
           { campaignId, promoterId: cleanPromoterId },
           'viewsGenerated',
