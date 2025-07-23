@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { StripePaymentIntent } from './stripe-payment-intent.entity';
 import { CampaignEntity } from './campaign.entity';
+import { PlatformFeeType } from './stripe-enums';
 
 @Entity('platform_fees')
 export class PlatformFee {
@@ -30,8 +31,12 @@ export class PlatformFee {
   @Column({ name: 'net_fee_amount', type: 'integer' })
   netFeeAmount: number; // Platform fee minus Stripe's cut
 
-  @Column({ name: 'fee_type', type: 'varchar', length: 50 })
-  feeType: string; // 'percentage', 'fixed'
+  @Column({
+    name: 'fee_type',
+    type: 'enum',
+    enum: PlatformFeeType,
+  })
+  feeType: PlatformFeeType;
 
   @Column({
     name: 'fee_rate',

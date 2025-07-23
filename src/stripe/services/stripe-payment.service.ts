@@ -16,6 +16,12 @@ import { PlatformFee } from '../../database/entities/platform-fee.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import { StripeConnectService } from './stripe-connect.service';
 import { stripeConfig } from '../../config/stripe.config';
+import {
+  StripePaymentIntentStatus,
+  StripeTransferStatus,
+  PaymentFlowType,
+  PlatformFeeType,
+} from '../../database/entities/stripe-enums';
 
 export interface CreatePaymentIntentDto {
   campaignId: string;
@@ -74,6 +80,52 @@ export class StripePaymentService {
   ) {}
 
   /**
+   * Map Stripe payment intent status to our enum
+   */
+  private mapStripeStatusToEnum(
+    stripeStatus: string,
+  ): StripePaymentIntentStatus {
+    switch (stripeStatus) {
+      case 'requires_payment_method':
+        return StripePaymentIntentStatus.REQUIRES_PAYMENT_METHOD;
+      case 'requires_confirmation':
+        return StripePaymentIntentStatus.REQUIRES_CONFIRMATION;
+      case 'requires_action':
+        return StripePaymentIntentStatus.REQUIRES_ACTION;
+      case 'processing':
+        return StripePaymentIntentStatus.PROCESSING;
+      case 'requires_capture':
+        return StripePaymentIntentStatus.REQUIRES_CAPTURE;
+      case 'canceled':
+        return StripePaymentIntentStatus.CANCELED;
+      case 'succeeded':
+        return StripePaymentIntentStatus.SUCCEEDED;
+      default:
+        throw new Error(`Unknown Stripe status: ${stripeStatus}`);
+    }
+  }
+
+  /**
+   * Map Stripe transfer status to our enum
+   */
+  private mapStripeTransferStatusToEnum(
+    stripeStatus: string,
+  ): StripeTransferStatus {
+    switch (stripeStatus) {
+      case 'pending':
+        return StripeTransferStatus.PENDING;
+      case 'paid':
+        return StripeTransferStatus.PAID;
+      case 'failed':
+        return StripeTransferStatus.FAILED;
+      case 'canceled':
+        return StripeTransferStatus.CANCELED;
+      default:
+        throw new Error(`Unknown Stripe transfer status: ${stripeStatus}`);
+    }
+  }
+
+  /**
    * Create payment intent for campaign payment
    */
   async createPaymentIntent(
@@ -122,7 +174,7 @@ export class StripePaymentService {
       let stripePaymentIntent: Stripe.PaymentIntent;
 
       switch (paymentConfig.paymentFlowType) {
-        case 'destination':
+        case PaymentFlowType.DESTINATION:
           stripePaymentIntent = await this.createDestinationCharge(
             amountInCents,
             platformFeeInCents,
@@ -132,7 +184,7 @@ export class StripePaymentService {
           );
           break;
 
-        case 'direct':
+        case PaymentFlowType.DIRECT:
           stripePaymentIntent = await this.createDirectCharge(
             amountInCents,
             platformFeeInCents,
@@ -142,7 +194,7 @@ export class StripePaymentService {
           );
           break;
 
-        case 'hold_and_transfer':
+        case PaymentFlowType.HOLD_AND_TRANSFER:
           stripePaymentIntent = await this.createHoldCharge(
             amountInCents,
             dto.description,
@@ -165,7 +217,7 @@ export class StripePaymentService {
         applicationFeeAmount: platformFeeInCents,
         paymentFlowType: paymentConfig.paymentFlowType,
         destinationAccountId: recipientAccount.stripeAccountId,
-        status: stripePaymentIntent.status,
+        status: this.mapStripeStatusToEnum(stripePaymentIntent.status),
         clientSecret: stripePaymentIntent.client_secret || null,
         description: dto.description,
         metadata: dto.metadata,
@@ -293,7 +345,7 @@ export class StripePaymentService {
         throw new BadRequestException('Payment intent not found');
       }
 
-      if (paymentIntent.paymentFlowType !== 'hold_and_transfer') {
+      if (paymentIntent.paymentFlowType !== PaymentFlowType.HOLD_AND_TRANSFER) {
         throw new BadRequestException(
           'Payment intent is not configured for transfers',
         );
@@ -324,7 +376,7 @@ export class StripePaymentService {
         currency: paymentIntent.currency,
         destinationAccountId: recipientAccount.stripeAccountId,
         recipientId,
-        status: 'pending',
+        status: StripeTransferStatus.PENDING,
         description: `Transfer for campaign ${paymentIntent.campaignId}`,
       });
 
@@ -349,11 +401,11 @@ export class StripePaymentService {
     config: CampaignPaymentConfig,
   ): number {
     switch (config.platformFeeType) {
-      case 'percentage':
+      case PlatformFeeType.PERCENTAGE:
         return Math.round((amount * config.platformFeeValue) / 100);
-      case 'fixed':
+      case PlatformFeeType.FIXED:
         return Math.round(config.platformFeeValue * 100); // Convert to cents
-      case 'none':
+      case PlatformFeeType.NONE:
         return 0;
       default:
         return Math.round((amount * this.config.platformFeePercentage) / 100);
@@ -367,21 +419,21 @@ export class StripePaymentService {
     campaignId: string,
     campaignType: string,
   ): Promise<CampaignPaymentConfig> {
-    let defaultFlow = 'destination';
-    const defaultFeeType = 'percentage';
+    let defaultFlow = PaymentFlowType.DESTINATION;
+    const defaultFeeType = PlatformFeeType.PERCENTAGE;
     const defaultFeeValue = this.config.platformFeePercentage;
 
     // Customize based on campaign type
     switch (campaignType) {
       case 'VISIBILITY':
-        defaultFlow = 'destination'; // Immediate payout
+        defaultFlow = PaymentFlowType.DESTINATION; // Immediate payout
         break;
       case 'CONSULTANT':
       case 'SELLER':
-        defaultFlow = 'hold_and_transfer'; // Hold until completion
+        defaultFlow = PaymentFlowType.HOLD_AND_TRANSFER; // Hold until completion
         break;
       case 'SALESMAN':
-        defaultFlow = 'hold_and_transfer'; // Batch payouts
+        defaultFlow = PaymentFlowType.HOLD_AND_TRANSFER; // Batch payouts
         break;
     }
 
@@ -440,10 +492,11 @@ export class StripePaymentService {
     stripePaymentIntentId: string,
     status: string,
   ): Promise<void> {
+    const enumStatus = this.mapStripeStatusToEnum(status);
     await this.paymentIntentRepo.update(
       { stripePaymentIntentId },
       {
-        status,
+        status: enumStatus,
         ...(status === 'succeeded' ? { succeededAt: new Date() } : {}),
         ...(status === 'canceled' ? { canceledAt: new Date() } : {}),
       },
@@ -638,10 +691,11 @@ export class StripePaymentService {
     status: string,
   ): Promise<void> {
     try {
+      const enumStatus = this.mapStripeTransferStatusToEnum(status);
       await this.transferRepo.update(
         { stripeTransferId: transferId },
         {
-          status,
+          status: enumStatus,
           ...(status === 'paid' ? { completedAt: new Date() } : {}),
           ...(status === 'failed' ? { failedAt: new Date() } : {}),
         },

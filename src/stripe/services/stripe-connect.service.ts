@@ -15,6 +15,7 @@ import {
   CapabilityStatus,
 } from '../../database/entities/stripe-connect-account.entity';
 import { BusinessProfile } from '../../database/entities/business-profile.entity';
+import { VerificationStatus } from '../../database/entities/stripe-enums';
 import { UserEntity } from '../../database/entities/user.entity';
 import { stripeConfig } from '../../config/stripe.config';
 
@@ -143,7 +144,7 @@ export class StripeConnectService {
       const accountLink = await this.stripe.accountLinks.create({
         account: account.stripeAccountId,
         refresh_url: this.config.refreshUrl,
-        return_url: this.config.returnUrl,
+        return_url: `${this.config.returnUrl}?user_id=${userId}&account_id=${account.stripeAccountId}`,
         type: 'account_onboarding',
       });
 
@@ -271,7 +272,7 @@ export class StripeConnectService {
       const businessProfile = this.businessProfileRepo.create({
         userId,
         ...businessData,
-        verificationStatus: 'pending',
+        verificationStatus: VerificationStatus.PENDING,
       });
 
       return await this.businessProfileRepo.save(businessProfile);

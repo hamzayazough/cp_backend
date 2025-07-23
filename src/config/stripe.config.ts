@@ -24,8 +24,8 @@ export const stripeConfig = (): StripeConfig => ({
   supportedCountries: (process.env.SUPPORTED_COUNTRIES || 'US,CA').split(','),
   returnUrl:
     process.env.STRIPE_CONNECT_RETURN_URL ||
-    'http://localhost:3000/api/connect/return',
+    'http://localhost:3000/api/connect/oauth/callback',
   refreshUrl:
     process.env.STRIPE_CONNECT_REFRESH_URL ||
-    'http://localhost:3000/api/connect/refresh',
+    'http://localhost:3000/api/connect/oauth/callback',
 });

@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
+import { BusinessType, VerificationStatus } from './stripe-enums';
 
 @Entity('business_profiles')
 export class BusinessProfile {
@@ -22,11 +23,11 @@ export class BusinessProfile {
 
   @Column({
     name: 'business_type',
-    type: 'varchar',
-    length: 100,
+    type: 'enum',
+    enum: BusinessType,
     nullable: true,
   })
-  businessType: string; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
+  businessType: BusinessType; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
 
   @Column({ name: 'tax_id', type: 'varchar', length: 50, nullable: true })
   taxId: string; // EIN for US, Business Number for Canada
@@ -131,11 +132,11 @@ export class BusinessProfile {
   // Verification fields
   @Column({
     name: 'verification_status',
-    type: 'varchar',
-    length: 50,
-    default: 'pending',
+    type: 'enum',
+    enum: VerificationStatus,
+    default: VerificationStatus.PENDING,
   })
-  verificationStatus: string; // 'pending', 'verified', 'requires_action'
+  verificationStatus: VerificationStatus;
 
   @Column({ name: 'verification_documents', type: 'jsonb', nullable: true })
   verificationDocuments: any;

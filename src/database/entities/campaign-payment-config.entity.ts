@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { CampaignEntity } from './campaign.entity';
+import { PaymentFlowType, PlatformFeeType } from './stripe-enums';
 
 @Entity('campaign_payment_configs')
 export class CampaignPaymentConfig {
@@ -19,19 +20,19 @@ export class CampaignPaymentConfig {
 
   @Column({
     name: 'payment_flow_type',
-    type: 'varchar',
-    length: 50,
-    default: 'destination',
+    type: 'enum',
+    enum: PaymentFlowType,
+    default: PaymentFlowType.DESTINATION,
   })
-  paymentFlowType: string; // 'destination', 'direct', 'hold_and_transfer'
+  paymentFlowType: PaymentFlowType;
 
   @Column({
     name: 'platform_fee_type',
-    type: 'varchar',
-    length: 50,
-    default: 'percentage',
+    type: 'enum',
+    enum: PlatformFeeType,
+    default: PlatformFeeType.PERCENTAGE,
   })
-  platformFeeType: string; // 'percentage', 'fixed', 'none'
+  platformFeeType: PlatformFeeType;
 
   @Column({
     name: 'platform_fee_value',
@@ -56,7 +57,7 @@ export class CampaignPaymentConfig {
   holdPeriodDays: number;
 
   @Column({ name: 'supports_revenue_split', type: 'boolean', default: false })
-  supportsRevenueplit: boolean;
+  supportsRevenueSplit: boolean;
 
   @Column({ name: 'split_configuration', type: 'jsonb', nullable: true })
   splitConfiguration: any;

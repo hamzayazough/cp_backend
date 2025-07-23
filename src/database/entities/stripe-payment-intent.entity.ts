@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { CampaignEntity } from './campaign.entity';
 import { UserEntity } from './user.entity';
+import { PaymentFlowType, StripePaymentIntentStatus } from './stripe-enums';
 
 @Entity('stripe_payment_intents')
 export class StripePaymentIntent {
@@ -43,10 +44,10 @@ export class StripePaymentIntent {
 
   @Column({
     name: 'payment_flow_type',
-    type: 'varchar',
-    length: 50,
+    type: 'enum',
+    enum: PaymentFlowType,
   })
-  paymentFlowType: string; // 'destination', 'direct', 'separate_transfer'
+  paymentFlowType: PaymentFlowType;
 
   @Column({
     name: 'destination_account_id',
@@ -61,11 +62,11 @@ export class StripePaymentIntent {
 
   @Column({
     name: 'status',
-    type: 'varchar',
-    length: 50,
-    default: 'requires_payment_method',
+    type: 'enum',
+    enum: StripePaymentIntentStatus,
+    default: StripePaymentIntentStatus.REQUIRES_PAYMENT_METHOD,
   })
-  status: string;
+  status: StripePaymentIntentStatus;
 
   @Column({ name: 'client_secret', type: 'text', nullable: true })
   clientSecret: string | null;

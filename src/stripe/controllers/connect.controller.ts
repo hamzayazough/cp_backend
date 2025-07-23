@@ -17,6 +17,7 @@ import {
 } from '../services/stripe-connect.service';
 import { User } from '../../auth/user.decorator';
 import { FirebaseUser } from '../../interfaces/firebase-user.interface';
+import { BusinessType } from '../../database/entities/stripe-enums';
 
 // DTOs
 export class CreateAccountDto {
@@ -52,6 +53,29 @@ export class ConnectController {
   private readonly logger = new Logger(ConnectController.name);
 
   constructor(private readonly stripeConnectService: StripeConnectService) {}
+
+  /**
+   * Map string business type to enum
+   */
+  private mapBusinessType(businessType?: string): BusinessType | undefined {
+    if (!businessType) return undefined;
+
+    switch (businessType.toLowerCase()) {
+      case 'llc':
+        return BusinessType.LLC;
+      case 'corporation':
+        return BusinessType.CORPORATION;
+      case 'partnership':
+        return BusinessType.PARTNERSHIP;
+      case 'sole_proprietorship':
+        return BusinessType.SOLE_PROPRIETORSHIP;
+      default:
+        throw new HttpException(
+          `Invalid business type: ${businessType}`,
+          HttpStatus.BAD_REQUEST,
+        );
+    }
+  }
 
   /**
    * Create a new Stripe Connect account for the authenticated user
@@ -382,7 +406,7 @@ export class ConnectController {
       const businessProfile =
         await this.stripeConnectService.createBusinessProfile(user.uid, {
           businessName: businessProfileDto.businessName,
-          businessType: businessProfileDto.businessType,
+          businessType: this.mapBusinessType(businessProfileDto.businessType),
           taxId: businessProfileDto.taxId,
           businessAddressLine1: businessProfileDto.businessAddressLine1,
           businessAddressLine2: businessProfileDto.businessAddressLine2,
@@ -435,15 +459,19 @@ export class ConnectController {
     @Query('state') state?: string,
     @Query('error') error?: string,
     @Query('error_description') errorDescription?: string,
+    @Query('user_id') userId?: string,
+    @Query('account_id') accountId?: string,
     @Res() res?: Response,
   ) {
     try {
       console.log('HEHEHEHEHEHEHE');
-      this.logger.log('Received Stripe Connect OAuth callback', {
+      this.logger.log('Received Stripe Connect callback', {
         code: code ? 'present' : 'missing',
         state,
         error,
         errorDescription,
+        userId,
+        accountId,
       });
 
       if (!res) {
@@ -465,8 +493,42 @@ export class ConnectController {
         return res.redirect(frontendUrl);
       }
 
-      // Handle authorization code exchange (if using OAuth flow)
-      if (code) {
+      // Handle Account Links (Express onboarding) - most common case
+      if (userId && accountId) {
+        try {
+          this.logger.log(
+            `Processing Account Links callback for user ${userId}, account ${accountId}`,
+          );
+
+          // Verify account status with Stripe
+          const accountStatus =
+            await this.stripeConnectService.verifyAccountCompleteness(
+              accountId,
+            );
+
+          if (accountStatus.isComplete) {
+            // Mark as onboarded in our database
+            await this.stripeConnectService.markAccountAsOnboarded(accountId);
+
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success&account=${accountId}`;
+            return res.redirect(frontendUrl);
+          } else {
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=incomplete&account=${accountId}`;
+            return res.redirect(frontendUrl);
+          }
+        } catch (verifyError) {
+          this.logger.error(
+            'Failed to verify account completeness',
+            verifyError,
+          );
+
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=verification_failed`;
+          return res.redirect(frontendUrl);
+        }
+      }
+
+      // Handle OAuth flow (if using OAuth instead of Account Links)
+      if (code && !userId && !accountId) {
         try {
           // Exchange code for access token and account info
           const oauthResult = await this.stripeConnectService.exchangeOAuthCode(

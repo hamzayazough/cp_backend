@@ -116,11 +116,26 @@ export class StripeConnectAccount {
   onboardingExpiresAt: Date;
 
   @Column({
+    name: 'onboarding_type',
+    type: 'varchar',
+    length: 50,
+    default: 'account_links',
+  })
+  onboardingType: string; // 'oauth' or 'account_links'
+
+  @Column({
     name: 'last_onboarding_attempt',
     type: 'timestamptz',
     nullable: true,
   })
   lastOnboardingAttempt: Date;
+
+  @Column({
+    name: 'requirements_due_date',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  requirementsDueDate: Date;
 
   @Column({ name: 'pending_verification', type: 'json', default: () => "'[]'" })
   pendingVerification: string[];

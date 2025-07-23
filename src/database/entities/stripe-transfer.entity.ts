@@ -10,6 +10,7 @@ import {
 import { StripePaymentIntent } from './stripe-payment-intent.entity';
 import { CampaignEntity } from './campaign.entity';
 import { UserEntity } from './user.entity';
+import { StripeTransferStatus } from './stripe-enums';
 
 @Entity('stripe_transfers')
 export class StripeTransfer {
@@ -24,10 +25,10 @@ export class StripeTransfer {
   })
   stripeTransferId: string;
 
-  @Column({ name: 'payment_intent_id', type: 'uuid' })
+  @Column({ name: 'payment_intent_id', type: 'uuid', nullable: true })
   paymentIntentId: string;
 
-  @Column({ name: 'campaign_id', type: 'uuid' })
+  @Column({ name: 'campaign_id', type: 'uuid', nullable: true })
   campaignId: string;
 
   @Column({ name: 'amount', type: 'integer' })
@@ -46,8 +47,13 @@ export class StripeTransfer {
   @Column({ name: 'recipient_id', type: 'uuid', nullable: true })
   recipientId: string;
 
-  @Column({ name: 'status', type: 'varchar', length: 50, default: 'pending' })
-  status: string; // 'pending', 'paid', 'failed', 'canceled', 'reversed'
+  @Column({
+    name: 'status',
+    type: 'enum',
+    enum: StripeTransferStatus,
+    default: StripeTransferStatus.PENDING,
+  })
+  status: StripeTransferStatus;
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description: string;

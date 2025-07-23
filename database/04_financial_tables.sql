@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS stripe_connect_accounts (
     account_type VARCHAR(50) NOT NULL, -- 'express' or 'standard'
     business_type VARCHAR(50), -- 'individual', 'company', etc.
     country VARCHAR(2) NOT NULL,
-    currency VARCHAR(3) NOT NULL,
+    default_currency VARCHAR(3) NOT NULL, -- Changed from 'currency' to match entity
     
     -- Account status
     status stripe_connect_status DEFAULT 'pending',
@@ -145,11 +145,15 @@ CREATE TABLE IF NOT EXISTS stripe_connect_accounts (
     eventually_due TEXT[], -- JSON array of requirements
     past_due TEXT[], -- JSON array of requirements
     pending_verification TEXT[], -- JSON array of requirements
+    requirements_due_date TIMESTAMP WITH TIME ZONE, -- Added missing column
     
-    -- Metadata
+    -- Onboarding details
     onboarding_completed BOOLEAN DEFAULT FALSE,
+    onboarding_completed_at TIMESTAMP WITH TIME ZONE, -- Added missing column
     onboarding_link TEXT,
     onboarding_expires_at TIMESTAMP WITH TIME ZONE,
+    onboarding_type VARCHAR(50), -- Added missing column
+    last_onboarding_attempt TIMESTAMP WITH TIME ZONE, -- Added missing column
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
