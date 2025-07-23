@@ -1,4 +1,10 @@
-import { Injectable, Inject, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
@@ -18,6 +24,24 @@ export interface CreatePaymentIntentDto {
   amount: number; // Amount in dollars
   description?: string;
   metadata?: Record<string, string>;
+}
+
+export interface CreateCampaignPaymentConfigDto {
+  campaignId: string;
+  platformFeePercentage?: number;
+  autoTransfer?: boolean;
+  captureMethod?: string;
+  currency?: string;
+}
+
+export interface FeeCalculation {
+  amount: number;
+  currency: string;
+  platformFee: number;
+  stripeFee: number;
+  totalFees: number;
+  promoterAmount: number;
+  platformFeePercentage: number;
 }
 
 export interface PaymentIntentResponse {
@@ -52,7 +76,9 @@ export class StripePaymentService {
   /**
    * Create payment intent for campaign payment
    */
-  async createPaymentIntent(dto: CreatePaymentIntentDto): Promise<PaymentIntentResponse> {
+  async createPaymentIntent(
+    dto: CreatePaymentIntentDto,
+  ): Promise<PaymentIntentResponse> {
     try {
       // Get campaign and its payment configuration
       const campaign = await this.campaignRepo.findOne({
@@ -70,22 +96,31 @@ export class StripePaymentService {
       });
 
       if (!paymentConfig) {
-        paymentConfig = await this.createDefaultPaymentConfig(dto.campaignId, campaign.type);
+        paymentConfig = await this.createDefaultPaymentConfig(
+          dto.campaignId,
+          campaign.type,
+        );
       }
 
       // Get recipient's Stripe account
-      const recipientAccount = await this.stripeConnectService.getAccountByUserId(dto.recipientId);
+      const recipientAccount =
+        await this.stripeConnectService.getAccountByUserId(dto.recipientId);
       if (!recipientAccount || !recipientAccount.chargesEnabled) {
-        throw new BadRequestException('Recipient account not ready for payments');
+        throw new BadRequestException(
+          'Recipient account not ready for payments',
+        );
       }
 
       // Calculate amounts
       const amountInCents = Math.round(dto.amount * 100);
-      const platformFeeInCents = this.calculatePlatformFee(amountInCents, paymentConfig);
+      const platformFeeInCents = this.calculatePlatformFee(
+        amountInCents,
+        paymentConfig,
+      );
 
       // Create payment intent based on flow type
       let stripePaymentIntent: Stripe.PaymentIntent;
-      
+
       switch (paymentConfig.paymentFlowType) {
         case 'destination':
           stripePaymentIntent = await this.createDestinationCharge(
@@ -96,7 +131,7 @@ export class StripePaymentService {
             dto.metadata,
           );
           break;
-        
+
         case 'direct':
           stripePaymentIntent = await this.createDirectCharge(
             amountInCents,
@@ -106,7 +141,7 @@ export class StripePaymentService {
             dto.metadata,
           );
           break;
-        
+
         case 'hold_and_transfer':
           stripePaymentIntent = await this.createHoldCharge(
             amountInCents,
@@ -114,7 +149,7 @@ export class StripePaymentService {
             dto.metadata,
           );
           break;
-        
+
         default:
           throw new BadRequestException('Invalid payment flow type');
       }
@@ -136,7 +171,8 @@ export class StripePaymentService {
         metadata: dto.metadata,
       });
 
-      const savedPaymentIntent = await this.paymentIntentRepo.save(paymentIntentEntity);
+      const savedPaymentIntent =
+        await this.paymentIntentRepo.save(paymentIntentEntity);
 
       // Create platform fee record
       await this.createPlatformFeeRecord(
@@ -147,7 +183,9 @@ export class StripePaymentService {
         amountInCents,
       );
 
-      this.logger.log(`Created payment intent ${stripePaymentIntent.id} for campaign ${dto.campaignId}`);
+      this.logger.log(
+        `Created payment intent ${stripePaymentIntent.id} for campaign ${dto.campaignId}`,
+      );
 
       return {
         id: savedPaymentIntent.id,
@@ -201,18 +239,21 @@ export class StripePaymentService {
     description?: string,
     metadata?: Record<string, string>,
   ): Promise<Stripe.PaymentIntent> {
-    return this.stripe.paymentIntents.create({
-      amount,
-      currency: this.config.currency.toLowerCase(),
-      application_fee_amount: applicationFee,
-      description,
-      metadata: metadata || {},
-      automatic_payment_methods: {
-        enabled: true,
+    return this.stripe.paymentIntents.create(
+      {
+        amount,
+        currency: this.config.currency.toLowerCase(),
+        application_fee_amount: applicationFee,
+        description,
+        metadata: metadata || {},
+        automatic_payment_methods: {
+          enabled: true,
+        },
       },
-    }, {
-      stripeAccount: connectedAccount,
-    });
+      {
+        stripeAccount: connectedAccount,
+      },
+    );
   }
 
   /**
@@ -237,7 +278,11 @@ export class StripePaymentService {
   /**
    * Create transfer for hold-and-transfer flow
    */
-  async createTransfer(paymentIntentId: string, recipientId: string, amount?: number): Promise<StripeTransfer> {
+  async createTransfer(
+    paymentIntentId: string,
+    recipientId: string,
+    amount?: number,
+  ): Promise<StripeTransfer> {
     try {
       const paymentIntent = await this.paymentIntentRepo.findOne({
         where: { id: paymentIntentId },
@@ -249,15 +294,19 @@ export class StripePaymentService {
       }
 
       if (paymentIntent.paymentFlowType !== 'hold_and_transfer') {
-        throw new BadRequestException('Payment intent is not configured for transfers');
+        throw new BadRequestException(
+          'Payment intent is not configured for transfers',
+        );
       }
 
-      const recipientAccount = await this.stripeConnectService.getAccountByUserId(recipientId);
+      const recipientAccount =
+        await this.stripeConnectService.getAccountByUserId(recipientId);
       if (!recipientAccount) {
         throw new BadRequestException('Recipient account not found');
       }
 
-      const transferAmount = amount || (paymentIntent.amount - paymentIntent.applicationFeeAmount);
+      const transferAmount =
+        amount || paymentIntent.amount - paymentIntent.applicationFeeAmount;
 
       const stripeTransfer = await this.stripe.transfers.create({
         amount: transferAmount,
@@ -281,7 +330,9 @@ export class StripePaymentService {
 
       const savedTransfer = await this.transferRepo.save(transferEntity);
 
-      this.logger.log(`Created transfer ${stripeTransfer.id} for payment intent ${paymentIntentId}`);
+      this.logger.log(
+        `Created transfer ${stripeTransfer.id} for payment intent ${paymentIntentId}`,
+      );
 
       return savedTransfer;
     } catch (error) {
@@ -293,7 +344,10 @@ export class StripePaymentService {
   /**
    * Calculate platform fee based on configuration
    */
-  private calculatePlatformFee(amount: number, config: CampaignPaymentConfig): number {
+  private calculatePlatformFee(
+    amount: number,
+    config: CampaignPaymentConfig,
+  ): number {
     switch (config.platformFeeType) {
       case 'percentage':
         return Math.round((amount * config.platformFeeValue) / 100);
@@ -309,10 +363,13 @@ export class StripePaymentService {
   /**
    * Create default payment configuration for campaign
    */
-  private async createDefaultPaymentConfig(campaignId: string, campaignType: string): Promise<CampaignPaymentConfig> {
+  private async createDefaultPaymentConfig(
+    campaignId: string,
+    campaignType: string,
+  ): Promise<CampaignPaymentConfig> {
     let defaultFlow = 'destination';
-    let defaultFeeType = 'percentage';
-    let defaultFeeValue = this.config.platformFeePercentage;
+    const defaultFeeType = 'percentage';
+    const defaultFeeValue = this.config.platformFeePercentage;
 
     // Customize based on campaign type
     switch (campaignType) {
@@ -379,14 +436,197 @@ export class StripePaymentService {
   /**
    * Update payment intent status
    */
-  async updatePaymentIntentStatus(stripePaymentIntentId: string, status: string): Promise<void> {
+  async updatePaymentIntentStatus(
+    stripePaymentIntentId: string,
+    status: string,
+  ): Promise<void> {
     await this.paymentIntentRepo.update(
       { stripePaymentIntentId },
-      { 
+      {
         status,
         ...(status === 'succeeded' ? { succeededAt: new Date() } : {}),
         ...(status === 'canceled' ? { canceledAt: new Date() } : {}),
       },
     );
+  }
+
+  /**
+   * Confirm payment intent
+   */
+  async confirmPaymentIntent(
+    paymentIntentId: string,
+    paymentMethodId: string,
+    returnUrl?: string,
+  ): Promise<{
+    id: string;
+    status: string;
+    client_secret: string | null;
+    requires_action: boolean;
+    next_action: any;
+  }> {
+    try {
+      const confirmParams: Stripe.PaymentIntentConfirmParams = {
+        payment_method: paymentMethodId,
+      };
+
+      if (returnUrl) {
+        confirmParams.return_url = returnUrl;
+      }
+
+      const paymentIntent = await this.stripe.paymentIntents.confirm(
+        paymentIntentId,
+        confirmParams,
+      );
+
+      // Update local record
+      await this.updatePaymentIntentStatus(
+        paymentIntentId,
+        paymentIntent.status,
+      );
+
+      return {
+        id: paymentIntent.id,
+        status: paymentIntent.status,
+        client_secret: paymentIntent.client_secret,
+        requires_action: paymentIntent.status === 'requires_action',
+        next_action: paymentIntent.next_action,
+      };
+    } catch (error) {
+      this.logger.error('Error confirming payment intent:', error);
+      throw new BadRequestException('Failed to confirm payment intent');
+    }
+  }
+
+  /**
+   * Capture payment intent
+   */
+  async capturePaymentIntent(
+    paymentIntentId: string,
+    amountToCapture?: number,
+  ): Promise<{
+    id: string;
+    status: string;
+    amount_captured: number | null;
+    amount_capturable: number | null;
+  }> {
+    try {
+      const captureParams: Stripe.PaymentIntentCaptureParams = {};
+
+      if (amountToCapture) {
+        captureParams.amount_to_capture = Math.round(amountToCapture * 100); // Convert to cents
+      }
+
+      const paymentIntent: Stripe.PaymentIntent =
+        await this.stripe.paymentIntents.capture(
+          paymentIntentId,
+          captureParams,
+        );
+
+      // Update local record
+      await this.updatePaymentIntentStatus(
+        paymentIntentId,
+        paymentIntent.status,
+      );
+
+      return {
+        id: paymentIntent.id,
+        status: paymentIntent.status,
+        amount_captured: 0, // Stripe's PaymentIntent doesn't have amount_captured, use amount_capturable or 0
+        amount_capturable: paymentIntent.amount_capturable,
+      };
+    } catch (error) {
+      this.logger.error('Error capturing payment intent:', error);
+      throw new BadRequestException('Failed to capture payment intent');
+    }
+  }
+
+  /**
+   * Get transfers by payment intent
+   */
+  async getTransfersByPaymentIntent(
+    paymentIntentId: string,
+  ): Promise<StripeTransfer[]> {
+    return this.transferRepo.find({
+      where: { paymentIntent: { stripePaymentIntentId: paymentIntentId } },
+      relations: ['paymentIntent', 'sourceAccount', 'destinationAccount'],
+    });
+  }
+
+  /**
+   * Get campaign payment configuration
+   */
+  async getCampaignPaymentConfig(
+    campaignId: string,
+  ): Promise<CampaignPaymentConfig | null> {
+    return this.campaignConfigRepo.findOne({
+      where: { campaignId },
+    });
+  }
+
+  /**
+   * Create or update campaign payment configuration
+   */
+  async createCampaignPaymentConfig(
+    configData: CreateCampaignPaymentConfigDto,
+  ): Promise<CampaignPaymentConfig> {
+    const { campaignId, ...otherData } = configData;
+
+    // Check if config already exists
+    let config = await this.getCampaignPaymentConfig(campaignId);
+
+    if (config) {
+      // Update existing config
+      Object.assign(config, otherData);
+    } else {
+      // Create new config
+      config = this.campaignConfigRepo.create({
+        campaignId,
+        platformFeePercentage: otherData.platformFeePercentage || 5, // Default 5%
+        autoTransfer: otherData.autoTransfer || false,
+        captureMethod: otherData.captureMethod || 'automatic',
+        currency: otherData.currency || 'usd',
+        ...otherData,
+      });
+    }
+
+    return this.campaignConfigRepo.save(config);
+  }
+
+  /**
+   * Calculate fees for a payment amount
+   */
+  calculateFees(amount: number, currency: string = 'usd'): FeeCalculation {
+    try {
+      // Platform fee (percentage-based)
+      const platformFeePercentage = this.config.platformFeePercentage || 5; // Default 5%
+      const platformFee =
+        Math.round(((amount * platformFeePercentage) / 100) * 100) / 100;
+
+      // Stripe fee calculation (approximate)
+      // Standard rates: 2.9% + 30¢ for US cards
+      const stripeFeePercentage = 2.9;
+      const stripeFixedFee = 0.3;
+      const stripeFee =
+        Math.round(
+          ((amount * stripeFeePercentage) / 100 + stripeFixedFee) * 100,
+        ) / 100;
+
+      // Amount to promoter (after all fees)
+      const totalFees = platformFee + stripeFee;
+      const promoterAmount = amount - totalFees;
+
+      return {
+        amount,
+        currency,
+        platformFee,
+        stripeFee,
+        totalFees,
+        promoterAmount: Math.max(0, promoterAmount), // Ensure non-negative
+        platformFeePercentage,
+      };
+    } catch (error) {
+      this.logger.error('Error calculating fees:', error);
+      throw new BadRequestException('Failed to calculate fees');
+    }
   }
 }

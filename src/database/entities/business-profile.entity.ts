@@ -20,7 +20,12 @@ export class BusinessProfile {
   @Column({ name: 'business_name', type: 'varchar', length: 255 })
   businessName: string;
 
-  @Column({ name: 'business_type', type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'business_type',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   businessType: string; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
 
   @Column({ name: 'tax_id', type: 'varchar', length: 50, nullable: true })

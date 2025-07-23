@@ -9,6 +9,7 @@ import { UserModule } from './modules/user.module';
 import { PromoterModule } from './modules/promoter.module';
 import { AdvertiserModule } from './modules/advertiser.module';
 import { ViewsModule } from './modules/views.module';
+import { StripeModule } from './stripe/stripe.module';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 
 @Module({
@@ -26,6 +27,7 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
     ]),
     DatabaseModule,
     AuthModule,
+    StripeModule,
     UserModule,
     PromoterModule,
     AdvertiserModule,

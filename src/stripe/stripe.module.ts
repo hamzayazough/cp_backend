@@ -1,26 +1,53 @@
 import { Module, Global } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import Stripe from 'stripe';
 import { stripeConfig } from '../config/stripe.config';
+import { StripeConnectService } from './services/stripe-connect.service';
+import { StripePaymentService } from './services/stripe-payment.service';
+import {
+  StripeConnectAccount,
+  StripePaymentIntent,
+  StripeTransfer,
+  CampaignPaymentConfig,
+  PlatformFee,
+  StripeWebhookEvent,
+  BusinessProfile,
+} from '../database/entities';
+import { ConnectController } from './controllers/connect.controller';
+import { PaymentController } from './controllers/payment.controller';
 
 export const STRIPE_CLIENT = 'STRIPE_CLIENT';
 
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [
+    ConfigModule,
+    TypeOrmModule.forFeature([
+      StripeConnectAccount,
+      StripePaymentIntent,
+      StripeTransfer,
+      CampaignPaymentConfig,
+      PlatformFee,
+      StripeWebhookEvent,
+      BusinessProfile,
+    ]),
+  ],
+  controllers: [ConnectController, PaymentController],
   providers: [
     {
       provide: STRIPE_CLIENT,
-      useFactory: (configService: ConfigService) => {
+      useFactory: () => {
         const config = stripeConfig();
         return new Stripe(config.secretKey, {
           apiVersion: config.apiVersion as Stripe.LatestApiVersion,
           typescript: true,
         });
       },
-      inject: [ConfigService],
     },
+    StripeConnectService,
+    StripePaymentService,
   ],
-  exports: [STRIPE_CLIENT],
+  exports: [STRIPE_CLIENT, StripeConnectService, StripePaymentService],
 })
 export class StripeModule {}

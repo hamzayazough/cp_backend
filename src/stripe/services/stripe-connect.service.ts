@@ -1,9 +1,19 @@
-import { Injectable, Inject, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { STRIPE_CLIENT } from '../stripe.module';
-import { StripeConnectAccount, StripeAccountStatus, CapabilityStatus } from '../../database/entities/stripe-connect-account.entity';
+import {
+  StripeConnectAccount,
+  StripeAccountStatus,
+  CapabilityStatus,
+} from '../../database/entities/stripe-connect-account.entity';
 import { BusinessProfile } from '../../database/entities/business-profile.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { stripeConfig } from '../../config/stripe.config';
@@ -41,7 +51,9 @@ export class StripeConnectService {
   /**
    * Create a new Stripe Connect account for a promoter
    */
-  async createConnectedAccount(dto: CreateConnectedAccountDto): Promise<StripeConnectAccount> {
+  async createConnectedAccount(
+    dto: CreateConnectedAccountDto,
+  ): Promise<StripeConnectAccount> {
     try {
       // Check if user already has a connected account
       const existingAccount = await this.stripeAccountRepo.findOne({
@@ -96,15 +108,22 @@ export class StripeConnectService {
 
       const savedAccount = await this.stripeAccountRepo.save(connectAccount);
 
-      this.logger.log(`Created Stripe Connect account ${stripeAccount.id} for user ${dto.userId}`);
+      this.logger.log(
+        `Created Stripe Connect account ${stripeAccount.id} for user ${dto.userId}`,
+      );
 
       return savedAccount;
     } catch (error) {
-      this.logger.error(`Failed to create connected account for user ${dto.userId}:`, error);
+      this.logger.error(
+        `Failed to create connected account for user ${dto.userId}:`,
+        error,
+      );
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to create connected account');
+      throw new InternalServerErrorException(
+        'Failed to create connected account',
+      );
     }
   }
 
@@ -140,8 +159,13 @@ export class StripeConnectService {
         expiresAt: new Date(accountLink.expires_at * 1000),
       };
     } catch (error) {
-      this.logger.error(`Failed to create onboarding link for user ${userId}:`, error);
-      throw new InternalServerErrorException('Failed to create onboarding link');
+      this.logger.error(
+        `Failed to create onboarding link for user ${userId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to create onboarding link',
+      );
     }
   }
 
@@ -180,8 +204,9 @@ export class StripeConnectService {
    */
   async syncAccountStatus(stripeAccountId: string): Promise<void> {
     try {
-      const stripeAccount = await this.stripe.accounts.retrieve(stripeAccountId);
-      
+      const stripeAccount =
+        await this.stripe.accounts.retrieve(stripeAccountId);
+
       const updateData: Partial<StripeConnectAccount> = {
         chargesEnabled: stripeAccount.charges_enabled,
         payoutsEnabled: stripeAccount.payouts_enabled,
@@ -189,13 +214,17 @@ export class StripeConnectService {
         currentlyDue: stripeAccount.requirements?.currently_due || [],
         eventuallyDue: stripeAccount.requirements?.eventually_due || [],
         pastDue: stripeAccount.requirements?.past_due || [],
-        pendingVerification: stripeAccount.requirements?.pending_verification || [],
+        pendingVerification:
+          stripeAccount.requirements?.pending_verification || [],
       };
 
       // Determine overall status
       if (stripeAccount.charges_enabled && stripeAccount.payouts_enabled) {
         updateData.status = StripeAccountStatus.ACTIVE;
-      } else if (stripeAccount.requirements?.currently_due && stripeAccount.requirements.currently_due.length > 0) {
+      } else if (
+        stripeAccount.requirements?.currently_due &&
+        stripeAccount.requirements.currently_due.length > 0
+      ) {
         updateData.status = StripeAccountStatus.RESTRICTED;
       } else {
         updateData.status = StripeAccountStatus.PENDING;
@@ -208,14 +237,14 @@ export class StripeConnectService {
         updateData.transfersCapability = capabilities.transfers as any;
       }
 
-      await this.stripeAccountRepo.update(
-        { stripeAccountId },
-        updateData,
-      );
+      await this.stripeAccountRepo.update({ stripeAccountId }, updateData);
 
       this.logger.log(`Synced account status for ${stripeAccountId}`);
     } catch (error) {
-      this.logger.error(`Failed to sync account status for ${stripeAccountId}:`, error);
+      this.logger.error(
+        `Failed to sync account status for ${stripeAccountId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -223,7 +252,10 @@ export class StripeConnectService {
   /**
    * Create business profile for business accounts
    */
-  async createBusinessProfile(userId: string, businessData: Partial<BusinessProfile>): Promise<BusinessProfile> {
+  async createBusinessProfile(
+    userId: string,
+    businessData: Partial<BusinessProfile>,
+  ): Promise<BusinessProfile> {
     try {
       // Check if business profile already exists
       const existingProfile = await this.businessProfileRepo.findOne({
@@ -242,8 +274,13 @@ export class StripeConnectService {
 
       return await this.businessProfileRepo.save(businessProfile);
     } catch (error) {
-      this.logger.error(`Failed to create business profile for user ${userId}:`, error);
-      throw new InternalServerErrorException('Failed to create business profile');
+      this.logger.error(
+        `Failed to create business profile for user ${userId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to create business profile',
+      );
     }
   }
 
@@ -261,7 +298,9 @@ export class StripeConnectService {
   /**
    * Get account by user ID
    */
-  async getAccountByUserId(userId: string): Promise<StripeConnectAccount | null> {
+  async getAccountByUserId(
+    userId: string,
+  ): Promise<StripeConnectAccount | null> {
     return this.stripeAccountRepo.findOne({
       where: { userId },
       relations: ['user'],
@@ -271,7 +310,9 @@ export class StripeConnectService {
   /**
    * Get account by Stripe account ID
    */
-  async getAccountByStripeId(stripeAccountId: string): Promise<StripeConnectAccount | null> {
+  async getAccountByStripeId(
+    stripeAccountId: string,
+  ): Promise<StripeConnectAccount | null> {
     return this.stripeAccountRepo.findOne({
       where: { stripeAccountId },
       relations: ['user'],

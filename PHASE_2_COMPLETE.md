@@ -3,6 +3,7 @@
 ## ✅ What We've Accomplished
 
 ### 🔧 Dependencies Installed
+
 - **Stripe SDK**: Latest Stripe Node.js library
 - **TypeScript Types**: Proper type definitions for Stripe
 - **Custom Integration**: Built our own Stripe module (avoiding outdated nestjs-stripe)
@@ -10,18 +11,22 @@
 ### 🏗️ Core Infrastructure Created
 
 #### 1. **Stripe Configuration** (`src/config/stripe.config.ts`)
+
 - Environment-based configuration
 - Support for test/live modes
 - Configurable platform fees
 - Multi-currency and country support
 
 #### 2. **Stripe Module** (`src/stripe/stripe.module.ts`)
+
 - Global Stripe client injection
 - Proper TypeScript integration
 - ConfigService integration
 
 #### 3. **StripeConnectService** (`src/stripe/services/stripe-connect.service.ts`)
+
 **Features:**
+
 - ✅ Connected account creation (Individual & Business)
 - ✅ Account onboarding with Stripe-hosted flows
 - ✅ Account status synchronization
@@ -30,13 +35,16 @@
 - ✅ Account readiness verification
 
 **Key Methods:**
+
 - `createConnectedAccount()` - Create Express accounts
 - `createOnboardingLink()` - Generate onboarding URLs
 - `syncAccountStatus()` - Sync with Stripe account status
 - `isAccountReady()` - Check if account can receive payments
 
 #### 4. **StripePaymentService** (`src/stripe/services/stripe-payment.service.ts`)
+
 **Features:**
+
 - ✅ Multiple payment flows (destination, direct, hold-and-transfer)
 - ✅ Platform fee calculation (percentage/fixed)
 - ✅ Campaign-specific payment configurations
@@ -44,13 +52,16 @@
 - ✅ Payment intent creation and tracking
 
 **Key Methods:**
+
 - `createPaymentIntent()` - Create payments with Connect routing
 - `createTransfer()` - Manual transfers for hold-and-release
 - `calculatePlatformFee()` - Dynamic fee calculation
 - `createDefaultPaymentConfig()` - Campaign-type specific configs
 
 ### 🔧 Environment Configuration Ready
+
 Added all necessary Stripe environment variables to `.env`:
+
 - API keys (test mode ready)
 - Webhook secrets
 - Platform fee configuration
@@ -60,17 +71,20 @@ Added all necessary Stripe environment variables to `.env`:
 ## 🎯 Payment Flow Support
 
 ### ✅ **Destination Charges** (Recommended for Cross-Border)
+
 - Platform processes payment
 - Funds automatically route to promoter
 - Platform fee deducted automatically
 - Works for US ↔ CA transactions
 
 ### ✅ **Direct Charges** (Domestic Only)
+
 - Charges created on promoter's account
 - Direct fund flow to promoter
 - Platform fee collected separately
 
 ### ✅ **Hold-and-Transfer** (Complex Campaigns)
+
 - Platform holds funds initially
 - Manual transfer on completion/milestone
 - Perfect for goal-based campaigns
@@ -79,24 +93,28 @@ Added all necessary Stripe environment variables to `.env`:
 ## 🏆 Campaign Type Integration Ready
 
 ### 🎬 **Visibility Campaigns**
+
 - **Flow**: Destination charges
 - **Fee**: Platform percentage
 - **Timing**: Immediate payout on completion
 - **Config**: Auto-release enabled
 
-### 💼 **Consultant Campaigns**  
+### 💼 **Consultant Campaigns**
+
 - **Flow**: Hold-and-transfer
 - **Fee**: Platform percentage
 - **Timing**: Release on deliverable approval
 - **Config**: 7-day hold period
 
 ### 🛍️ **Seller Campaigns**
-- **Flow**: Hold-and-transfer  
+
+- **Flow**: Hold-and-transfer
 - **Fee**: Platform percentage
 - **Timing**: Milestone-based releases
 - **Config**: Goal completion required
 
 ### 💰 **Salesman Campaigns**
+
 - **Flow**: Hold-and-transfer
 - **Fee**: Commission-based
 - **Timing**: Batch payouts
@@ -107,14 +125,16 @@ Added all necessary Stripe environment variables to `.env`:
 ### 📝 **Ready to Build:**
 
 #### 1. **Connect Controller** (User Onboarding)
+
 ```typescript
 POST   /api/connect/create-account     // Create connected account
-GET    /api/connect/onboard/:userId    // Get onboarding link  
+GET    /api/connect/onboard/:userId    // Get onboarding link
 GET    /api/connect/status/:userId     // Check account status
 POST   /api/connect/refresh-onboarding // Refresh onboarding link
 ```
 
 #### 2. **Payment Controller** (Payment Processing)
+
 ```typescript
 POST   /api/payments/create-intent     // Create payment intent
 POST   /api/payments/confirm          // Confirm payment
@@ -123,8 +143,9 @@ POST   /api/payments/refund          // Process refunds
 ```
 
 #### 3. **Webhook Controller** (Event Handling)
+
 ```typescript
-POST   /api/stripe/webhook           // Receive Stripe webhooks
+POST / api / stripe / webhook; // Receive Stripe webhooks
 ```
 
 ## 🔧 **Technical Foundation Status:**

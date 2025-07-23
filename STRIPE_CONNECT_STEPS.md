@@ -5,11 +5,13 @@
 ### Step 1.1: Review and Apply Database Enhancements ⭐ **NEXT ACTION**
 
 **What to do:**
+
 1. Review the new file: `database/10_stripe_connect_enhancements.sql`
 2. Run this SQL against your PostgreSQL database
 3. Update your master initialization script
 
 **Commands to run:**
+
 ```bash
 # Connect to your PostgreSQL database
 psql -h localhost -d your_database_name -U your_username
@@ -27,11 +29,13 @@ psql -h localhost -d your_database_name -U your_username
 ### Step 1.2: Update Your Database Initialization Scripts
 
 **Files to modify:**
+
 - `database/init_master.sql` - Add reference to new file
 - `database/99_complete.sql` - Add new tables to completion script
 
 **Action needed:**
 Add this line to your `init_master.sql`:
+
 ```sql
 \i 10_stripe_connect_enhancements.sql
 ```
@@ -39,6 +43,7 @@ Add this line to your `init_master.sql`:
 ### Step 1.3: Verify Schema Integration
 
 **Validation steps:**
+
 1. Check all foreign key relationships work
 2. Verify indexes are created properly
 3. Test sample data insertion
@@ -50,6 +55,7 @@ Add this line to your `init_master.sql`:
 ### Step 2.1: Install Required Dependencies
 
 **Run these commands:**
+
 ```bash
 npm install stripe nestjs-stripe @stripe/stripe-js
 npm install --save-dev @types/stripe
@@ -58,6 +64,7 @@ npm install --save-dev @types/stripe
 ### Step 2.2: Environment Configuration
 
 **Add to your `.env` file:**
+
 ```env
 # Stripe Test Configuration (start with test mode)
 STRIPE_SECRET_KEY=sk_test_YOUR_TEST_SECRET_KEY
@@ -87,6 +94,7 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:3000/connect/refresh
 ### Step 3.1: Create StripeModule
 
 **Files to create:**
+
 - `src/stripe/stripe.module.ts`
 - `src/stripe/services/stripe-connect.service.ts`
 - `src/stripe/services/stripe-payment.service.ts`
@@ -95,6 +103,7 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:3000/connect/refresh
 ### Step 3.2: Implement Database Entities
 
 **Create TypeORM entities for:**
+
 - StripeConnectAccount
 - StripePaymentIntent
 - StripeTransfer
@@ -105,6 +114,7 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:3000/connect/refresh
 ### Step 3.3: Build Core Services
 
 **Priority order:**
+
 1. StripeConnectService (account creation/onboarding)
 2. StripePaymentService (payment processing)
 3. StripeWebhookService (event handling)
@@ -116,6 +126,7 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:3000/connect/refresh
 ### Step 4.1: Create Controllers
 
 **Files to create:**
+
 - `src/stripe/controllers/connect.controller.ts`
 - `src/stripe/controllers/payment.controller.ts`
 - `src/stripe/controllers/webhook.controller.ts`
@@ -123,6 +134,7 @@ STRIPE_CONNECT_REFRESH_URL=http://localhost:3000/connect/refresh
 ### Step 4.2: API Endpoints Design
 
 **Connect Controller endpoints:**
+
 ```
 POST   /api/connect/create-account
 GET    /api/connect/onboard/:userId
@@ -131,6 +143,7 @@ POST   /api/connect/refresh-onboarding
 ```
 
 **Payment Controller endpoints:**
+
 ```
 POST   /api/payments/create-intent
 POST   /api/payments/confirm
@@ -139,6 +152,7 @@ POST   /api/payments/refund
 ```
 
 **Webhook Controller endpoints:**
+
 ```
 POST   /api/stripe/webhook
 ```
@@ -150,6 +164,7 @@ POST   /api/stripe/webhook
 ### Step 5.1: Modify Campaign Creation
 
 **Update campaign creation flow to:**
+
 1. Set payment configuration per campaign type
 2. Initialize Stripe Connect requirements
 3. Validate promoter account status
@@ -157,6 +172,7 @@ POST   /api/stripe/webhook
 ### Step 5.2: Implement Payment Flows
 
 **By campaign type:**
+
 - **Visibility:** Immediate destination charges
 - **Consultant:** Hold-and-release pattern
 - **Seller:** Milestone-based payments
@@ -167,22 +183,26 @@ POST   /api/stripe/webhook
 ## IMMEDIATE NEXT STEPS (What to do right now):
 
 ### 🚀 **ACTION 1: Database Setup**
+
 1. Open your PostgreSQL client
 2. Run the migration file we created: `database/10_stripe_connect_enhancements.sql`
 3. Verify all tables were created successfully
 
 ### 🚀 **ACTION 2: Install Dependencies**
+
 ```bash
 cd c:\Users\hamza\Documents\history_project\cp\cp_backend
 npm install stripe nestjs-stripe @stripe/stripe-js @types/stripe
 ```
 
 ### 🚀 **ACTION 3: Get Stripe Test Keys**
+
 1. Go to https://dashboard.stripe.com/test/apikeys
 2. Copy your test keys to your `.env` file
 3. Set up a test Stripe Connect application
 
 ### 🚀 **ACTION 4: Update Master Database Script**
+
 Add the new migration to your database initialization process
 
 ---
@@ -191,7 +211,7 @@ Add the new migration to your database initialization process
 
 1. **Do you want to start with test data migrations first, or jump into the NestJS implementation?**
 
-2. **What's your current Stripe account status?** 
+2. **What's your current Stripe account status?**
    - Do you have test keys?
    - Is Connect enabled on your account?
 
