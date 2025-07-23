@@ -233,7 +233,9 @@ export class StripeConnectService {
       // Update capabilities
       const capabilities = stripeAccount.capabilities;
       if (capabilities) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         updateData.cardPaymentsCapability = capabilities.card_payments as any;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         updateData.transfersCapability = capabilities.transfers as any;
       }
 
@@ -411,6 +413,7 @@ export class StripeConnectService {
    */
   async handlePersonUpdate(
     stripeAccountId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _person: any,
   ): Promise<void> {
     try {
@@ -564,5 +567,179 @@ export class StripeConnectService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Exchange OAuth authorization code for access token and account information
+   */
+  async exchangeOAuthCode(
+    code: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _state?: string,
+  ): Promise<{
+    stripeAccountId: string;
+    userId: string;
+    accessToken: string;
+    refreshToken?: string;
+  }> {
+    try {
+      this.logger.log('Exchanging OAuth code for access token');
+
+      // Exchange the code for an access token using Stripe's OAuth
+      const response = await this.stripe.oauth.token({
+        grant_type: 'authorization_code',
+        code,
+      });
+
+      const {
+        stripe_user_id: stripeAccountId,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      } = response;
+
+      // Validate required fields from Stripe response
+      if (!stripeAccountId || !accessToken) {
+        throw new InternalServerErrorException(
+          'Invalid response from Stripe OAuth: missing required fields',
+        );
+      }
+
+      // Find the local account to get the userId
+      const account = await this.stripeAccountRepo.findOne({
+        where: { stripeAccountId },
+        relations: ['user'],
+      });
+
+      if (!account) {
+        throw new BadRequestException(
+          'Account not found for the provided authorization code',
+        );
+      }
+
+      // Note: We're not storing OAuth tokens in the current schema
+      // They would need to be added to the database schema if needed for future operations
+
+      this.logger.log(
+        `Successfully exchanged OAuth code for account ${stripeAccountId}`,
+      );
+
+      return {
+        stripeAccountId,
+        userId: account.user.id,
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      this.logger.error('Failed to exchange OAuth code:', error);
+      throw new InternalServerErrorException(
+        'Failed to exchange authorization code',
+      );
+    }
+  }
+
+  /**
+   * Mark an account as fully onboarded
+   */
+  async markAccountAsOnboarded(stripeAccountId: string): Promise<void> {
+    try {
+      this.logger.log(`Marking account ${stripeAccountId} as onboarded`);
+
+      const account = await this.stripeAccountRepo.findOne({
+        where: { stripeAccountId },
+      });
+
+      if (!account) {
+        throw new BadRequestException(`Account ${stripeAccountId} not found`);
+      }
+
+      // Sync the latest status from Stripe
+      await this.syncAccountStatus(stripeAccountId);
+
+      // Update the onboarded status
+      await this.stripeAccountRepo.update(account.id, {
+        onboardingCompleted: true,
+        onboardingCompletedAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      this.logger.log(
+        `Successfully marked account ${stripeAccountId} as onboarded`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to mark account ${stripeAccountId} as onboarded:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Verify account completeness and requirements
+   */
+  async verifyAccountCompleteness(accountIdOrUserId: string): Promise<{
+    isComplete: boolean;
+    requirements: any;
+    capabilities: any;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+  }> {
+    try {
+      this.logger.log(
+        `Verifying account completeness for ${accountIdOrUserId}`,
+      );
+
+      // Try to find account by Stripe account ID first, then by user ID
+      let account = await this.stripeAccountRepo.findOne({
+        where: { stripeAccountId: accountIdOrUserId },
+      });
+
+      if (!account) {
+        account = await this.stripeAccountRepo.findOne({
+          where: { user: { id: accountIdOrUserId } },
+          relations: ['user'],
+        });
+      }
+
+      if (!account) {
+        throw new BadRequestException(
+          `Account not found for identifier: ${accountIdOrUserId}`,
+        );
+      }
+
+      // Get the latest status from Stripe
+      const stripeAccount = await this.stripe.accounts.retrieve(
+        account.stripeAccountId,
+      );
+
+      const isComplete =
+        stripeAccount.charges_enabled &&
+        stripeAccount.payouts_enabled &&
+        (!stripeAccount.requirements?.currently_due?.length ||
+          stripeAccount.requirements.currently_due.length === 0);
+
+      return {
+        isComplete,
+        requirements: stripeAccount.requirements,
+        capabilities: stripeAccount.capabilities,
+        chargesEnabled: stripeAccount.charges_enabled,
+        payoutsEnabled: stripeAccount.payouts_enabled,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to verify account completeness for ${accountIdOrUserId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get connected account by user ID (alias for getAccountByUserId)
+   */
+  async getConnectedAccount(
+    userId: string,
+  ): Promise<StripeConnectAccount | null> {
+    return this.getAccountByUserId(userId);
   }
 }
