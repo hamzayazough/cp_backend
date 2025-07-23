@@ -25,6 +25,19 @@ CREATE TABLE IF NOT EXISTS campaign_analytics (
     roi DECIMAL(8,4),
     total_earnings DECIMAL(10,2) DEFAULT 0,
     
+    -- Stripe Connect specific metrics
+    total_payment_intents INTEGER DEFAULT 0,
+    successful_payments INTEGER DEFAULT 0,
+    failed_payments INTEGER DEFAULT 0,
+    total_platform_fees DECIMAL(10,2) DEFAULT 0,
+    total_stripe_fees DECIMAL(10,2) DEFAULT 0,
+    average_payment_amount DECIMAL(10,2) DEFAULT 0,
+    total_transfers INTEGER DEFAULT 0,
+    successful_transfers INTEGER DEFAULT 0,
+    failed_transfers INTEGER DEFAULT 0,
+    payment_success_rate DECIMAL(5,2) DEFAULT 100,
+    transfer_success_rate DECIMAL(5,2) DEFAULT 100,
+    
     -- Timeline metrics
     started_at TIMESTAMP WITH TIME ZONE,
     completed_at TIMESTAMP WITH TIME ZONE,

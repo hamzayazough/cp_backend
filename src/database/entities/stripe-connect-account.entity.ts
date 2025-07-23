@@ -90,6 +90,27 @@ export class StripeConnectAccount {
   @Column({ name: 'payouts_enabled', type: 'boolean', default: false })
   payoutsEnabled: boolean;
 
+  @Column({ name: 'details_submitted', type: 'boolean', default: false })
+  detailsSubmitted: boolean;
+
+  @Column({ name: 'account_type', type: 'varchar', length: 50, nullable: true })
+  accountType: string;
+
+  @Column({ name: 'business_type', type: 'varchar', length: 50, nullable: true })
+  businessType: string;
+
+  @Column({ name: 'onboarding_link', type: 'text', nullable: true })
+  onboardingLink: string;
+
+  @Column({ name: 'onboarding_expires_at', type: 'timestamptz', nullable: true })
+  onboardingExpiresAt: Date;
+
+  @Column({ name: 'last_onboarding_attempt', type: 'timestamptz', nullable: true })
+  lastOnboardingAttempt: Date;
+
+  @Column({ name: 'pending_verification', type: 'json', default: () => "'[]'" })
+  pendingVerification: string[];
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

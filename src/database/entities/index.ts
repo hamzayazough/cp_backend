@@ -39,3 +39,11 @@ export { FinancialAnalytics } from './financial-analytics.entity';
 export { PayoutSettings } from './payout-settings.entity';
 export { Invoice } from './invoice.entity';
 export { SalesRecordEntity } from './sales-record.entity';
+
+// Stripe Connect entities
+export { StripePaymentIntent } from './stripe-payment-intent.entity';
+export { StripeTransfer } from './stripe-transfer.entity';
+export { CampaignPaymentConfig } from './campaign-payment-config.entity';
+export { PlatformFee } from './platform-fee.entity';
+export { StripeWebhookEvent } from './stripe-webhook-event.entity';
+export { BusinessProfile } from './business-profile.entity';

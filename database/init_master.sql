@@ -31,5 +31,8 @@
 -- 8. Create database indexes
 \i 08_indexes.sql
 
+-- 9. Create Stripe Connect enhancements
+\i 10_stripe_connect_enhancements.sql
+
 -- Database initialization complete
 -- Run this script from the database directory: psql -d crowdprop -f init_master.sql
