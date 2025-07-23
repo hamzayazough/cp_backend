@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
-import { STRIPE_CLIENT } from '../stripe.module';
+import { STRIPE_CLIENT } from '../stripe.constants';
 import { StripePaymentIntent } from '../../database/entities/stripe-payment-intent.entity';
 import { StripeTransfer } from '../../database/entities/stripe-transfer.entity';
 import { CampaignPaymentConfig } from '../../database/entities/campaign-payment-config.entity';

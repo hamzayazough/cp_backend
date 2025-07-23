@@ -9,6 +9,7 @@ import { StripeIntegrationService } from '../services/stripe-integration.service
 
 // Entities
 import { CampaignEntity } from '../database/entities/campaign.entity';
+import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { PayoutRecord as PayoutRecordEntity } from '../database/entities/payout-record.entity';
 import { AdvertiserCharge as AdvertiserChargeEntity } from '../database/entities/advertiser-charge.entity';
 import { PromoterBalance as PromoterBalanceEntity } from '../database/entities/promoter-balance.entity';
@@ -22,6 +23,7 @@ import { UserEntity } from '../database/entities/user.entity';
   imports: [
     TypeOrmModule.forFeature([
       CampaignEntity,
+      PromoterCampaign,
       PayoutRecordEntity,
       AdvertiserChargeEntity,
       PromoterBalanceEntity,

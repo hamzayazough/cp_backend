@@ -1,10 +1,11 @@
 import { Module, Global } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import Stripe from 'stripe';
 import { stripeConfig } from '../config/stripe.config';
 import { StripeConnectService } from './services/stripe-connect.service';
 import { StripePaymentService } from './services/stripe-payment.service';
+import { StripeWebhookService } from './services/stripe-webhook.service';
+import { STRIPE_CLIENT } from './stripe.constants';
 import {
   StripeConnectAccount,
   StripePaymentIntent,
@@ -19,14 +20,10 @@ import {
 import { ConnectController } from './controllers/connect.controller';
 import { PaymentController } from './controllers/payment.controller';
 import { WebhookController } from './controllers/webhook.controller';
-import { StripeWebhookService } from './services/stripe-webhook.service';
-
-export const STRIPE_CLIENT = 'STRIPE_CLIENT';
 
 @Global()
 @Module({
   imports: [
-    ConfigModule,
     TypeOrmModule.forFeature([
       StripeConnectAccount,
       StripePaymentIntent,
@@ -45,16 +42,30 @@ export const STRIPE_CLIENT = 'STRIPE_CLIENT';
       provide: STRIPE_CLIENT,
       useFactory: () => {
         const config = stripeConfig();
-        return new Stripe(config.secretKey, {
+        console.log('Config loaded:', {
+          hasSecretKey: !!config.secretKey,
+          apiVersion: config.apiVersion,
+        });
+        if (!config.secretKey) {
+          throw new Error('STRIPE_SECRET_KEY environment variable is required');
+        }
+        const stripeInstance = new Stripe(config.secretKey, {
           apiVersion: config.apiVersion as Stripe.LatestApiVersion,
           typescript: true,
         });
+        console.log('Stripe client created successfully:', !!stripeInstance);
+        return stripeInstance;
       },
     },
     StripeConnectService,
     StripePaymentService,
     StripeWebhookService,
   ],
-  exports: [STRIPE_CLIENT, StripeConnectService, StripePaymentService, StripeWebhookService],
+  exports: [
+    STRIPE_CLIENT,
+    StripeConnectService,
+    StripePaymentService,
+    StripeWebhookService,
+  ],
 })
 export class StripeModule {}
