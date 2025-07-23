@@ -16,6 +16,8 @@ import {
 } from '../database/entities';
 import { ConnectController } from './controllers/connect.controller';
 import { PaymentController } from './controllers/payment.controller';
+import { WebhookController } from './controllers/webhook.controller';
+import { StripeWebhookService } from './services/stripe-webhook.service';
 
 export const STRIPE_CLIENT = 'STRIPE_CLIENT';
 
@@ -33,7 +35,7 @@ export const STRIPE_CLIENT = 'STRIPE_CLIENT';
       BusinessProfile,
     ]),
   ],
-  controllers: [ConnectController, PaymentController],
+  controllers: [ConnectController, PaymentController, WebhookController],
   providers: [
     {
       provide: STRIPE_CLIENT,
@@ -47,7 +49,8 @@ export const STRIPE_CLIENT = 'STRIPE_CLIENT';
     },
     StripeConnectService,
     StripePaymentService,
+    StripeWebhookService,
   ],
-  exports: [STRIPE_CLIENT, StripeConnectService, StripePaymentService],
+  exports: [STRIPE_CLIENT, StripeConnectService, StripePaymentService, StripeWebhookService],
 })
 export class StripeModule {}

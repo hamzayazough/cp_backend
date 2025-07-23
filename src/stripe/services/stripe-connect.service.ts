@@ -318,4 +318,251 @@ export class StripeConnectService {
       relations: ['user'],
     });
   }
+
+  /**
+   * Sync account data from Stripe
+   */
+  async syncAccountFromStripe(stripeAccountId: string): Promise<void> {
+    try {
+      const stripeAccount =
+        await this.stripe.accounts.retrieve(stripeAccountId);
+      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+
+      if (!localAccount) {
+        this.logger.warn(
+          `Local account not found for Stripe ID: ${stripeAccountId}`,
+        );
+        return;
+      }
+
+      // Update account data
+      localAccount.status = this.mapStripeAccountStatus(stripeAccount);
+      const capabilities = this.mapCapabilityStatuses(
+        stripeAccount.capabilities,
+      );
+      localAccount.transfersCapability =
+        capabilities.transfers || CapabilityStatus.INACTIVE;
+      localAccount.cardPaymentsCapability =
+        capabilities.card_payments || CapabilityStatus.INACTIVE;
+      localAccount.chargesEnabled = stripeAccount.charges_enabled;
+      localAccount.payoutsEnabled = stripeAccount.payouts_enabled;
+      localAccount.detailsSubmitted = stripeAccount.details_submitted;
+      localAccount.updatedAt = new Date();
+
+      await this.stripeAccountRepo.save(localAccount);
+      this.logger.log(`Synced account data for ${stripeAccountId}`);
+    } catch (error) {
+      this.logger.error('Error syncing account from Stripe:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle account deauthorization
+   */
+  async handleAccountDeauthorization(stripeAccountId: string): Promise<void> {
+    try {
+      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+
+      if (localAccount) {
+        localAccount.status = StripeAccountStatus.DEAUTHORIZED;
+        localAccount.chargesEnabled = false;
+        localAccount.payoutsEnabled = false;
+        localAccount.updatedAt = new Date();
+
+        await this.stripeAccountRepo.save(localAccount);
+        this.logger.log(`Marked account as deauthorized: ${stripeAccountId}`);
+      }
+    } catch (error) {
+      this.logger.error('Error handling account deauthorization:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update payout status for an account
+   */
+  async updatePayoutStatus(
+    stripeAccountId: string,
+    payoutId: string,
+    status: string,
+  ): Promise<void> {
+    try {
+      // Note: We could create a separate payouts table if needed
+      // For now, just log the payout status change
+      this.logger.log(
+        `Payout ${payoutId} for account ${stripeAccountId} status: ${status}`,
+      );
+
+      // Update last activity
+      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+      if (localAccount) {
+        localAccount.updatedAt = new Date();
+        await this.stripeAccountRepo.save(localAccount);
+      }
+    } catch (error) {
+      this.logger.error('Error updating payout status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle person updates for business accounts
+   */
+  async handlePersonUpdate(
+    stripeAccountId: string,
+    _person: any,
+  ): Promise<void> {
+    try {
+      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+
+      if (!localAccount) {
+        this.logger.warn(
+          `Local account not found for person update: ${stripeAccountId}`,
+        );
+        return;
+      }
+
+      // Update business profile if exists
+      const businessProfile = await this.businessProfileRepo.findOne({
+        where: { userId: localAccount.userId },
+      });
+
+      if (businessProfile) {
+        // Update person-related fields
+        businessProfile.updatedAt = new Date();
+        await this.businessProfileRepo.save(businessProfile);
+      }
+
+      // Update account last updated timestamp
+      localAccount.updatedAt = new Date();
+      await this.stripeAccountRepo.save(localAccount);
+
+      this.logger.log(`Updated person data for account ${stripeAccountId}`);
+    } catch (error) {
+      this.logger.error('Error handling person update:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Map Stripe account status to our enum
+   */
+  private mapStripeAccountStatus(
+    stripeAccount: Stripe.Account,
+  ): StripeAccountStatus {
+    if (!stripeAccount.details_submitted) {
+      return StripeAccountStatus.PENDING;
+    }
+
+    if (stripeAccount.charges_enabled && stripeAccount.payouts_enabled) {
+      return StripeAccountStatus.ACTIVE;
+    }
+
+    if (
+      stripeAccount.requirements?.currently_due?.length &&
+      stripeAccount.requirements.currently_due.length > 0
+    ) {
+      return StripeAccountStatus.RESTRICTED;
+    }
+
+    return StripeAccountStatus.PENDING;
+  }
+
+  /**
+   * Map Stripe capabilities to our enum
+   */
+  private mapCapabilityStatuses(
+    capabilities: Stripe.Account.Capabilities | undefined,
+  ): Record<string, CapabilityStatus> {
+    const result: Record<string, CapabilityStatus> = {};
+
+    if (!capabilities) {
+      return result;
+    }
+
+    for (const [capability, status] of Object.entries(capabilities)) {
+      switch (status) {
+        case 'active':
+          result[capability] = CapabilityStatus.ACTIVE;
+          break;
+        case 'inactive':
+          result[capability] = CapabilityStatus.INACTIVE;
+          break;
+        case 'pending':
+          result[capability] = CapabilityStatus.PENDING;
+          break;
+        default:
+          result[capability] = CapabilityStatus.INACTIVE;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get Stripe instance for webhook service
+   */
+  getStripeInstance(): Stripe {
+    return this.stripe;
+  }
+
+  /**
+   * Update account from webhook event
+   */
+  async updateAccountFromWebhook(
+    stripeAccountId: string,
+    updates: Partial<{
+      chargesEnabled: boolean;
+      payoutsEnabled: boolean;
+      detailsSubmitted: boolean;
+      status: string;
+    }>,
+  ): Promise<void> {
+    try {
+      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+
+      if (!localAccount) {
+        this.logger.warn(
+          `Local account not found for webhook update: ${stripeAccountId}`,
+        );
+        return;
+      }
+
+      // Map string status to enum if provided
+      let mappedStatus = localAccount.status;
+      if (updates.status) {
+        switch (updates.status) {
+          case 'active':
+            mappedStatus = StripeAccountStatus.ACTIVE;
+            break;
+          case 'pending':
+            mappedStatus = StripeAccountStatus.PENDING;
+            break;
+          case 'restricted':
+            mappedStatus = StripeAccountStatus.RESTRICTED;
+            break;
+          case 'deauthorized':
+            mappedStatus = StripeAccountStatus.RESTRICTED; // Map deauthorized to restricted
+            break;
+          default:
+            mappedStatus = StripeAccountStatus.PENDING;
+        }
+      }
+
+      await this.stripeAccountRepo.update(localAccount.id, {
+        ...updates,
+        status: mappedStatus,
+        updatedAt: new Date(),
+      });
+
+      this.logger.log(`Updated account ${stripeAccountId} from webhook`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to update account ${stripeAccountId} from webhook:`,
+        error,
+      );
+      throw error;
+    }
+  }
 }

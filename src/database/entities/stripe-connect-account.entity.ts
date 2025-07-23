@@ -14,6 +14,7 @@ export enum StripeAccountStatus {
   ACTIVE = 'active',
   RESTRICTED = 'restricted',
   REJECTED = 'rejected',
+  DEAUTHORIZED = 'deauthorized',
 }
 
 export enum CapabilityStatus {

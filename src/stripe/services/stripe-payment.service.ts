@@ -629,4 +629,128 @@ export class StripePaymentService {
       throw new BadRequestException('Failed to calculate fees');
     }
   }
+
+  /**
+   * Update transfer status
+   */
+  async updateTransferStatus(
+    transferId: string,
+    status: string,
+  ): Promise<void> {
+    try {
+      await this.transferRepo.update(
+        { stripeTransferId: transferId },
+        {
+          status,
+          ...(status === 'paid' ? { completedAt: new Date() } : {}),
+          ...(status === 'failed' ? { failedAt: new Date() } : {}),
+        },
+      );
+    } catch (error) {
+      this.logger.error('Error updating transfer status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update payment intent from webhook event
+   */
+  async updatePaymentIntentFromWebhook(
+    stripePaymentIntentId: string,
+    updates: Partial<{
+      status: string;
+      failureCode?: string;
+      failureMessage?: string;
+    }>,
+  ): Promise<void> {
+    try {
+      const paymentIntent = await this.paymentIntentRepo.findOne({
+        where: { stripePaymentIntentId },
+      });
+
+      if (!paymentIntent) {
+        this.logger.warn(
+          `Payment intent not found for webhook update: ${stripePaymentIntentId}`,
+        );
+        return;
+      }
+
+      const updateData: Record<string, any> = {
+        ...updates,
+        updatedAt: new Date(),
+      };
+
+      // Set completion timestamp for succeeded payments
+      if (updates.status === 'succeeded') {
+        updateData['confirmedAt'] = new Date();
+      }
+
+      // Set failure details for failed payments
+      if (
+        updates.status === 'failed' &&
+        (updates.failureCode || updates.failureMessage)
+      ) {
+        updateData['failedAt'] = new Date();
+      }
+
+      await this.paymentIntentRepo.update(paymentIntent.id, updateData);
+
+      this.logger.log(
+        `Updated payment intent ${stripePaymentIntentId} from webhook`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to update payment intent ${stripePaymentIntentId} from webhook:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update transfer from webhook event
+   */
+  async updateTransferFromWebhook(
+    stripeTransferId: string,
+    updates: Partial<{
+      status: string;
+      failureCode?: string;
+      failureMessage?: string;
+    }>,
+  ): Promise<void> {
+    try {
+      const transfer = await this.transferRepo.findOne({
+        where: { stripeTransferId },
+      });
+
+      if (!transfer) {
+        this.logger.warn(
+          `Transfer not found for webhook update: ${stripeTransferId}`,
+        );
+        return;
+      }
+
+      const updateData: Record<string, any> = {
+        ...updates,
+        updatedAt: new Date(),
+      };
+
+      // Set appropriate timestamps based on status
+      if (updates.status === 'paid') {
+        updateData['completedAt'] = new Date();
+      } else if (updates.status === 'failed') {
+        updateData['failedAt'] = new Date();
+      }
+
+      await this.transferRepo.update(transfer.id, updateData);
+
+      this.logger.log(`Updated transfer ${stripeTransferId} from webhook`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to update transfer ${stripeTransferId} from webhook:`,
+        error,
+      );
+      throw error;
+    }
+  }
 }
