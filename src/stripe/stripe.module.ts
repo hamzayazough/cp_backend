@@ -13,6 +13,8 @@ import {
   PlatformFee,
   StripeWebhookEvent,
   BusinessProfile,
+  UserEntity,
+  CampaignEntity,
 } from '../database/entities';
 import { ConnectController } from './controllers/connect.controller';
 import { PaymentController } from './controllers/payment.controller';
@@ -33,6 +35,8 @@ export const STRIPE_CLIENT = 'STRIPE_CLIENT';
       PlatformFee,
       StripeWebhookEvent,
       BusinessProfile,
+      UserEntity,
+      CampaignEntity,
     ]),
   ],
   controllers: [ConnectController, PaymentController, WebhookController],
