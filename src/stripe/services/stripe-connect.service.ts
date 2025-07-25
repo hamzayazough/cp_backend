@@ -79,6 +79,14 @@ export class StripeConnectService {
         business_type: dto.isBusiness ? 'company' : 'individual',
       };
 
+      // For non-US countries, explicitly specify capabilities
+      if (dto.country !== 'US') {
+        accountParams.capabilities = {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        };
+      }
+
       // Add business or individual specific data
       if (dto.isBusiness && dto.businessName) {
         accountParams.company = {
@@ -208,39 +216,52 @@ export class StripeConnectService {
       const stripeAccount =
         await this.stripe.accounts.retrieve(stripeAccountId);
 
-      const updateData: Partial<StripeConnectAccount> = {
-        chargesEnabled: stripeAccount.charges_enabled,
-        payoutsEnabled: stripeAccount.payouts_enabled,
-        detailsSubmitted: stripeAccount.details_submitted,
-        currentlyDue: stripeAccount.requirements?.currently_due || [],
-        eventuallyDue: stripeAccount.requirements?.eventually_due || [],
-        pastDue: stripeAccount.requirements?.past_due || [],
-        pendingVerification:
-          stripeAccount.requirements?.pending_verification || [],
-      };
+      // Find the existing account in our database
+      const existingAccount = await this.stripeAccountRepo.findOne({
+        where: { stripeAccountId },
+      });
+
+      if (!existingAccount) {
+        this.logger.warn(`Account ${stripeAccountId} not found in database`);
+        return;
+      }
+
+      // Update the account data
+      existingAccount.chargesEnabled = stripeAccount.charges_enabled;
+      existingAccount.payoutsEnabled = stripeAccount.payouts_enabled;
+      existingAccount.detailsSubmitted = stripeAccount.details_submitted;
+      existingAccount.currentlyDue =
+        stripeAccount.requirements?.currently_due || [];
+      existingAccount.eventuallyDue =
+        stripeAccount.requirements?.eventually_due || [];
+      existingAccount.pastDue = stripeAccount.requirements?.past_due || [];
+      existingAccount.pendingVerification =
+        stripeAccount.requirements?.pending_verification || [];
 
       // Determine overall status
       if (stripeAccount.charges_enabled && stripeAccount.payouts_enabled) {
-        updateData.status = StripeAccountStatus.ACTIVE;
+        existingAccount.status = StripeAccountStatus.ACTIVE;
       } else if (
         stripeAccount.requirements?.currently_due &&
         stripeAccount.requirements.currently_due.length > 0
       ) {
-        updateData.status = StripeAccountStatus.RESTRICTED;
+        existingAccount.status = StripeAccountStatus.RESTRICTED;
       } else {
-        updateData.status = StripeAccountStatus.PENDING;
+        existingAccount.status = StripeAccountStatus.PENDING;
       }
 
       // Update capabilities
       const capabilities = stripeAccount.capabilities;
       if (capabilities) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        updateData.cardPaymentsCapability = capabilities.card_payments as any;
+        existingAccount.cardPaymentsCapability =
+          capabilities.card_payments as any;
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        updateData.transfersCapability = capabilities.transfers as any;
+        existingAccount.transfersCapability = capabilities.transfers as any;
       }
 
-      await this.stripeAccountRepo.update({ stripeAccountId }, updateData);
+      // Save the updated account (this handles JSON serialization properly)
+      await this.stripeAccountRepo.save(existingAccount);
 
       this.logger.log(`Synced account status for ${stripeAccountId}`);
     } catch (error) {

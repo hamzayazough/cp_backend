@@ -99,6 +99,32 @@ export class ConnectController {
 
       this.logger.log(`Creating Stripe Connect account for user ${user.uid}`);
 
+      // Check if user already has an account first
+      const existingAccount = await this.stripeConnectService.getAccountStatus(
+        user.uid,
+      );
+
+      if (existingAccount) {
+        this.logger.log(
+          `User ${user.uid} already has a connected account: ${existingAccount.stripeAccountId}`,
+        );
+
+        return {
+          success: true,
+          data: {
+            accountId: existingAccount.id,
+            stripeAccountId: existingAccount.stripeAccountId,
+            status: existingAccount.status,
+            accountType: existingAccount.accountType,
+            businessType: existingAccount.businessType,
+            country: existingAccount.country,
+            chargesEnabled: existingAccount.chargesEnabled,
+            payoutsEnabled: existingAccount.payoutsEnabled,
+          },
+          message: 'Stripe Connect account already exists',
+        };
+      }
+
       const accountData: CreateConnectedAccountDto = {
         userId: user.uid,
         email: createAccountDto.email || user.email,
@@ -678,107 +704,6 @@ export class ConnectController {
 
       throw new HttpException(
         'Failed to check onboarding status',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * TEST ENDPOINT: Create the Stripe Connect account without authentication (for testing only)
-   * TODO: Remove this endpoint in production
-   */
-  @Post('test-create-account')
-  async testCreateAccount(
-    @Body() createAccountDto: CreateAccountDto & { userId: string },
-  ) {
-    try {
-      this.logger.log(
-        `TEST: Creating Stripe Connect account for user ${createAccountDto.userId}`,
-      );
-
-      if (!createAccountDto.userId) {
-        throw new HttpException(
-          'userId is required for test endpoint',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const accountData: CreateConnectedAccountDto = {
-        userId: createAccountDto.userId,
-        email: createAccountDto.email,
-        country: createAccountDto.country,
-        isBusiness: createAccountDto.isBusiness,
-        businessName: createAccountDto.businessName,
-        firstName: createAccountDto.firstName,
-        lastName: createAccountDto.lastName,
-      };
-
-      const account =
-        await this.stripeConnectService.createConnectedAccount(accountData);
-
-      this.logger.log(
-        `TEST: Successfully created account ${account.stripeAccountId} for user ${createAccountDto.userId}`,
-      );
-
-      return {
-        success: true,
-        data: {
-          accountId: account.id,
-          stripeAccountId: account.stripeAccountId,
-          status: account.status,
-          accountType: account.accountType,
-          businessType: account.businessType,
-          country: account.country,
-          chargesEnabled: account.chargesEnabled,
-          payoutsEnabled: account.payoutsEnabled,
-        },
-        message: 'Stripe Connect account created successfully (TEST MODE)',
-      };
-    } catch (error) {
-      this.logger.error(
-        `TEST: Failed to create account for user ${createAccountDto.userId}:`,
-        error,
-      );
-
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      throw new HttpException(
-        'Failed to create Stripe Connect account',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * TEST ENDPOINT: Get onboarding link for a user without authentication (for testing only)
-   * TODO: Remove this endpoint in production
-   */
-  @Get('test-onboard/:userId')
-  async testGetOnboardingLink(@Param('userId') userId: string) {
-    try {
-      this.logger.log(`TEST: Getting onboarding link for user ${userId}`);
-
-      const onboardingLink =
-        await this.stripeConnectService.createOnboardingLink(userId);
-
-      return {
-        success: true,
-        data: {
-          url: onboardingLink.url,
-          expiresAt: onboardingLink.expiresAt,
-        },
-        message: 'Onboarding link generated successfully (TEST MODE)',
-      };
-    } catch (error) {
-      this.logger.error(
-        `TEST: Failed to get onboarding link for user ${userId}:`,
-        error,
-      );
-
-      throw new HttpException(
-        'Failed to generate onboarding link',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

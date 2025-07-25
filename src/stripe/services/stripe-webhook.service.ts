@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { StripeWebhookEvent } from '../../database/entities/stripe-webhook-event.entity';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripePaymentService } from './stripe-payment.service';
+import { UserService } from '../../services/user.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -15,6 +16,7 @@ export class StripeWebhookService {
     private readonly webhookEventRepository: Repository<StripeWebhookEvent>,
     private readonly stripeConnectService: StripeConnectService,
     private readonly stripePaymentService: StripePaymentService,
+    private readonly userService: UserService,
   ) {}
 
   /**
@@ -181,6 +183,8 @@ export class StripeWebhookService {
 
   private async handleAccountUpdated(event: Stripe.Event): Promise<void> {
     const account = event.data.object as Stripe.Account;
+
+    // Update account status in database
     await this.stripeConnectService.updateAccountFromWebhook(account.id, {
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
@@ -190,6 +194,40 @@ export class StripeWebhookService {
           ? 'active'
           : 'pending',
     });
+
+    // Check if onboarding is complete and mark user setup as done
+    const isOnboardingComplete =
+      account.charges_enabled &&
+      account.payouts_enabled &&
+      account.details_submitted;
+
+    if (isOnboardingComplete) {
+      try {
+        // Get the user's Firebase UID from the connected account
+        const stripeAccount =
+          await this.stripeConnectService.getAccountByStripeId(account.id);
+
+        if (stripeAccount && stripeAccount.userId) {
+          this.logger.log(
+            `Marking user setup complete for Firebase UID: ${stripeAccount.userId}`,
+          );
+          await this.userService.markSetupComplete(stripeAccount.userId);
+          this.logger.log(
+            `Successfully marked user ${stripeAccount.userId} setup as complete`,
+          );
+        } else {
+          this.logger.warn(
+            `Could not find user for Stripe account: ${account.id}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to mark user setup complete for account ${account.id}:`,
+          error,
+        );
+        // Don't throw error here - webhook should still succeed even if user update fails
+      }
+    }
   }
 
   private async handleAccountDeauthorized(event: Stripe.Event): Promise<void> {

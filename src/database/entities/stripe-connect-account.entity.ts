@@ -46,14 +46,29 @@ export class StripeConnectAccount {
   })
   status: StripeAccountStatus;
 
-  // Requirements as JSON fields
-  @Column({ name: 'currently_due', type: 'json', default: () => "'[]'" })
+  // Requirements as TEXT[] fields (PostgreSQL arrays)
+  @Column({
+    name: 'currently_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   currentlyDue: string[];
 
-  @Column({ name: 'eventually_due', type: 'json', default: () => "'[]'" })
+  @Column({
+    name: 'eventually_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   eventuallyDue: string[];
 
-  @Column({ name: 'past_due', type: 'json', default: () => "'[]'" })
+  @Column({
+    name: 'past_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   pastDue: string[];
 
   // Capabilities
@@ -137,7 +152,12 @@ export class StripeConnectAccount {
   })
   requirementsDueDate: Date;
 
-  @Column({ name: 'pending_verification', type: 'json', default: () => "'[]'" })
+  @Column({
+    name: 'pending_verification',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   pendingVerification: string[];
 
   @Column({ name: 'onboarding_completed', type: 'boolean', default: false })

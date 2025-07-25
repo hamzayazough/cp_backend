@@ -19,6 +19,7 @@ import {
 import { ConnectController } from './controllers/connect.controller';
 import { PaymentController } from './controllers/payment.controller';
 import { WebhookController } from './controllers/webhook.controller';
+import { UserModule } from '../modules/user.module';
 
 @Global()
 @Module({
@@ -33,6 +34,7 @@ import { WebhookController } from './controllers/webhook.controller';
       UserEntity,
       CampaignEntity,
     ]),
+    UserModule, // Import UserModule to access UserService
   ],
   controllers: [ConnectController, PaymentController, WebhookController],
   providers: [
