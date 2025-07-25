@@ -15,6 +15,7 @@ import {
   StripeWebhookEvent,
   UserEntity,
   CampaignEntity,
+  AdvertiserDetailsEntity,
 } from '../database/entities';
 import { ConnectController } from './controllers/connect.controller';
 import { PaymentController } from './controllers/payment.controller';
@@ -33,6 +34,7 @@ import { UserModule } from '../modules/user.module';
       StripeWebhookEvent,
       UserEntity,
       CampaignEntity,
+      AdvertiserDetailsEntity,
     ]),
     UserModule, // Import UserModule to access UserService
   ],

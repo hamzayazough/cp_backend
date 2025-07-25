@@ -47,6 +47,12 @@ export class CapturePaymentDto {
   amountToCapture?: number;
 }
 
+export class SetupCustomerDto {
+  email?: string;
+  name?: string;
+  companyName?: string;
+}
+
 @Controller('stripe/payments')
 export class PaymentController {
   constructor(
@@ -188,6 +194,53 @@ export class PaymentController {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to create transfer';
+      throw new BadRequestException(message);
+    }
+  }
+
+  @Post('customer/setup')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RecaptchaGuard)
+  async setupStripeCustomer(
+    @User() user: FirebaseUser,
+    @Body() setupCustomerDto: SetupCustomerDto,
+  ) {
+    try {
+      // This will create a Stripe customer and save the ID to advertiser_details
+      const result = await this.stripePaymentService.setupAdvertiserCustomer(
+        user.uid,
+        setupCustomerDto,
+      );
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to setup Stripe customer';
+      throw new BadRequestException(message);
+    }
+  }
+
+  @Get('customer/status')
+  @UseGuards(RecaptchaGuard)
+  async getCustomerStatus(@User() user: FirebaseUser) {
+    try {
+      const status =
+        await this.stripePaymentService.getAdvertiserCustomerStatus(user.uid);
+
+      return {
+        success: true,
+        data: status,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to get customer status';
       throw new BadRequestException(message);
     }
   }

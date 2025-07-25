@@ -14,6 +14,8 @@ import { StripeTransfer } from '../../database/entities/stripe-transfer.entity';
 import { CampaignPaymentConfig } from '../../database/entities/campaign-payment-config.entity';
 import { PlatformFee } from '../../database/entities/platform-fee.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { UserEntity } from '../../database/entities/user.entity';
+import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
 import { StripeConnectService } from './stripe-connect.service';
 import { stripeConfig } from '../../config/stripe.config';
 import {
@@ -22,6 +24,7 @@ import {
   PaymentFlowType,
   PlatformFeeType,
 } from '../../database/entities/stripe-enums';
+import { UserType } from 'src/database/entities/billing-period-summary.entity';
 
 export interface CreatePaymentIntentDto {
   campaignId: string;
@@ -38,6 +41,18 @@ export interface CreateCampaignPaymentConfigDto {
   autoTransfer?: boolean;
   captureMethod?: string;
   currency?: string;
+}
+
+export interface SetupCustomerDto {
+  email?: string;
+  name?: string;
+  companyName?: string;
+}
+
+export interface CustomerStatusResponse {
+  hasStripeCustomer: boolean;
+  stripeCustomerId?: string;
+  setupRequired: boolean;
 }
 
 export interface FeeCalculation {
@@ -76,6 +91,10 @@ export class StripePaymentService {
     private readonly platformFeeRepo: Repository<PlatformFee>,
     @InjectRepository(CampaignEntity)
     private readonly campaignRepo: Repository<CampaignEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(AdvertiserDetailsEntity)
+    private readonly advertiserDetailsRepo: Repository<AdvertiserDetailsEntity>,
     private readonly stripeConnectService: StripeConnectService,
   ) {}
 
@@ -805,6 +824,139 @@ export class StripePaymentService {
         error,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Setup Stripe customer for advertiser and save to database
+   */
+  async setupAdvertiserCustomer(
+    firebaseUid: string,
+    setupData: SetupCustomerDto,
+  ): Promise<{ stripeCustomerId: string; customer: Stripe.Customer }> {
+    try {
+      // Find user by Firebase UID
+      const user = await this.userRepo.findOne({
+        where: { firebaseUid },
+        relations: ['advertiserDetails'],
+      });
+
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      if (user.role !== UserType.ADVERTISER) {
+        throw new BadRequestException('User is not an advertiser');
+      }
+
+      if (!user.advertiserDetails) {
+        throw new BadRequestException('Advertiser details not found');
+      }
+
+      // Check if already has Stripe customer
+      if (user.advertiserDetails.stripeCustomerId) {
+        const existingCustomer = await this.stripe.customers.retrieve(
+          user.advertiserDetails.stripeCustomerId,
+        );
+        return {
+          stripeCustomerId: user.advertiserDetails.stripeCustomerId,
+          customer: existingCustomer as Stripe.Customer,
+        };
+      }
+
+      // Create Stripe customer
+      const customerParams: Stripe.CustomerCreateParams = {
+        email: setupData.email || user.email,
+        name: setupData.name || user.name,
+        metadata: {
+          firebaseUid: user.firebaseUid,
+          userId: user.id,
+          advertiserDetailsId: user.advertiserDetails.id,
+          companyName:
+            setupData.companyName || user.advertiserDetails.companyName,
+        },
+      };
+
+      if (setupData.companyName || user.advertiserDetails.companyName) {
+        customerParams.description = `Advertiser: ${setupData.companyName || user.advertiserDetails.companyName}`;
+      }
+
+      const customer = await this.stripe.customers.create(customerParams);
+
+      // Save Stripe customer ID to database
+      await this.advertiserDetailsRepo.update(user.advertiserDetails.id, {
+        stripeCustomerId: customer.id,
+        updatedAt: new Date(),
+      });
+
+      this.logger.log(
+        `Created Stripe customer ${customer.id} for advertiser ${user.id}`,
+      );
+
+      return {
+        stripeCustomerId: customer.id,
+        customer,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to setup Stripe customer for user ${firebaseUid}:`,
+        error,
+      );
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Failed to setup Stripe customer');
+    }
+  }
+
+  /**
+   * Get advertiser's Stripe customer status
+   */
+  async getAdvertiserCustomerStatus(
+    firebaseUid: string,
+  ): Promise<CustomerStatusResponse> {
+    try {
+      // Find user by Firebase UID
+      const user = await this.userRepo.findOne({
+        where: { firebaseUid },
+        relations: ['advertiserDetails'],
+      });
+
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      if (user.role !== UserType.ADVERTISER) {
+        throw new BadRequestException('User is not an advertiser');
+      }
+
+      if (!user.advertiserDetails) {
+        return {
+          hasStripeCustomer: false,
+          setupRequired: true,
+        };
+      }
+
+      const hasStripeCustomer = !!user.advertiserDetails.stripeCustomerId;
+
+      return {
+        hasStripeCustomer,
+        stripeCustomerId: user.advertiserDetails.stripeCustomerId,
+        setupRequired: !hasStripeCustomer,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get customer status for user ${firebaseUid}:`,
+        error,
+      );
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Failed to get customer status');
     }
   }
 }

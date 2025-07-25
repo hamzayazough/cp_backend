@@ -29,6 +29,9 @@ export class AdvertiserDetailsEntity {
   @Column({ default: false })
   verified: boolean;
 
+  @Column({ name: 'stripe_customer_id', unique: true, nullable: true })
+  stripeCustomerId: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

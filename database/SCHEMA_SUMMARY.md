@@ -1,5 +1,58 @@
 # Database Schema Use Cases Summary
 
+## Application Overview
+
+This database schema supports a **Campaign Platform** that connects two primary user types: **Advertisers** and **Promoters**. The platform facilitates performance-based marketing campaigns where advertisers pay promoters for various types of promotional work.
+
+### Platform Purpose
+
+The application serves as a marketplace where:
+
+- **Advertisers** create campaigns with specific budgets and requirements
+- **Promoters** (influencers, content creators, salespeople) complete promotional work
+- **Payments flow** from advertisers to promoters based on performance metrics
+- **Platform earns** fees from successful transactions
+
+### Campaign Types & Payment Models
+
+**1. Visibility Campaigns (Pay-per-View)**
+
+- Advertisers set a rate per 100 views (e.g., $3 per 100 views) and maximum view count
+- Multiple promoters can participate simultaneously
+- Promoters are paid monthly for views generated (minimum $20 threshold)
+- Example: $3/100 views × 2,000 views = $60 earned for the promoter
+
+**2. Consultant Campaigns (Project-based)**
+
+- Advertisers set minimum and maximum budget range for consulting work
+- Single promoter selected through application process
+- Multiple payments allowed during campaign duration (within budget range)
+- Immediate payment upon work completion/approval
+
+**3. Seller Campaigns (Deliverable-based)**
+
+- Similar to consultant but focused on tangible deliverables
+- Budget range with milestone-based payments
+- Work submissions and approval workflows
+- Project timeline management
+
+**4. Salesman Campaigns (Commission-based)**
+
+- Promoters earn commission percentage on sales they generate
+- Sales tracked via referral links or coupon codes
+- Monthly commission payouts (minimum $20 threshold)
+- Performance-based long-term relationships
+
+### Key Business Rules
+
+- **$20 Minimum Payout**: Earnings below $20 accumulate until threshold is met
+- **Pre-funded Campaigns**: Advertisers must fund campaigns upfront
+- **Budget Controls**: Spending cannot exceed allocated campaign budgets
+- **Monthly Cycles**: Visibility and salesman earnings paid monthly
+- **Immediate Payments**: Consultant/seller payments processed upon completion
+
+---
+
 This document outlines the use cases for each table in the campaign platform database, focusing on the payment flow between advertisers and promoters.
 
 ## System Overview
@@ -180,6 +233,116 @@ This document outlines the use cases for each table in the campaign platform dat
 - `transactions`: General financial movement tracking
 - `promoter_balances`: Real-time balance snapshots
 - `advertiser_spends`: Spending pattern analysis
+
+## Advertiser-Related Tables
+
+This section identifies all tables that store data related to advertisers or their business operations.
+
+### Primary Advertiser Tables
+
+#### `users`
+
+- **Primary table** - All advertisers start here with `role = 'advertiser'`
+- Contains basic profile info, contact details, Firebase auth
+- Foundation for all advertiser operations
+
+#### `advertiser_details`
+
+- **Extended advertiser profile** - Company info, verification status
+- One-to-one relationship with `users` table
+- Business-specific information and settings
+
+#### `advertiser_type_mappings`
+
+- **Business categories** - Links advertisers to their industry types
+- Many-to-many relationship (advertiser can have multiple business types)
+- Used for campaign categorization and matching
+
+### Campaign Management (Advertiser-Created)
+
+#### `campaigns`
+
+- **Core table** - Advertisers create and own all campaigns
+- Contains budget settings, campaign type, requirements
+- Foreign key: `advertiser_id` → `users(id)`
+
+#### `campaign_applications`
+
+- **Application review** - Advertisers review promoter applications
+- Advertisers accept/reject applications for consultant/seller campaigns
+- Negotiation and selection process management
+
+#### `campaign_budget_allocations`
+
+- **Campaign funding** - Tracks advertiser's budget allocations per campaign
+- Links to payment intents for funding source
+- Budget control and spending limits
+
+### Payment & Billing (Advertiser Pays)
+
+#### `stripe_payment_intents`
+
+- **Advertiser payments** - When advertisers fund campaigns
+- All incoming money from advertisers flows through here
+- Payment processing and status tracking
+
+#### `payment_methods`
+
+- **Stored payment info** - Advertiser's saved cards/bank accounts
+- Enables recurring payments without re-entering details
+- Frictionless payment experience
+
+#### `advertiser_charges`
+
+- **Billing records** - All charges made to advertisers
+- Includes campaign funding, platform fees, refunds
+- Complete billing history and refund management
+
+#### `advertiser_spends`
+
+- **Spending analytics** - Tracks advertiser spending patterns
+- Used for reporting and budget recommendations
+- Business intelligence and optimization
+
+### Financial Analytics & Reporting
+
+#### `platform_fees`
+
+- **Revenue tracking** - Platform fees collected from advertiser transactions
+- Important for business analytics and revenue attribution
+- Links advertiser payments to platform revenue
+
+#### `billing_period_summaries`
+
+- **Monthly reports** - Advertiser spending summaries
+- Tax documentation and financial reporting
+- Period-based analytics and insights
+
+#### `transactions`
+
+- **Audit trail** - All financial movements involving advertisers
+- Complete transaction history for compliance
+- Dispute resolution and accounting
+
+### Supporting Infrastructure
+
+#### `stripe_webhook_events`
+
+- **Payment confirmations** - Webhook processing for advertiser payments
+- Ensures payment status accuracy and system reliability
+- Error handling and retry mechanisms
+
+### Tables NOT Related to Advertisers
+
+**Promoter-Only Tables:**
+
+- `stripe_connect_accounts` - Promoters only (receive payments)
+- `wallets` - Promoters only (earnings accumulation)
+- `payout_records` - Promoters only (monthly payouts)
+- `stripe_transfers` - Promoters only (money going out)
+- `promoter_*` tables - Promoter-specific profile data
+
+**Key Distinction:** Advertisers are **payers** in the system, so they're associated with incoming payments, campaign creation, and billing tables, but NOT with payout/transfer tables which are promoter-focused.
 
 ## Key Business Flow Use Cases
 
