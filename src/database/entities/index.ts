@@ -46,4 +46,3 @@ export { StripeTransfer } from './stripe-transfer.entity';
 export { CampaignPaymentConfig } from './campaign-payment-config.entity';
 export { PlatformFee } from './platform-fee.entity';
 export { StripeWebhookEvent } from './stripe-webhook-event.entity';
-export { BusinessProfile } from './business-profile.entity';

@@ -14,8 +14,6 @@ import {
   StripeAccountStatus,
   CapabilityStatus,
 } from '../../database/entities/stripe-connect-account.entity';
-import { BusinessProfile } from '../../database/entities/business-profile.entity';
-import { VerificationStatus } from '../../database/entities/stripe-enums';
 import { UserEntity } from '../../database/entities/user.entity';
 import { stripeConfig } from '../../config/stripe.config';
 
@@ -43,8 +41,8 @@ export class StripeConnectService {
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe,
     @InjectRepository(StripeConnectAccount)
     private readonly stripeAccountRepo: Repository<StripeConnectAccount>,
-    @InjectRepository(BusinessProfile)
-    private readonly businessProfileRepo: Repository<BusinessProfile>,
+    // @InjectRepository(BusinessProfile)
+    // private readonly businessProfileRepo: Repository<BusinessProfile>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
   ) {}
@@ -252,40 +250,42 @@ export class StripeConnectService {
     }
   }
 
-  /**
-   * Create business profile for business accounts
-   */
-  async createBusinessProfile(
-    userId: string,
-    businessData: Partial<BusinessProfile>,
-  ): Promise<BusinessProfile> {
-    try {
-      // Check if business profile already exists
-      const existingProfile = await this.businessProfileRepo.findOne({
-        where: { userId },
-      });
+  // /** DEPRECATED: This method is not used anymore
+  // -------------------------------------------------------------
+  //  * Create business profile for business accounts
+  //  */
+  // async createBusinessProfile(
+  //   userId: string,
+  //   businessData: Partial<BusinessProfile>,
+  // ): Promise<BusinessProfile> {
+  //   try {
+  //     // Check if business profile already exists
+  //     const existingProfile = await this.businessProfileRepo.findOne({
+  //       where: { userId },
+  //     });
 
-      if (existingProfile) {
-        throw new BadRequestException('Business profile already exists');
-      }
+  //     if (existingProfile) {
+  //       throw new BadRequestException('Business profile already exists');
+  //     }
 
-      const businessProfile = this.businessProfileRepo.create({
-        userId,
-        ...businessData,
-        verificationStatus: VerificationStatus.PENDING,
-      });
+  //     const businessProfile = this.businessProfileRepo.create({
+  //       userId,
+  //       ...businessData,
+  //       verificationStatus: VerificationStatus.PENDING,
+  //     });
 
-      return await this.businessProfileRepo.save(businessProfile);
-    } catch (error) {
-      this.logger.error(
-        `Failed to create business profile for user ${userId}:`,
-        error,
-      );
-      throw new InternalServerErrorException(
-        'Failed to create business profile',
-      );
-    }
-  }
+  //     return await this.businessProfileRepo.save(businessProfile);
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Failed to create business profile for user ${userId}:`,
+  //       error,
+  //     );
+  //     throw new InternalServerErrorException(
+  //       'Failed to create business profile',
+  //     );
+  //   }
+  // }
+  // -----------------------------------------------------------
 
   /**
    * Check if account is ready for payments
@@ -409,45 +409,47 @@ export class StripeConnectService {
     }
   }
 
-  /**
-   * Handle person updates for business accounts
-   */
-  async handlePersonUpdate(
-    stripeAccountId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _person: any,
-  ): Promise<void> {
-    try {
-      const localAccount = await this.getAccountByStripeId(stripeAccountId);
+  // /** DEPRECATED: This method is not used anymore
+  // -------------------------------------------------------------
+  //  * Handle person updates for business accounts
+  //  */
+  // async handlePersonUpdate(
+  //   stripeAccountId: string,
+  //   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  //   _person: any,
+  // ): Promise<void> {
+  //   try {
+  //     const localAccount = await this.getAccountByStripeId(stripeAccountId);
 
-      if (!localAccount) {
-        this.logger.warn(
-          `Local account not found for person update: ${stripeAccountId}`,
-        );
-        return;
-      }
+  //     if (!localAccount) {
+  //       this.logger.warn(
+  //         `Local account not found for person update: ${stripeAccountId}`,
+  //       );
+  //       return;
+  //     }
 
-      // Update business profile if exists
-      const businessProfile = await this.businessProfileRepo.findOne({
-        where: { userId: localAccount.userId },
-      });
+  //     // Update business profile if exists
+  //     const businessProfile = await this.businessProfileRepo.findOne({
+  //       where: { userId: localAccount.userId },
+  //     });
 
-      if (businessProfile) {
-        // Update person-related fields
-        businessProfile.updatedAt = new Date();
-        await this.businessProfileRepo.save(businessProfile);
-      }
+  //     if (businessProfile) {
+  //       // Update person-related fields
+  //       businessProfile.updatedAt = new Date();
+  //       await this.businessProfileRepo.save(businessProfile);
+  //     }
 
-      // Update account last updated timestamp
-      localAccount.updatedAt = new Date();
-      await this.stripeAccountRepo.save(localAccount);
+  //     // Update account last updated timestamp
+  //     localAccount.updatedAt = new Date();
+  //     await this.stripeAccountRepo.save(localAccount);
 
-      this.logger.log(`Updated person data for account ${stripeAccountId}`);
-    } catch (error) {
-      this.logger.error('Error handling person update:', error);
-      throw error;
-    }
-  }
+  //     this.logger.log(`Updated person data for account ${stripeAccountId}`);
+  //   } catch (error) {
+  //     this.logger.error('Error handling person update:', error);
+  //     throw error;
+  //   }
+  // }
+  // -----------------------------------------------------------
 
   /**
    * Map Stripe account status to our enum

@@ -227,7 +227,7 @@ END $$;
 -- Payment flow type enum for Stripe Connect
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_flow_type') THEN
-        CREATE TYPE payment_flow_type AS ENUM ('destination', 'direct', 'separate_transfer');
+        CREATE TYPE payment_flow_type AS ENUM ('destination', 'direct', 'separate_transfer', 'hold_and_transfer');
     END IF;
 END $$;
 

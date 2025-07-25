@@ -18,6 +18,7 @@ import {
 import { User } from '../../auth/user.decorator';
 import { FirebaseUser } from '../../interfaces/firebase-user.interface';
 import { BusinessType } from '../../database/entities/stripe-enums';
+import { StripeConnectAccount } from 'src/database/entities';
 
 // DTOs
 export class CreateAccountDto {
@@ -29,24 +30,26 @@ export class CreateAccountDto {
   lastName?: string;
 }
 
-export class CreateBusinessProfileDto {
-  businessName: string;
-  businessType?: string; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
-  taxId?: string;
-  businessAddressLine1?: string;
-  businessAddressLine2?: string;
-  businessCity?: string;
-  businessState?: string;
-  businessPostalCode?: string;
-  businessCountry?: string;
-  businessPhone?: string;
-  businessWebsite?: string;
-  representativeFirstName?: string;
-  representativeLastName?: string;
-  representativeEmail?: string;
-  representativeDob?: string;
-  representativePhone?: string;
-}
+// DEPRECATED DTO for business profile creation
+
+//  export class CreateBusinessProfileDto {
+//   businessName: string;
+//   businessType?: string; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
+//   taxId?: string;
+//   businessAddressLine1?: string;
+//   businessAddressLine2?: string;
+//   businessCity?: string;
+//   businessState?: string;
+//   businessPostalCode?: string;
+//   businessCountry?: string;
+//   businessPhone?: string;
+//   businessWebsite?: string;
+//   representativeFirstName?: string;
+//   representativeLastName?: string;
+//   representativeEmail?: string;
+//   representativeDob?: string;
+//   representativePhone?: string;
+// }
 
 @Controller('connect')
 export class ConnectController {
@@ -78,7 +81,7 @@ export class ConnectController {
   }
 
   /**
-   * Create a new Stripe Connect account for the authenticated user
+   * Create the Stripe Connect account, then redirect the user to Stripe’s onboarding page.
    */
   @Post('create-account')
   async createAccount(
@@ -240,9 +243,8 @@ export class ConnectController {
     try {
       this.logger.log(`Getting account status for user ${user.uid}`);
 
-      const account = await this.stripeConnectService.getAccountStatus(
-        user.uid,
-      );
+      const account: StripeConnectAccount | null =
+        await this.stripeConnectService.getAccountStatus(user.uid);
 
       if (!account) {
         return {
@@ -299,7 +301,7 @@ export class ConnectController {
   }
 
   /**
-   * Get account status for a specific user (admin use)
+   * Get account status for a specific user (ADMIN METHOD!!! PLEASE NEVER USE IN FRONTEND)
    */
   @Get('status/:userId')
   async getAccountStatusForUser(@Param('userId') userId: string) {
@@ -392,62 +394,65 @@ export class ConnectController {
     }
   }
 
-  /**
-   * Create business profile for business accounts
-   */
-  @Post('business-profile')
-  async createBusinessProfile(
-    @User() user: FirebaseUser,
-    @Body() businessProfileDto: CreateBusinessProfileDto,
-  ) {
-    try {
-      this.logger.log(`Creating business profile for user ${user.uid}`);
+  // /** DEPRECATED SINCE WE ARE GONNA USE STRIPE-HOSTED ONBOARDING
 
-      const businessProfile =
-        await this.stripeConnectService.createBusinessProfile(user.uid, {
-          businessName: businessProfileDto.businessName,
-          businessType: this.mapBusinessType(businessProfileDto.businessType),
-          taxId: businessProfileDto.taxId,
-          businessAddressLine1: businessProfileDto.businessAddressLine1,
-          businessAddressLine2: businessProfileDto.businessAddressLine2,
-          businessCity: businessProfileDto.businessCity,
-          businessState: businessProfileDto.businessState,
-          businessPostalCode: businessProfileDto.businessPostalCode,
-          businessCountry: businessProfileDto.businessCountry,
-          businessPhone: businessProfileDto.businessPhone,
-          businessWebsite: businessProfileDto.businessWebsite,
-          representativeFirstName: businessProfileDto.representativeFirstName,
-          representativeLastName: businessProfileDto.representativeLastName,
-          representativeEmail: businessProfileDto.representativeEmail,
-          representativeDob: businessProfileDto.representativeDob
-            ? new Date(businessProfileDto.representativeDob)
-            : undefined,
-          representativePhone: businessProfileDto.representativePhone,
-        });
+  // -------------------------------------------------------------------------------------
+  //  * Create business profile for business accounts
+  //  */
+  // @Post('business-profile')
+  // async createBusinessProfile(
+  //   @User() user: FirebaseUser,
+  //   @Body() businessProfileDto: CreateBusinessProfileDto,
+  // ) {
+  //   try {
+  //     this.logger.log(`Creating business profile for user ${user.uid}`);
 
-      return {
-        success: true,
-        data: {
-          id: businessProfile.id,
-          businessName: businessProfile.businessName,
-          businessType: businessProfile.businessType,
-          verificationStatus: businessProfile.verificationStatus,
-          createdAt: businessProfile.createdAt,
-        },
-        message: 'Business profile created successfully',
-      };
-    } catch (error) {
-      this.logger.error(
-        `Failed to create business profile for user ${user.uid}:`,
-        error,
-      );
+  //     const businessProfile =
+  //       await this.stripeConnectService.createBusinessProfile(user.uid, {
+  //         businessName: businessProfileDto.businessName,
+  //         businessType: this.mapBusinessType(businessProfileDto.businessType),
+  //         taxId: businessProfileDto.taxId,
+  //         businessAddressLine1: businessProfileDto.businessAddressLine1,
+  //         businessAddressLine2: businessProfileDto.businessAddressLine2,
+  //         businessCity: businessProfileDto.businessCity,
+  //         businessState: businessProfileDto.businessState,
+  //         businessPostalCode: businessProfileDto.businessPostalCode,
+  //         businessCountry: businessProfileDto.businessCountry,
+  //         businessPhone: businessProfileDto.businessPhone,
+  //         businessWebsite: businessProfileDto.businessWebsite,
+  //         representativeFirstName: businessProfileDto.representativeFirstName,
+  //         representativeLastName: businessProfileDto.representativeLastName,
+  //         representativeEmail: businessProfileDto.representativeEmail,
+  //         representativeDob: businessProfileDto.representativeDob
+  //           ? new Date(businessProfileDto.representativeDob)
+  //           : undefined,
+  //         representativePhone: businessProfileDto.representativePhone,
+  //       });
 
-      throw new HttpException(
-        'Failed to create business profile',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
+  //     return {
+  //       success: true,
+  //       data: {
+  //         id: businessProfile.id,
+  //         businessName: businessProfile.businessName,
+  //         businessType: businessProfile.businessType,
+  //         verificationStatus: businessProfile.verificationStatus,
+  //         createdAt: businessProfile.createdAt,
+  //       },
+  //       message: 'Business profile created successfully',
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Failed to create business profile for user ${user.uid}:`,
+  //       error,
+  //     );
+
+  //     throw new HttpException(
+  //       'Failed to create business profile',
+  //       HttpStatus.INTERNAL_SERVER_ERROR,
+  //     );
+  //   }
+  // }
+  // -------------------------------------------------------------------------------
 
   /**
    * OAuth callback endpoint for Stripe Connect onboarding completion

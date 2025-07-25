@@ -13,7 +13,6 @@ import {
   CampaignPaymentConfig,
   PlatformFee,
   StripeWebhookEvent,
-  BusinessProfile,
   UserEntity,
   CampaignEntity,
 } from '../database/entities';
@@ -31,7 +30,6 @@ import { WebhookController } from './controllers/webhook.controller';
       CampaignPaymentConfig,
       PlatformFee,
       StripeWebhookEvent,
-      BusinessProfile,
       UserEntity,
       CampaignEntity,
     ]),

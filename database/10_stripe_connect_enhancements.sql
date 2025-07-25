@@ -153,43 +153,6 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Business Profile table (for business promoters)
-CREATE TABLE IF NOT EXISTS business_profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Business details
-    business_name VARCHAR(255) NOT NULL,
-    business_type business_type, -- 'llc', 'corporation', 'partnership', 'sole_proprietorship'
-    tax_id VARCHAR(50), -- EIN for US, Business Number for Canada
-    
-    -- Address
-    business_address_line1 VARCHAR(255),
-    business_address_line2 VARCHAR(255),
-    business_city VARCHAR(100),
-    business_state VARCHAR(100),
-    business_postal_code VARCHAR(20),
-    business_country VARCHAR(2),
-    
-    -- Contact
-    business_phone VARCHAR(50),
-    business_website TEXT,
-    
-    -- Legal representative (for Stripe)
-    representative_first_name VARCHAR(100),
-    representative_last_name VARCHAR(100),
-    representative_email VARCHAR(255),
-    representative_dob DATE,
-    representative_phone VARCHAR(50),
-    
-    -- Verification
-    verification_status verification_status DEFAULT 'pending',
-    verification_documents JSONB, -- Store document references
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_campaign_id ON stripe_payment_intents(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_status ON stripe_payment_intents(status);
