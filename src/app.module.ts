@@ -1,4 +1,9 @@
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import {
+  Module,
+  NestModule,
+  MiddlewareConsumer,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -42,6 +47,22 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(FirebaseAuthMiddleware)
-      .forRoutes('auth/*', 'promoter/*', 'advertiser/*');
+      .exclude(
+        { path: 'connect/oauth/callback', method: RequestMethod.GET },
+        { path: 'connect/test-create-account', method: RequestMethod.POST },
+        { path: 'connect/test-onboard/:userId', method: RequestMethod.GET },
+      )
+      .forRoutes(
+        'auth/*',
+        'promoter/*',
+        'advertiser/*',
+        'connect/create-account',
+        'connect/onboard',
+        'connect/onboard/*',
+        'connect/refresh-onboarding',
+        'connect/status',
+        'connect/status/*',
+        'connect/ready',
+      );
   }
 }

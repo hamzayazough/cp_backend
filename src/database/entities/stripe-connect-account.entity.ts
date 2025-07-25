@@ -28,7 +28,7 @@ export class StripeConnectAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255, unique: true })
   userId: string;
 
   @Column({
@@ -158,6 +158,6 @@ export class StripeConnectAccount {
 
   // Relations
   @ManyToOne(() => UserEntity, { nullable: false })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'user_id', referencedColumnName: 'firebaseUid' })
   user: UserEntity;
 }

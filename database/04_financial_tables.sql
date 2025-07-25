@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS sales_records (
 -- Stripe Connect Accounts table
 CREATE TABLE IF NOT EXISTS stripe_connect_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) UNIQUE REFERENCES users(firebase_uid) ON DELETE CASCADE,
     stripe_account_id VARCHAR(255) UNIQUE NOT NULL,
     
     -- Account details

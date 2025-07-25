@@ -64,7 +64,9 @@ export class StripeConnectService {
       }
 
       // Verify user exists
-      const user = await this.userRepo.findOne({ where: { id: dto.userId } });
+      const user = await this.userRepo.findOne({
+        where: { firebaseUid: dto.userId },
+      });
       if (!user) {
         throw new BadRequestException('User not found');
       }
