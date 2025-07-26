@@ -53,336 +53,218 @@ The application serves as a marketplace where:
 
 ---
 
-This document outlines the use cases for each table in the campaign platform database, focusing on the payment flow between advertisers and promoters.
-
-## System Overview
-
-**Core Business Model:**
-
-- **Advertisers** pay money to **Promoters** in exchange for promotional work
-- **4 Campaign Types:**
-  1. **Visibility**: Pay per 100 views (monthly payout if >$20)
-  2. **Consultant**: Fixed budget range, multiple payments during campaign
-  3. **Seller**: Fixed budget range, multiple payments during campaign
-  4. **Salesman**: Commission-based, monthly payouts
-
 ## Core User Management Tables
 
-### `users`
+### `users` (File: 02_core_tables.sql)
 
 - **Primary user registry** for both advertisers and promoters
-- Tracks `wallet_balance` for promoters (accumulated earnings from all campaigns)
-- Stores campaign completion statistics and performance metrics
+- Tracks basic profile information and authentication
 - Links to Firebase authentication via `firebase_uid`
-- **Use Case**: Central identity management and financial balance tracking
+- Foundation for all user operations in the system
+- **Key Fields**: `id`, `firebase_uid`, `email`, `role`, `created_at`
 
-### `advertiser_details` & `promoter_details`
+### `advertiser_details` (File: 02_core_tables.sql)
 
-- **Role-specific profiles** created after users choose their account type
-- **Advertiser**: Company information, verification status, business categories
-- **Promoter**: Demographics, skills, follower counts across social platforms
-- **Use Case**: Enhanced profile data for campaign matching and verification
+- **Extended advertiser profiles** created after users choose advertiser role
+- Company information, verification status, business categories
+- Links to `users` table via `user_id`
+- **Key Fields**: `user_id`, `company_name`, `verification_status`, `stripe_customer_id`
 
-### Supporting Tables
+### `promoter_details` (File: 02_core_tables.sql)
+
+- **Extended promoter profiles** for content creators and influencers
+- Demographics, skills, follower counts across social platforms
+- Links to `users` table via `user_id`
+
+### Supporting User Tables
 
 - `advertiser_type_mappings`: Business category classification
 - `promoter_languages`, `promoter_skills`: Skill-based campaign matching
-- `follower_estimates`: Platform-specific audience size for rate calculations
+
+---
 
 ## Campaign Management Tables
 
-### `campaigns`
+### `campaigns` (File: 03_campaign_tables.sql)
 
 - **Core campaign creation** by advertisers with budget allocation
-- **Visibility Campaigns**:
-  - Set `cpv` (cost per 100 views), `max_views` for budget calculation
-  - Requires `tracking_link` for view measurement
-- **Consultant/Seller Campaigns**:
-  - Set `min_budget`/`max_budget` ranges for negotiated work
-  - Define deliverables and timeline requirements
-- **Salesman Campaigns**:
-  - Set `commission_per_sale` percentage for monthly payouts
-  - Configure tracking method (ref links or coupon codes)
-- **Use Case**: Campaign specification and budget parameters
+- **Visibility Campaigns**: Set `cpv` (cost per 100 views), `max_views` for budget calculation
+- **Consultant/Seller Campaigns**: Set `min_budget`/`max_budget` ranges for negotiated work
+- **Salesman Campaigns**: Set `commission_per_sale` percentage for monthly payouts
+- **Key Fields**: `advertiser_id`, `campaign_type`, `max_budget`, `cpv`, `status`
 
-### `campaign_applications`
+### `campaign_applications` (File: 03_campaign_tables.sql)
 
 - **Application system** for Consultant/Seller campaigns requiring approval
 - Promoters submit applications with proposed rates
 - Advertisers can accept/reject and negotiate terms
-- **Use Case**: Selective campaign participation with rate negotiation
+- **Key Fields**: `campaign_id`, `promoter_id`, `status`, `proposed_rate`
 
-### `promoter_campaigns`
+### `promoter_campaigns` (File: 03_campaign_tables.sql)
 
 - **Active participation tracking** for ongoing campaigns
 - Tracks `views_generated` for visibility campaigns
-- Manages **budget holding** via `budget_held` and `spent_budget`
-- Records final payouts and Stripe transaction references
-- **Use Case**: Real-time campaign progress and payment status
+- Records final payouts and transaction references
+- **Key Fields**: `campaign_id`, `promoter_id`, `views_generated`, `total_earned`
 
-### Supporting Tables
+### Supporting Campaign Tables
 
 - `campaign_deliverables`: Work requirements and submission tracking
 - `campaign_works`: Actual deliverable submissions
 - `view_stats`: Daily view tracking for visibility campaigns
 - `unique_views`: Fraud prevention for view counting
 
-## Financial Flow Tables
+---
 
-### `campaign_budget_allocations`
+## Financial & Payment Tables (SIMPLIFIED IMPLEMENTATION)
 
-- **Pre-funding mechanism** for all campaign types
-- Links to `stripe_payment_intent_id` for advertiser payment collection
-- Tracks `allocated_amount` vs `spent_amount` for budget control
-- Stores campaign-specific rates: `rate_per_100_views` or `commission_rate`
-- **Use Case**: Budget reservation and spending limits enforcement
+### `payment_records` (File: 09_stripe_connect_enhancements.sql)
 
-### `stripe_payment_intents`
+- **SIMPLIFIED STRIPE PAYMENT TRACKING** - All Stripe payment intents with business context
+- Links Stripe payments to campaigns and users for business logic
+- **Key Fields**: `stripe_payment_intent_id`, `campaign_id`, `user_id`, `amount_cents`, `payment_type`, `status`
+- **Payment Types**: 'campaign_funding', 'wallet_deposit', 'withdrawal'
 
-- **Advertiser payment collection** when funding campaigns
-- Supports multiple payment flows (destination charges, separate transfers)
-- Tracks payment status from creation through completion
-- **Use Case**: Secure payment processing for campaign funding
+### `stripe_webhook_events` (File: 09_stripe_connect_enhancements.sql)
 
-### `stripe_transfers`
+- **Webhook event processing** for debugging and ensuring we don't miss events
+- **Key Fields**: `stripe_event_id`, `event_type`, `processed`, `object_id`
 
-- **Promoter payouts** from held campaign funds
-- Used for:
-  - Visibility campaigns: Monthly payouts if balance >$20
-  - Consultant/Seller: Final or milestone payments
-  - Salesman: Monthly commission payouts
-- Links to original payment intent for complete audit trail
-- **Use Case**: Automated and manual payout execution
+### `transactions` (File: 04_financial_tables.sql)
 
-### `platform_fees`
+- **ALL INTERNAL MONEY MOVEMENTS** - Replaces payout_records, advertiser_charges, etc.
+- Tracks wallet deposits, campaign funding, promoter payments, refunds
+- **Key Fields**: `user_id`, `campaign_id`, `type`, `amount`, `status`, `stripe_transaction_id`
 
-- **Platform revenue tracking** from each transaction
-- Calculates fees as percentage or fixed amount
-- Separates Stripe processing fees from platform profit
-- **Use Case**: Business analytics and revenue reporting
+### `wallets` (File: 04_financial_tables.sql)
 
-## Monthly Payout System Tables
+- **USER BALANCE MANAGEMENT** - Both advertiser and promoter wallets
+- Advertiser: available_balance, held_balance for campaigns
+- Promoter: earnings accumulation with $20 minimum threshold
+- **Key Fields**: `user_id`, `current_balance`, `pending_balance`, `total_earned`, `minimum_threshold`
 
-### `wallets`
+### `sales_records` (File: 04_financial_tables.sql)
 
-- **Promoter earnings accumulation** across all campaigns
-- Implements `minimum_threshold` ($20) for monthly payouts
-- Separates earnings by type:
-  - `current_balance`: Ready for immediate payout
-  - `pending_balance`: Awaiting campaign completion
-  - `direct_*` fields: Consultant/Seller immediate payments
-- **Use Case**: Consolidated earnings management with payout thresholds
+- **COMMISSION TRACKING** for salesman campaigns only
+- Records individual sales with verification status for commission calculation
+- **Key Fields**: `campaign_id`, `promoter_id`, `sale_amount`, `commission_rate`, `commission_earned`
 
-### `sales_records`
+---
 
-- **Salesman campaign sales tracking** for commission calculation
-- Records individual sales with verification status
-- Links tracking codes (coupons/ref links) to sales
-- Feeds into monthly commission payout calculations
-- **Use Case**: Performance-based payment tracking
+## Supporting Infrastructure Tables
 
-### `payout_records`
+### `stripe_connect_accounts` (File: 04_financial_tables.sql)
 
-- **Monthly payout execution** for accumulated earnings
-- Triggers when promoter balance exceeds $20 threshold
-- Tracks Stripe transfer completion and failure reasons
-- **Use Case**: Automated monthly payment processing
+- **Promoter payment account setup** for receiving payments through Stripe Connect
+- Required before promoters can receive any payments
+- **Key Fields**: `user_id`, `stripe_account_id`, `status`, `charges_enabled`, `payouts_enabled`
 
-## Payment Infrastructure Tables
-
-### `stripe_connect_accounts`
-
-- **Promoter onboarding** to receive payments through Stripe Connect
-- Tracks verification status and payout capabilities
-- Required before any promoter can receive funds
-- Handles compliance and tax requirements
-- **Use Case**: Payment recipient verification and compliance
-
-### `advertiser_charges`
-
-- **Advertiser billing** for campaign funding and ongoing charges
-- Handles refunds for unused campaign budgets
-- Tracks payment method usage and failure reasons
-- **Use Case**: Advertiser payment management and refund processing
-
-### `payment_methods`
+### `payment_methods` (File: 04_financial_tables.sql)
 
 - **Stored payment methods** for recurring advertiser charges
 - Enables seamless campaign funding without re-entering card details
-- Supports multiple payment types (cards, bank accounts)
-- **Use Case**: Frictionless repeat payments
+- **Key Fields**: `user_id`, `stripe_payment_method_id`, `type`, `is_default`
 
-## Audit and Compliance Tables
+---
 
-### `stripe_webhook_events`
+## Simplified Money Flow Architecture
 
-- **Event processing** from Stripe for payment confirmations
-- Ensures reliable payment status updates across all tables
-- Provides debugging capabilities for failed payments
-- **Use Case**: Payment system reliability and troubleshooting
+### **1. Advertiser Wallet System**
 
-### `billing_period_summaries`
+```
+Deposit: payment_records (Stripe) → transactions (internal) → wallets (advertiser balance)
+Campaign: wallets (available → held) → transactions (budget allocation)
+```
 
-- **Monthly financial reports** for both user types
-- Tracks below-threshold earnings that carry forward
-- Provides analytics on campaign performance and spending patterns
-- **Use Case**: Financial reporting and tax documentation
+### **2. Automatic Payments (Visibility/Salesman)**
 
-### Supporting Tables
+```
+Views/Sales Generated → transactions (held → promoter wallets) → Automatic monthly payouts
+```
 
-- `transactions`: General financial movement tracking
-- `promoter_balances`: Real-time balance snapshots
-- `advertiser_spends`: Spending pattern analysis
+### **3. Manual Payments (Consultant/Seller)**
 
-## Advertiser-Related Tables
+```
+Work Completed → transactions (held → promoter wallets) → Immediate payments
+```
 
-This section identifies all tables that store data related to advertisers or their business operations.
+### **4. All Financial Tracking**
 
-### Primary Advertiser Tables
+```
+- payment_records: All Stripe interactions
+- transactions: All internal money movements
+- wallets: Real-time balance management
+- sales_records: Commission calculations only
+```
 
-#### `users`
-
-- **Primary table** - All advertisers start here with `role = 'advertiser'`
-- Contains basic profile info, contact details, Firebase auth
-- Foundation for all advertiser operations
-
-#### `advertiser_details`
-
-- **Extended advertiser profile** - Company info, verification status
-- One-to-one relationship with `users` table
-- Business-specific information and settings
-
-#### `advertiser_type_mappings`
-
-- **Business categories** - Links advertisers to their industry types
-- Many-to-many relationship (advertiser can have multiple business types)
-- Used for campaign categorization and matching
-
-### Campaign Management (Advertiser-Created)
-
-#### `campaigns`
-
-- **Core table** - Advertisers create and own all campaigns
-- Contains budget settings, campaign type, requirements
-- Foreign key: `advertiser_id` → `users(id)`
-
-#### `campaign_applications`
-
-- **Application review** - Advertisers review promoter applications
-- Advertisers accept/reject applications for consultant/seller campaigns
-- Negotiation and selection process management
-
-#### `campaign_budget_allocations`
-
-- **Campaign funding** - Tracks advertiser's budget allocations per campaign
-- Links to payment intents for funding source
-- Budget control and spending limits
-
-### Payment & Billing (Advertiser Pays)
-
-#### `stripe_payment_intents`
-
-- **Advertiser payments** - When advertisers fund campaigns
-- All incoming money from advertisers flows through here
-- Payment processing and status tracking
-
-#### `payment_methods`
-
-- **Stored payment info** - Advertiser's saved cards/bank accounts
-- Enables recurring payments without re-entering details
-- Frictionless payment experience
-
-#### `advertiser_charges`
-
-- **Billing records** - All charges made to advertisers
-- Includes campaign funding, platform fees, refunds
-- Complete billing history and refund management
-
-#### `advertiser_spends`
-
-- **Spending analytics** - Tracks advertiser spending patterns
-- Used for reporting and budget recommendations
-- Business intelligence and optimization
-
-### Financial Analytics & Reporting
-
-#### `platform_fees`
-
-- **Revenue tracking** - Platform fees collected from advertiser transactions
-- Important for business analytics and revenue attribution
-- Links advertiser payments to platform revenue
-
-#### `billing_period_summaries`
-
-- **Monthly reports** - Advertiser spending summaries
-- Tax documentation and financial reporting
-- Period-based analytics and insights
-
-#### `transactions`
-
-- **Audit trail** - All financial movements involving advertisers
-- Complete transaction history for compliance
-- Dispute resolution and accounting
-
-### Supporting Infrastructure
-
-#### `stripe_webhook_events`
-
-- **Payment confirmations** - Webhook processing for advertiser payments
-- Ensures payment status accuracy and system reliability
-- Error handling and retry mechanisms
-
-### Tables NOT Related to Advertisers
-
-**Promoter-Only Tables:**
-
-- `stripe_connect_accounts` - Promoters only (receive payments)
-- `wallets` - Promoters only (earnings accumulation)
-- `payout_records` - Promoters only (monthly payouts)
-- `stripe_transfers` - Promoters only (money going out)
-- `promoter_*` tables - Promoter-specific profile data
-
-**Key Distinction:** Advertisers are **payers** in the system, so they're associated with incoming payments, campaign creation, and billing tables, but NOT with payout/transfer tables which are promoter-focused.
+---
 
 ## Key Business Flow Use Cases
 
-### 1. Visibility Campaign Flow
+### 1. Advertiser Wallet Deposit Flow
 
 ```
-Advertiser creates campaign → Funds via stripe_payment_intents →
-Budget held in campaign_budget_allocations → Promoters generate views →
-Views tracked in view_stats → Monthly payout if wallet >$20 via stripe_transfers
+Advertiser deposits $1000 → payment_records (Stripe tracking) →
+transactions (deposit record) → wallets (advertiser balance = $1000)
 ```
 
-### 2. Consultant/Seller Campaign Flow
+### 2. Campaign Creation & Funding Flow
 
 ```
-Advertiser creates campaign with budget range → Promoter applies via campaign_applications →
-Advertiser accepts → Budget funded → Work delivered →
-Multiple payments within budget range via stripe_transfers
+Advertiser creates $300 campaign → wallets (available: $700, held: $300) →
+transactions (budget allocation record) → Campaign ready for promoters
 ```
 
-### 3. Salesman Campaign Flow
+### 3. Visibility Campaign Automatic Payments
 
 ```
-Campaign setup with commission rate → Sales tracked in sales_records →
-Monthly commission calculation → Payout via standard wallet system if >$20
+Promoters generate views → transactions (held → promoter wallets) →
+Monthly: If promoter wallet >$20 → payment_records (Stripe payout)
 ```
 
-### 4. Platform Revenue Flow
+### 4. Consultant/Seller Manual Payments
 
 ```
-All transactions generate platform_fees entries →
-Revenue tracking and business analytics →
-Financial reporting and tax compliance
+Work completed → Advertiser approves → transactions (held → promoter wallet) →
+Immediate payout via payment_records (Stripe transfer)
+```
+
+### 5. Salesman Commission Flow
+
+```
+Sales tracked in sales_records → Commission calculated →
+transactions (held → promoter wallet) → Monthly payouts if >$20
 ```
 
 ## Data Integrity and Security
 
-- **Fund Holding**: Campaign budgets are pre-funded and held securely
-- **Threshold Management**: $20 minimum prevents micro-transactions
-- **Audit Trails**: Complete transaction history for compliance
-- **Fraud Prevention**: Unique view tracking and verification systems
-- **Payment Security**: Stripe Connect ensures PCI compliance
+- **Simplified Payment Tracking**: New `payment_records` table provides minimal local storage while Stripe API handles complex payment data
+- **Fund Holding**: Campaign budgets are pre-funded and tracked via `wallets` with held_balance
+- **Threshold Management**: $20 minimum in `wallets` table prevents micro-transactions
+- **Audit Trails**: Complete transaction history via `transactions` table for compliance
+- **Webhook Reliability**: `stripe_webhook_events` ensures no missed payment updates
+- **Payment Security**: Stripe Connect via `stripe_connect_accounts` ensures PCI compliance
 
-This schema design ensures proper fund management, automated payouts, comprehensive audit trails, and scalable payment processing for all
+## Current Implementation Status
+
+**✅ IMPLEMENTED (Core Tables Only):**
+
+- `payment_records` - Simplified Stripe payment tracking
+- `stripe_webhook_events` - Event processing and debugging
+- `wallets` - User balance management (both advertiser and promoter)
+- `transactions` - All internal financial movements
+- `sales_records` - Commission tracking for salesman campaigns
+- `stripe_connect_accounts` - Promoter payment accounts
+- `payment_methods` - Stored payment methods
+
+**✅ REMOVED (Redundant Tables):**
+
+- `advertiser_charges` ❌ (duplicated payment_records functionality)
+- `advertiser_spends` ❌ (can be calculated from transactions)
+- `payout_records` ❌ (replaced by transactions)
+- `payout_settings` ❌ (unnecessary complexity)
+- `billing_period_summaries` ❌ (can be calculated on-demand)
+- `financial_analytics` ❌ (can be calculated on-demand)
+- `invoices` ❌ (unnecessary for current use case)
+
+This simplified schema design ensures proper fund management, automated payouts, comprehensive audit trails, and scalable payment processing using a **minimal database approach** with **4 core financial tables** instead of 11+ redundant tables.
