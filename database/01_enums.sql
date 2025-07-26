@@ -210,12 +210,6 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Invoice status enum
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
-        CREATE TYPE invoice_status AS ENUM ('DRAFT', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED');
-    END IF;
-END $$;
 
 -- Stripe Connect status enum
 DO $$ BEGIN

@@ -24,7 +24,7 @@ import {
   PaymentFlowType,
   PlatformFeeType,
 } from '../../database/entities/stripe-enums';
-import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { UserType } from 'src/enums/user-type';
 
 export interface CreatePaymentIntentDto {
   campaignId: string;

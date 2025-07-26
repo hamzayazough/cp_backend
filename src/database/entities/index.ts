@@ -17,11 +17,8 @@ export { PromoterCampaign } from './promoter-campaign.entity';
 export { CampaignApplicationEntity } from './campaign-applications.entity';
 export { ViewStatEntity } from './view-stat.entity';
 export { UniqueViewEntity } from './unique-view.entity';
-export { MessageThread, Message } from './message.entity';
-export { PayoutRecord } from './payout-record.entity';
-export { AdvertiserCharge } from './advertiser-charge.entity';
+export { Message, MessageThread } from './message.entity';
 export { PromoterBalance } from './promoter-balance.entity';
-export { AdvertiserSpend } from './advertiser-spend.entity';
 
 // Analytics entities
 export { CampaignAnalytics } from './campaign-analytics.entity';
@@ -34,10 +31,6 @@ export { PaymentTransaction } from './payment-transaction.entity';
 export { StripeConnectAccount } from './stripe-connect-account.entity';
 export { PaymentMethod } from './payment-method.entity';
 export { CampaignBudgetAllocation } from './campaign-budget-allocation.entity';
-export { BillingPeriodSummary } from './billing-period-summary.entity';
-export { FinancialAnalytics } from './financial-analytics.entity';
-export { PayoutSettings } from './payout-settings.entity';
-export { Invoice } from './invoice.entity';
 export { SalesRecordEntity } from './sales-record.entity';
 
 // Stripe Connect entities

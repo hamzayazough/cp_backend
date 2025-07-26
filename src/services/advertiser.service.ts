@@ -29,7 +29,7 @@ import { AdvertiserWalletService } from './advertiser-wallet.service';
 import { AdvertiserStatsService } from './advertiser-stats.service';
 import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
-import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { UserType } from 'src/enums/user-type';
 import { ReviewCampaignApplicationResult } from '../interfaces/review-campaign-application-result';
 import { S3Service } from './s3.service';
 

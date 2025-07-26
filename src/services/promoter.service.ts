@@ -52,7 +52,7 @@ import {
   ApplicationStatus,
 } from '../database/entities/campaign-applications.entity';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
-import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { UserType } from 'src/enums/user-type';
 import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';

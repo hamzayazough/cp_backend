@@ -131,26 +131,3 @@ export class CampaignBudgetAllocation {
   @JoinColumn({ name: 'promoter_id' })
   promoter: UserEntity | null;
 }
-
-/*
-Simplified Campaign Budget Allocation Design:
-
-This table now focuses on its core responsibility: tracking campaign budget allocations.
-The complex payout logic has been moved to dedicated financial tables:
-
-- Promoter earnings and thresholds → wallets table
-- Salesman commission tracking → sales_records table  
-- Payout processing → payout_records table
-- Stripe integration → stripe_connect_accounts table
-
-This design:
-✅ Follows single responsibility principle
-✅ Reduces complexity and query confusion
-✅ Leverages existing financial infrastructure
-✅ Makes the system more maintainable and scalable
-
-Each campaign type uses this table differently:
-- VISIBILITY: total_budget + rate_per_100_views (earnings tracked in wallets)
-- CONSULTANT/SELLER: total_budget + min_budget (direct payments via payout_records)
-- SALESMAN: total_budget + commission_rate (sales tracked in sales_records)
-*/

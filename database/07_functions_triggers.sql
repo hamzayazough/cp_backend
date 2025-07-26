@@ -87,26 +87,6 @@ CREATE TRIGGER update_wallets_updated_at
     BEFORE UPDATE ON wallets 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_payout_records_updated_at ON payout_records;
-CREATE TRIGGER update_payout_records_updated_at 
-    BEFORE UPDATE ON payout_records 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_charges_updated_at ON advertiser_charges;
-CREATE TRIGGER update_advertiser_charges_updated_at 
-    BEFORE UPDATE ON advertiser_charges 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_balances_updated_at ON promoter_balances;
-CREATE TRIGGER update_promoter_balances_updated_at 
-    BEFORE UPDATE ON promoter_balances 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_spends_updated_at ON advertiser_spends;
-CREATE TRIGGER update_advertiser_spends_updated_at 
-    BEFORE UPDATE ON advertiser_spends 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 DROP TRIGGER IF EXISTS update_stripe_connect_accounts_updated_at ON stripe_connect_accounts;
 CREATE TRIGGER update_stripe_connect_accounts_updated_at 
     BEFORE UPDATE ON stripe_connect_accounts 
@@ -115,26 +95,6 @@ CREATE TRIGGER update_stripe_connect_accounts_updated_at
 DROP TRIGGER IF EXISTS update_payment_methods_updated_at ON payment_methods;
 CREATE TRIGGER update_payment_methods_updated_at 
     BEFORE UPDATE ON payment_methods 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_billing_period_summaries_updated_at ON billing_period_summaries;
-CREATE TRIGGER update_billing_period_summaries_updated_at 
-    BEFORE UPDATE ON billing_period_summaries 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_payout_settings_updated_at ON payout_settings;
-CREATE TRIGGER update_payout_settings_updated_at 
-    BEFORE UPDATE ON payout_settings 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_invoices_updated_at ON invoices;
-CREATE TRIGGER update_invoices_updated_at 
-    BEFORE UPDATE ON invoices 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_financial_analytics_updated_at ON financial_analytics;
-CREATE TRIGGER update_financial_analytics_updated_at 
-    BEFORE UPDATE ON financial_analytics 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ========================================
