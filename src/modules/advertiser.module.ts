@@ -26,8 +26,6 @@ import { CampaignDeliverableEntity } from '../database/entities/campaign-deliver
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import { PaymentMethod } from '../database/entities/payment-method.entity';
-import { AdvertiserCharge } from '../database/entities/advertiser-charge.entity';
-import { AdvertiserSpend } from '../database/entities/advertiser-spend.entity';
 import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 
@@ -48,8 +46,6 @@ import { PaymentRecord } from '../database/entities/payment-record.entity';
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
       PaymentMethod,
-      AdvertiserCharge,
-      AdvertiserSpend,
       CampaignBudgetAllocation,
       PaymentRecord,
     ]),

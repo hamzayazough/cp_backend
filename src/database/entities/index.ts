@@ -41,6 +41,7 @@ export { Invoice } from './invoice.entity';
 export { SalesRecordEntity } from './sales-record.entity';
 
 // Stripe Connect entities
+export { PaymentRecord } from './payment-record.entity';
 export { StripePaymentIntent } from './stripe-payment-intent.entity';
 export { StripeTransfer } from './stripe-transfer.entity';
 export { CampaignPaymentConfig } from './campaign-payment-config.entity';

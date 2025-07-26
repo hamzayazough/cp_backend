@@ -15,8 +15,6 @@ import {
   PaymentMethod,
   PaymentMethodType,
 } from '../database/entities/payment-method.entity';
-import { AdvertiserCharge } from '../database/entities/advertiser-charge.entity';
-import { AdvertiserSpend } from '../database/entities/advertiser-spend.entity';
 import {
   Transaction,
   TransactionType,
@@ -131,10 +129,6 @@ export class AdvertiserPaymentService {
     private readonly advertiserDetailsRepo: Repository<AdvertiserDetailsEntity>,
     @InjectRepository(PaymentMethod)
     private readonly paymentMethodRepo: Repository<PaymentMethod>,
-    @InjectRepository(AdvertiserCharge)
-    private readonly advertiserChargeRepo: Repository<AdvertiserCharge>,
-    @InjectRepository(AdvertiserSpend)
-    private readonly advertiserSpendRepo: Repository<AdvertiserSpend>,
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
     @InjectRepository(CampaignEntity)
@@ -398,44 +392,60 @@ export class AdvertiserPaymentService {
   async getWalletBalance(firebaseUid: string): Promise<WalletBalance> {
     const user = await this.findUserByFirebaseUid(firebaseUid);
 
-    // Use advertiser charges to get wallet balance
-    const advertiserSpend = await this.advertiserSpendRepo.findOne({
-      where: { advertiserId: user.id },
-    });
-
-    const totalSpent = advertiserSpend?.totalSpent || 0;
-
-    // Get total deposited from successful charges
-    const totalCharges: { total: string | null } | undefined =
-      await this.advertiserChargeRepo
-        .createQueryBuilder('charge')
-        .select('SUM(charge.amount)', 'total')
-        .where('charge.advertiserId = :advertiserId', { advertiserId: user.id })
-        .andWhere('charge.status = :status', { status: 'SUCCEEDED' })
+    // Get total deposited from completed wallet deposits using PaymentRecord
+    const totalDeposits: { total: string | null } | undefined =
+      await this.paymentRecordRepo
+        .createQueryBuilder('payment')
+        .select('SUM(payment.amountCents)', 'total')
+        .where('payment.userId = :userId', { userId: user.id })
+        .andWhere('payment.paymentType = :paymentType', {
+          paymentType: 'wallet_deposit',
+        })
+        .andWhere('payment.status = :status', { status: 'completed' })
         .getRawOne();
 
-    const totalDeposited = parseFloat(totalCharges?.total || '0');
-    const currentBalance = Number(totalDeposited - totalSpent);
+    const totalDepositedCents = parseInt(totalDeposits?.total || '0');
+    const totalDeposited = totalDepositedCents / 100; // Convert cents to dollars
 
-    // Get pending charges
-    const pendingCharges: { total: string | null } | undefined =
-      await this.advertiserChargeRepo
-        .createQueryBuilder('charge')
-        .select('SUM(charge.amount)', 'total')
-        .where('charge.advertiserId = :advertiserId', { advertiserId: user.id })
-        .andWhere('charge.status = :status', { status: 'PENDING' })
+    // Get pending deposits
+    const pendingDeposits: { total: string | null } | undefined =
+      await this.paymentRecordRepo
+        .createQueryBuilder('payment')
+        .select('SUM(payment.amountCents)', 'total')
+        .where('payment.userId = :userId', { userId: user.id })
+        .andWhere('payment.paymentType = :paymentType', {
+          paymentType: 'wallet_deposit',
+        })
+        .andWhere('payment.status = :status', { status: 'pending' })
         .getRawOne();
 
-    const pendingAmount = parseFloat(pendingCharges?.total || '0');
+    const pendingAmount = parseInt(pendingDeposits?.total || '0') / 100;
+
+    // Get total spent from campaign funding and other outgoing transactions
+    const totalSpentFromPayments: { total: string | null } | undefined =
+      await this.paymentRecordRepo
+        .createQueryBuilder('payment')
+        .select('SUM(payment.amountCents)', 'total')
+        .where('payment.userId = :userId', { userId: user.id })
+        .andWhere('payment.paymentType = :paymentType', {
+          paymentType: 'campaign_funding',
+        })
+        .andWhere('payment.status = :status', { status: 'completed' })
+        .getRawOne();
+
+    const totalSpentCents = parseInt(totalSpentFromPayments?.total || '0');
+    const totalSpent = totalSpentCents / 100; // Convert cents to dollars
+
+    const currentBalance = totalDeposited - totalSpent;
 
     return {
-      currentBalance: Number(currentBalance),
-      pendingCharges: Number(pendingAmount),
-      totalDeposited,
-      totalSpent,
+      currentBalance: Number(currentBalance.toFixed(2)),
+      pendingCharges: Number(pendingAmount.toFixed(2)),
+      totalDeposited: Number(totalDeposited.toFixed(2)),
+      totalSpent: Number(totalSpent.toFixed(2)),
       availableForWithdrawal: Math.max(
         0,
-        Number(currentBalance - pendingAmount),
+        Number((currentBalance - pendingAmount).toFixed(2)),
       ),
     };
   }
@@ -478,21 +488,51 @@ export class AdvertiserPaymentService {
         firebaseUid: user.firebaseUid,
       },
     });
+    console.log('Creating payment record for intent:', paymentIntent.id);
 
     // Save payment record to database for tracking
-    const paymentRecord = this.paymentRecordRepo.create({
-      stripePaymentIntentId: paymentIntent.id,
-      campaignId: undefined, // No campaign for wallet funding
-      userId: user.id,
-      amountCents: dto.amount,
-      currency: 'USD',
-      paymentType: 'wallet_deposit',
-      status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
-      description: dto.description || 'Add funds to wallet',
-    });
+    try {
+      const paymentRecord = this.paymentRecordRepo.create({
+        stripePaymentIntentId: paymentIntent.id,
+        // campaignId is optional, so we can omit it for wallet funding
+        userId: user.id,
+        amountCents: dto.amount,
+        currency: 'USD',
+        paymentType: 'wallet_deposit',
+        status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
+        description: dto.description || 'Add funds to wallet',
+      });
 
-    await this.paymentRecordRepo.save(paymentRecord);
+      console.log(
+        'Payment record created, about to save:',
+        JSON.stringify(paymentRecord, null, 2),
+      );
 
+      const savedPaymentRecord =
+        await this.paymentRecordRepo.save(paymentRecord);
+      console.log(
+        'Payment record successfully saved with ID:',
+        savedPaymentRecord.id,
+      );
+
+      // Verify it was saved by querying it back
+      const verifyRecord = await this.paymentRecordRepo.findOne({
+        where: { stripePaymentIntentId: paymentIntent.id },
+      });
+      console.log(
+        'Verification query result:',
+        verifyRecord ? 'Found' : 'Not found',
+      );
+    } catch (error) {
+      console.error('Error saving payment record:', error);
+      console.error(
+        'Error details:',
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    }
+
+    console.log('Payment intent created successfully:', paymentIntent.id);
     return {
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
