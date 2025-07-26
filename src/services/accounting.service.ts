@@ -345,36 +345,23 @@ export class AccountingService {
       let spend = await this.advertiserSpendRepository.findOne({
         where: {
           advertiserId,
-          periodStart: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth(),
-            1,
-          ),
-          periodEnd: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth() + 1,
-            0,
-          ),
         },
       });
 
       if (!spend) {
-        // Create new spend record for current month
-        const now = new Date();
+        // Create new spend record
         spend = this.advertiserSpendRepository.create({
           advertiserId,
-          periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
-          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-          campaignsFunded: 0,
           totalSpent: 0,
-          totalCharged: 0,
-          remainingBalance: 0,
+          totalRefunded: 0,
+          pendingCharges: 0,
+          lastChargeDate: new Date(),
         });
       }
 
       // Update spend tracking
-      spend.totalCharged += amount;
-      spend.campaignsFunded += 1;
+      spend.pendingCharges += amount;
+      spend.lastChargeDate = new Date();
 
       await this.advertiserSpendRepository.save(spend);
       this.logger.log(
@@ -423,7 +410,6 @@ export class AccountingService {
           recentCharges: [], // Not applicable for promoters
         };
       } else {
-        const spend = await this.getAdvertiserSpend(userId);
         const currentMonth = new Date().getMonth() + 1;
         const currentYear = new Date().getFullYear();
         const monthlySpend = await this.calculateMonthlyAdvertiserSpend(
@@ -442,7 +428,7 @@ export class AccountingService {
           totalSpentThisMonth: monthlySpend.totalCharged,
           totalSpentLastMonth: 0, // Would need last month calculation
           activeCampaignsBudget: 0, // Would need calculation
-          prepaidBalance: spend?.remainingBalance || 0,
+          prepaidBalance: 0, // Calculated elsewhere or not tracked in AdvertiserSpend
           recentCharges: [], // Would need to fetch recent charges
         };
       }
@@ -478,12 +464,10 @@ export class AccountingService {
   ): AdvertiserSpend => ({
     id: entity.id,
     advertiserId: entity.advertiserId,
-    periodStart: entity.periodStart,
-    periodEnd: entity.periodEnd,
-    campaignsFunded: entity.campaignsFunded,
     totalSpent: entity.totalSpent,
-    totalCharged: entity.totalCharged,
-    remainingBalance: entity.remainingBalance,
+    totalRefunded: entity.totalRefunded,
+    pendingCharges: entity.pendingCharges,
+    lastChargeDate: entity.lastChargeDate,
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,
   });

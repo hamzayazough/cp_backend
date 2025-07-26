@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
 import { AdvertiserService } from '../services/advertiser.service';
+import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
 import { AdvertiserDashboardService } from '../services/advertiser-dashboard.service';
 import { AdvertiserCampaignService } from '../services/advertiser-campaign.service';
 import { AdvertiserWalletService } from '../services/advertiser-wallet.service';
@@ -11,6 +12,7 @@ import { AdvertiserMessageService } from '../services/advertiser-message.service
 import { CampaignService } from '../services/campaign.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
+import { StripeModule } from '../stripe/stripe.module';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -23,6 +25,11 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
+import { PaymentMethod } from '../database/entities/payment-method.entity';
+import { AdvertiserCharge } from '../database/entities/advertiser-charge.entity';
+import { AdvertiserSpend } from '../database/entities/advertiser-spend.entity';
+import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
+import { PaymentRecord } from '../database/entities/payment-record.entity';
 
 @Module({
   imports: [
@@ -40,12 +47,19 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
       CampaignDeliverableEntity,
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
+      PaymentMethod,
+      AdvertiserCharge,
+      AdvertiserSpend,
+      CampaignBudgetAllocation,
+      PaymentRecord,
     ]),
     PromoterModule,
+    StripeModule,
   ],
   controllers: [AdvertiserController],
   providers: [
     AdvertiserService,
+    AdvertiserPaymentService,
     AdvertiserDashboardService,
     AdvertiserCampaignService,
     AdvertiserWalletService,

@@ -6,52 +6,46 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  Index,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 
 @Entity('advertiser_spends')
-@Index(['advertiserId', 'periodStart', 'periodEnd'], { unique: true })
 export class AdvertiserSpend {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'advertiser_id', type: 'uuid' })
+  @Column({ name: 'advertiser_id', type: 'uuid', unique: true })
   advertiserId: string;
-
-  @Column({ name: 'period_start', type: 'timestamptz' })
-  periodStart: Date;
-
-  @Column({ name: 'period_end', type: 'timestamptz' })
-  periodEnd: Date;
-
-  @Column({ name: 'campaigns_funded', type: 'integer', default: 0 })
-  campaignsFunded: number;
 
   @Column({
     name: 'total_spent',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
+    default: 0.0,
   })
   totalSpent: number;
 
   @Column({
-    name: 'total_charged',
+    name: 'total_refunded',
     type: 'decimal',
-    precision: 10,
+    precision: 12,
     scale: 2,
+    default: 0.0,
   })
-  totalCharged: number;
+  totalRefunded: number;
 
   @Column({
-    name: 'remaining_balance',
+    name: 'pending_charges',
     type: 'decimal',
     precision: 10,
     scale: 2,
     default: 0.0,
   })
-  remainingBalance: number;
+  pendingCharges: number;
+
+  @Column({ name: 'last_charge_date', type: 'timestamptz', nullable: true })
+  lastChargeDate: Date;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -53,11 +53,9 @@ export class StripeWebhookService {
     const webhookEvent = this.webhookEventRepository.create({
       stripeEventId: event.id,
       eventType: event.type,
-      livemode: event.livemode,
-      objectId: (event.data.object as any).id || '',
-      objectType: event.data.object.object,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      objectId: ((event.data.object as any).id as string) || '',
       processed: false,
-      rawEventData: event,
     });
 
     return this.webhookEventRepository.save(webhookEvent);
@@ -73,7 +71,6 @@ export class StripeWebhookService {
         processed: !error,
         processedAt: new Date(),
         processingError: error,
-        retryCount: error ? () => 'retry_count + 1' : undefined,
       },
     );
   }

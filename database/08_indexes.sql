@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns(created_at);
 CREATE INDEX IF NOT EXISTS idx_campaigns_expiry_date ON campaigns(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_campaigns_is_public ON campaigns(is_public);
-CREATE INDEX IF NOT EXISTS idx_campaigns_selected_promoter_id ON campaigns(selected_promoter_id);
+-- Removed: selected_promoter_id column doesn't exist in campaigns table
 CREATE INDEX IF NOT EXISTS idx_campaigns_min_budget ON campaigns(min_budget);
 CREATE INDEX IF NOT EXISTS idx_campaigns_max_budget ON campaigns(max_budget);
 CREATE INDEX IF NOT EXISTS idx_campaigns_advertiser_types ON campaigns USING GIN(advertiser_types);

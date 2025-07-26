@@ -69,12 +69,10 @@ export interface PromoterBalance {
 export interface AdvertiserSpend {
   id: string;
   advertiserId: string;
-  periodStart: Date;
-  periodEnd: Date;
-  campaignsFunded: number;
   totalSpent: number;
-  totalCharged: number;
-  remainingBalance: number;
+  totalRefunded: number;
+  pendingCharges: number;
+  lastChargeDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -143,7 +141,7 @@ export interface PaymentDashboard {
   totalEarningsLastMonth: number;
   nextPayoutDate?: Date;
   recentPayouts: PayoutRecord[];
-  
+
   // Advertiser view
   totalSpentThisMonth: number;
   totalSpentLastMonth: number;
