@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS advertiser_details (
     company_name VARCHAR(255) NOT NULL,
     company_website TEXT,
     verified BOOLEAN DEFAULT FALSE,
+    stripe_connected_account_id VARCHAR(255) UNIQUE, -- Stripe Connected Account ID for payouts
     stripe_customer_id VARCHAR(255) UNIQUE, -- Stripe Customer ID for payment processing
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

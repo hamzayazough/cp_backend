@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS payment_records (
     -- Basic payment info (for quick queries without API calls)
     amount_cents INTEGER NOT NULL,
     currency VARCHAR(3) DEFAULT 'USD',
-    payment_type VARCHAR(50) NOT NULL, -- 'campaign_funding', 'wallet_deposit', 'withdrawal'
+    payment_type VARCHAR(50) NOT NULL, -- 'CAMPAIGN_FUNDING', 'WALLET_DEPOSIT', 'WITHDRAWAL'
     
     -- Simple status tracking
     status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed', 'failed', 'cancelled'

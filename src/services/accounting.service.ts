@@ -117,7 +117,7 @@ export class AccountingService {
       for (const payment of paymentRecords) {
         totalSpent += payment.amountCents;
 
-        const paymentType = payment.paymentType || 'UNKNOWN';
+        const paymentType = payment.paymentType || 'CAMPAIGN_FUNDING';
         spendByType[paymentType] =
           (spendByType[paymentType] || 0) + payment.amountCents;
       }

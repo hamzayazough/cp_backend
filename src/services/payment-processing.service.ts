@@ -202,7 +202,7 @@ export class PaymentProcessingService {
       const refundRecord = this.paymentRecordRepository.create({
         userId: advertiserId,
         amountCents: refundAmount,
-        paymentType: 'REFUND',
+        paymentType: 'WITHDRAWAL',
         status: 'completed',
         description: `Refund for campaign ${campaign.title}`,
         stripePaymentIntentId: `refund_${Date.now()}`,

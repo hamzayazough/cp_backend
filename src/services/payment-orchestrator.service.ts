@@ -172,7 +172,7 @@ export class PaymentServiceImpl {
       const refundRecord = this.paymentRecordRepo.create({
         userId: advertiserId,
         amountCents: -(amount || 0), // Negative amount for refund
-        paymentType: 'refund',
+        paymentType: 'WITHDRAWAL',
         status: 'completed',
         description: `Campaign budget refund for ${campaignId}`,
         stripePaymentIntentId: `refund_${Date.now()}`,

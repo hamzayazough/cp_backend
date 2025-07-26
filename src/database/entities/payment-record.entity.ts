@@ -31,7 +31,7 @@ export class PaymentRecord {
   currency: string;
 
   @Column({ name: 'payment_type' })
-  paymentType: string; // 'campaign_funding', 'wallet_deposit', 'withdrawal'
+  paymentType: string; // 'CAMPAIGN_FUNDING', 'WALLET_DEPOSIT', 'WITHDRAWAL'
 
   @Column({ default: 'pending' })
   status: string; // 'pending', 'completed', 'failed', 'cancelled'
