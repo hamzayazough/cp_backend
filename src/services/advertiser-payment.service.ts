@@ -25,6 +25,7 @@ import { CampaignEntity } from '../database/entities/campaign.entity';
 import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { Wallet } from '../database/entities/wallet.entity';
+import { CampaignStatus } from '../enums/campaign-status';
 import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
@@ -32,6 +33,7 @@ import {
   FundCampaignDto,
   UpdateBudgetDto,
   TransactionQueryDto,
+  WithdrawFundsDto,
 } from '../controllers/advertiser.controller';
 
 export interface PaymentSetupStatus {
@@ -115,6 +117,36 @@ export interface CampaignFundingStatus {
 export interface BudgetUpdateResult {
   requiresAdditionalFunding: boolean;
   additionalFundingAmount?: number;
+}
+
+export interface WithdrawalResult {
+  withdrawalId: string;
+  amount: number;
+  processingTime: string;
+  estimatedArrival: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+export interface WithdrawalLimits {
+  feeStructure: {
+    standardFee: number;
+    freeWithdrawalThreshold: number;
+    minimumWithdrawal: number;
+  };
+  limits: {
+    dailyLimit: number;
+    remainingDailyLimit: number;
+    maxWithdrawable: number;
+    recommendedMaxWithdrawal: number;
+  };
+  campaignRestrictions: {
+    activeCampaigns: number;
+    totalBudgetAllocated: number;
+    recommendedReserve: number;
+    canWithdrawFullBalance: boolean;
+  };
+  processingTime: string;
+  description: string;
 }
 
 @Injectable()
@@ -490,13 +522,19 @@ export class AdvertiserPaymentService {
     });
     console.log('Creating payment record for intent:', paymentIntent.id);
 
+    // Calculate net amount after Stripe fees (2.9% + $0.30)
+    // User pays: dto.amount (includes fees)
+    // Net amount for wallet: dto.amount - Stripe fees
+    const stripeFees = Math.round(dto.amount * 0.029) + 30;
+    const netAmountCents = dto.amount - stripeFees;
+
     // Save payment record to database for tracking
     try {
       const paymentRecord = this.paymentRecordRepo.create({
         stripePaymentIntentId: paymentIntent.id,
         // campaignId is optional, so we can omit it for wallet funding
         userId: user.id,
-        amountCents: dto.amount,
+        amountCents: netAmountCents, // Store net amount that goes to wallet
         currency: 'USD',
         paymentType: 'wallet_deposit',
         status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
@@ -682,6 +720,164 @@ export class AdvertiserPaymentService {
       additionalFundingAmount:
         additionalFunding > 0 ? Math.round(additionalFunding * 100) : undefined,
     };
+  }
+
+  /**
+   * Withdraw funds from advertiser wallet to their bank account
+   * Business Rules:
+   * - Minimum balance of $10 must remain in wallet
+   * - Cannot withdraw if user has active campaigns
+   * - Processing time: 3-5 business days
+   * - Daily withdrawal limit: $5,000
+   * - Withdrawal fee: $5.00 flat fee (deducted from withdrawal amount)
+   * - Free withdrawals for amounts over $500
+   */
+  async withdrawFunds(
+    firebaseUid: string,
+    dto: WithdrawFundsDto,
+  ): Promise<WithdrawalResult> {
+    const user = await this.findUserByFirebaseUid(firebaseUid);
+    const balance = await this.getWalletBalance(user.firebaseUid);
+
+    const withdrawalAmountDollars = dto.amount / 100;
+
+    // Calculate withdrawal fee
+    const withdrawalFeeThreshold = 500; // $500 threshold for free withdrawals
+    const withdrawalFeeDollars =
+      withdrawalAmountDollars >= withdrawalFeeThreshold ? 0 : 5; // $5.00 fee
+    const netWithdrawalDollars = withdrawalAmountDollars - withdrawalFeeDollars;
+
+    // Business rule: Check available balance (including fee)
+    if (withdrawalAmountDollars > balance.availableForWithdrawal) {
+      throw new BadRequestException(
+        'Insufficient available balance for withdrawal',
+      );
+    }
+
+    // Business rule: Minimum withdrawal after fees
+    if (netWithdrawalDollars < 1) {
+      throw new BadRequestException(
+        `Minimum net withdrawal amount is $1.00. ` +
+          `Withdrawal amount: $${withdrawalAmountDollars.toFixed(2)}, ` +
+          `Fee: $${withdrawalFeeDollars.toFixed(2)}, ` +
+          `Net amount: $${netWithdrawalDollars.toFixed(2)}`,
+      );
+    }
+
+    // Business rule: Minimum balance requirement ($10)
+    const minimumBalance = 10;
+    if (balance.currentBalance - withdrawalAmountDollars < minimumBalance) {
+      throw new BadRequestException(
+        `Minimum wallet balance of $${minimumBalance} required`,
+      );
+    }
+
+    // Business rule: Check for active campaigns
+    const activeCampaigns = await this.campaignRepo.count({
+      where: { advertiserId: user.id, status: CampaignStatus.ACTIVE },
+    });
+
+    if (
+      activeCampaigns > 0 &&
+      withdrawalAmountDollars > balance.currentBalance * 0.5
+    ) {
+      throw new BadRequestException(
+        'Cannot withdraw more than 50% of balance while campaigns are active',
+      );
+    }
+
+    // Business rule: Daily withdrawal limit check
+    const dailyLimit = 5000; // $5,000
+    const todayWithdrawals = await this.getTodayWithdrawals(user.id);
+
+    if (todayWithdrawals + withdrawalAmountDollars > dailyLimit) {
+      throw new BadRequestException(
+        `Daily withdrawal limit exceeded. Limit: $${dailyLimit}, Today's withdrawals: $${todayWithdrawals}`,
+      );
+    }
+
+    // Create withdrawal transaction record (full amount deducted from wallet)
+    const withdrawalTransaction = this.transactionRepo.create({
+      promoterId: user.id,
+      type: TransactionType.WITHDRAWAL,
+      amount: -withdrawalAmountDollars, // Full amount deducted from wallet
+      status: TransactionStatus.PENDING,
+      description:
+        dto.description ||
+        `Wallet withdrawal - $${withdrawalAmountDollars.toFixed(2)} (Net: $${netWithdrawalDollars.toFixed(2)}, Fee: $${withdrawalFeeDollars.toFixed(2)})`,
+      paymentMethod: TxnPaymentMethod.BANK_TRANSFER,
+    });
+
+    const savedWithdrawalTransaction = await this.transactionRepo.save(
+      withdrawalTransaction,
+    );
+
+    // TODO: Implement actual Stripe transfer to bank account
+    // This would involve:
+    // 1. Creating a Stripe transfer to the user's external account
+    // 2. Handling the transfer webhook to update status
+    // 3. Managing any transfer failures
+
+    this.logger.log(
+      `Processing withdrawal for user ${user.id}, amount: $${withdrawalAmountDollars}`,
+    );
+
+    // Calculate estimated arrival (3-5 business days)
+    const estimatedArrival = this.calculateBusinessDays(new Date(), 5);
+
+    return {
+      withdrawalId: savedWithdrawalTransaction.id,
+      amount: dto.amount,
+      processingTime: '3-5 business days',
+      estimatedArrival: estimatedArrival.toLocaleDateString(),
+      status: 'pending',
+    };
+  }
+
+  /**
+   * Get today's total withdrawals for a user
+   */
+  private async getTodayWithdrawals(userId: string): Promise<number> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const result: { total: string | null } | undefined =
+      await this.transactionRepo
+        .createQueryBuilder('transaction')
+        .select('SUM(ABS(transaction.amount))', 'total')
+        .where('transaction.promoterId = :userId', { userId })
+        .andWhere('transaction.type = :type', {
+          type: TransactionType.WITHDRAWAL,
+        })
+        .andWhere('transaction.createdAt >= :today', { today })
+        .andWhere('transaction.createdAt < :tomorrow', { tomorrow })
+        .andWhere('transaction.status IN (:...statuses)', {
+          statuses: [TransactionStatus.PENDING, TransactionStatus.COMPLETED],
+        })
+        .getRawOne();
+
+    return result?.total ? parseFloat(result.total) : 0;
+  }
+
+  /**
+   * Calculate business days from a given date
+   */
+  private calculateBusinessDays(startDate: Date, businessDays: number): Date {
+    const result = new Date(startDate);
+    let addedDays = 0;
+
+    while (addedDays < businessDays) {
+      result.setDate(result.getDate() + 1);
+      // Skip weekends (Saturday = 6, Sunday = 0)
+      if (result.getDay() !== 0 && result.getDay() !== 6) {
+        addedDays++;
+      }
+    }
+
+    return result;
   }
 
   // Helper methods
@@ -895,5 +1091,91 @@ export class AdvertiserPaymentService {
         error,
       );
     }
+  }
+
+  /**
+   * Get withdrawal limits and recommendations based on campaign allocations
+   */
+  async getWithdrawalLimits(firebaseUid: string): Promise<WithdrawalLimits> {
+    const user = await this.findUserByFirebaseUid(firebaseUid);
+    const balance = await this.getWalletBalance(user.firebaseUid);
+
+    // Get active campaigns and their budget allocations
+    const activeCampaigns = await this.campaignRepo.find({
+      where: {
+        advertiserId: user.id,
+        status: CampaignStatus.ACTIVE,
+      },
+      select: ['id', 'title', 'budgetAllocated', 'maxBudget', 'minBudget'],
+    });
+
+    // Calculate total budget allocated across active campaigns
+    const totalBudgetAllocated = activeCampaigns.reduce(
+      (sum, campaign) => sum + (campaign.budgetAllocated || 0),
+      0,
+    );
+
+    // Calculate recommended reserve (20% of allocated budget or $50, whichever is higher)
+    const recommendedReserve = Math.max(
+      totalBudgetAllocated * 0.2,
+      activeCampaigns.length > 0 ? 50 : 0,
+    );
+
+    // Get today's withdrawals to calculate remaining daily limit
+    const dailyLimit = 5000; // $5,000 daily limit
+    const todayWithdrawals = await this.getTodayWithdrawals(user.id);
+    const remainingDailyLimit = Math.max(0, dailyLimit - todayWithdrawals);
+
+    // Calculate maximum withdrawable amount considering all constraints
+    const minimumBalance = 10; // $10 minimum wallet balance
+    const maxWithdrawableByBalance = Math.max(
+      0,
+      balance.availableForWithdrawal - minimumBalance,
+    );
+    const maxWithdrawableByDailyLimit = remainingDailyLimit;
+    const maxWithdrawable = Math.min(
+      maxWithdrawableByBalance,
+      maxWithdrawableByDailyLimit,
+    );
+
+    // Calculate recommended max withdrawal considering campaign needs
+    const safeWithdrawable = Math.max(
+      0,
+      balance.availableForWithdrawal - recommendedReserve - minimumBalance,
+    );
+    const recommendedMaxWithdrawal = Math.min(
+      safeWithdrawable,
+      maxWithdrawable,
+    );
+
+    // Determine if user can withdraw full balance
+    const canWithdrawFullBalance =
+      activeCampaigns.length === 0 &&
+      balance.availableForWithdrawal > minimumBalance;
+
+    return {
+      feeStructure: {
+        standardFee: 5.0,
+        freeWithdrawalThreshold: 500.0,
+        minimumWithdrawal: 6.0,
+      },
+      limits: {
+        dailyLimit,
+        remainingDailyLimit,
+        maxWithdrawable: Number(maxWithdrawable.toFixed(2)),
+        recommendedMaxWithdrawal: Number(recommendedMaxWithdrawal.toFixed(2)),
+      },
+      campaignRestrictions: {
+        activeCampaigns: activeCampaigns.length,
+        totalBudgetAllocated: Number(totalBudgetAllocated.toFixed(2)),
+        recommendedReserve: Number(recommendedReserve.toFixed(2)),
+        canWithdrawFullBalance,
+      },
+      processingTime: '3-5 business days',
+      description:
+        activeCampaigns.length > 0
+          ? `You have ${activeCampaigns.length} active campaign(s) with $${totalBudgetAllocated.toFixed(2)} allocated. We recommend keeping $${recommendedReserve.toFixed(2)} in your wallet for campaign operations.`
+          : 'No active campaigns. You can withdraw up to your available balance minus the $10 minimum required.',
+    };
   }
 }

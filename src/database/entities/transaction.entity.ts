@@ -16,6 +16,7 @@ export enum TransactionType {
   SALESMAN_COMMISSION = 'SALESMAN_COMMISSION',
   MONTHLY_PAYOUT = 'MONTHLY_PAYOUT',
   DIRECT_PAYMENT = 'DIRECT_PAYMENT',
+  WITHDRAWAL = 'WITHDRAWAL',
 }
 
 export enum TransactionStatus {

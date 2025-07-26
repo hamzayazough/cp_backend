@@ -69,7 +69,7 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
         CREATE TYPE transaction_type AS ENUM (
             'VIEW_EARNING', 'CONSULTANT_PAYMENT', 'SALESMAN_COMMISSION', 
-            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT'
+            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT', 'WITHDRAWAL'
         );
     END IF;
 END $$;

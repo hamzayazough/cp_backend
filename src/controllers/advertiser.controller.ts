@@ -72,6 +72,12 @@ export class TransactionQueryDto {
   type?: 'DEPOSIT' | 'WITHDRAWAL' | 'CAMPAIGN_FUNDING' | 'REFUND';
 }
 
+export class WithdrawFundsDto {
+  amount: number; // Amount in cents
+  bankAccountId?: string; // Optional: specific bank account to withdraw to
+  description?: string;
+}
+
 @Controller('advertiser')
 export class AdvertiserController {
   constructor(
@@ -533,6 +539,57 @@ export class AdvertiserController {
       data: result,
       message: 'Add funds request processed successfully',
     };
+  }
+
+  @Post('wallet/withdraw-funds')
+  @HttpCode(HttpStatus.OK)
+  async withdrawFunds(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: WithdrawFundsDto,
+  ) {
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    if (dto.amount < 600) {
+      // Minimum $6 withdrawal to cover $5 fee + $1 net
+      throw new BadRequestException(
+        'Minimum withdrawal amount is $6.00 (includes $5.00 processing fee)',
+      );
+    }
+
+    const result = await this.advertiserPaymentService.withdrawFunds(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Withdrawal request processed successfully',
+    };
+  }
+
+  @Get('wallet/withdrawal-limits')
+  @HttpCode(HttpStatus.OK)
+  async getWithdrawalLimits(@Request() req: { user: FirebaseUser }) {
+    try {
+      const limits = await this.advertiserPaymentService.getWithdrawalLimits(
+        req.user.uid,
+      );
+
+      return {
+        success: true,
+        data: limits,
+        message: 'Withdrawal limits retrieved successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve withdrawal limits',
+      );
+    }
   }
 
   @Get('wallet/transactions')
