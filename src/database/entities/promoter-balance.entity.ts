@@ -9,7 +9,6 @@ import {
   Index,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-import { PayoutRecord } from './payout-record.entity';
 
 @Entity('promoter_balances')
 @Index(['promoterId', 'periodStart', 'periodEnd'], { unique: true })
@@ -73,9 +72,6 @@ export class PromoterBalance {
   @Column({ name: 'paid_out', type: 'boolean', default: false })
   paidOut: boolean;
 
-  @Column({ name: 'payout_record_id', type: 'uuid', nullable: true })
-  payoutRecordId?: string;
-
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
@@ -86,8 +82,4 @@ export class PromoterBalance {
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'promoter_id' })
   promoter: UserEntity;
-
-  @ManyToOne(() => PayoutRecord, { eager: false })
-  @JoinColumn({ name: 'payout_record_id' })
-  payoutRecord?: PayoutRecord;
 }

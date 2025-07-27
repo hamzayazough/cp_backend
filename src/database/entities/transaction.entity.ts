@@ -9,13 +9,25 @@ import {
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { CampaignEntity } from './campaign.entity';
+import { PaymentRecord } from './payment-record.entity';
+import { UserType } from '../../enums/user-type';
+
+// Transformer to handle PostgreSQL DECIMAL to JavaScript number conversion
+const DecimalTransformer = {
+  to: (value: number): number => value,
+  from: (value: string): number => parseFloat(value),
+};
 
 export enum TransactionType {
+  WALLET_DEPOSIT = 'WALLET_DEPOSIT',
+  CAMPAIGN_FUNDING = 'CAMPAIGN_FUNDING',
+  WITHDRAWAL = 'WITHDRAWAL',
   VIEW_EARNING = 'VIEW_EARNING',
   CONSULTANT_PAYMENT = 'CONSULTANT_PAYMENT',
   SALESMAN_COMMISSION = 'SALESMAN_COMMISSION',
   MONTHLY_PAYOUT = 'MONTHLY_PAYOUT',
   DIRECT_PAYMENT = 'DIRECT_PAYMENT',
+  PLATFORM_FEE = 'PLATFORM_FEE',
 }
 
 export enum TransactionStatus {
@@ -36,13 +48,27 @@ export class Transaction {
   id: string;
 
   @Column({ name: 'user_id', type: 'uuid' })
-  promoterId: string;
+  userId: string;
+
+  @Column({ name: 'user_type', type: 'enum', enum: UserType })
+  userType: UserType;
 
   @Column({ name: 'campaign_id', type: 'uuid', nullable: true })
   campaignId?: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: DecimalTransformer,
+  })
   amount: number;
+
+  @Column({ name: 'gross_amount_cents', type: 'integer', nullable: true })
+  grossAmountCents?: number;
+
+  @Column({ name: 'platform_fee_cents', type: 'integer', default: 0 })
+  platformFeeCents: number;
 
   @Column({
     type: 'enum',
@@ -54,8 +80,13 @@ export class Transaction {
   @Column({ type: 'enum', enum: TransactionType })
   type: TransactionType;
 
-  @Column({ name: 'payment_method', type: 'enum', enum: PaymentMethod })
-  paymentMethod: PaymentMethod;
+  @Column({
+    name: 'payment_method',
+    type: 'enum',
+    enum: PaymentMethod,
+    nullable: true,
+  })
+  paymentMethod?: PaymentMethod;
 
   @Column({ type: 'text', nullable: true })
   description?: string;
@@ -75,6 +106,9 @@ export class Transaction {
   })
   stripeTransactionId?: string;
 
+  @Column({ name: 'payment_record_id', type: 'uuid', nullable: true })
+  paymentRecordId?: string;
+
   @Column({ name: 'processed_at', type: 'timestamptz', nullable: true })
   processedAt?: Date;
 
@@ -87,9 +121,13 @@ export class Transaction {
   // Relations
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'user_id' })
-  promoter: UserEntity;
+  user: UserEntity;
 
   @ManyToOne(() => CampaignEntity, { eager: false })
   @JoinColumn({ name: 'campaign_id' })
   campaign?: CampaignEntity;
+
+  @ManyToOne(() => PaymentRecord, { eager: false })
+  @JoinColumn({ name: 'payment_record_id' })
+  paymentRecord?: PaymentRecord;
 }

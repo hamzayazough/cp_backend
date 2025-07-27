@@ -10,9 +10,13 @@ import {
   Param,
   Delete,
   Put,
+  Query,
+  HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
+import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
 import { PromoterService } from '../services/promoter.service';
 import {
   CampaignService,
@@ -35,10 +39,63 @@ import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
 
+// Payment DTOs
+export class CompletePaymentSetupDto {
+  companyName: string;
+  email: string;
+}
+
+export class AddPaymentMethodDto {
+  paymentMethodId: string;
+  setAsDefault?: boolean = false;
+}
+
+export class AddFundsDto {
+  amount: number; // in cents
+  paymentMethodId?: string;
+  description?: string;
+}
+
+export class FundCampaignDto {
+  amount: number; // in cents
+  source: 'wallet' | 'direct';
+  paymentMethodId?: string;
+}
+
+export class UpdateBudgetDto {
+  newBudget: number; // in cents
+}
+
+export class TransactionQueryDto {
+  page?: number = 1;
+  limit?: number = 10;
+  // Updated to support both legacy and new transaction types for backward compatibility
+  type?:
+    | 'DEPOSIT' // Legacy: maps to WALLET_DEPOSIT
+    | 'WITHDRAWAL' // Maps to WITHDRAWAL
+    | 'CAMPAIGN_FUNDING' // Maps to CAMPAIGN_FUNDING
+    | 'REFUND' // Legacy: searches for refund descriptions
+    // New unified transaction types
+    | 'WALLET_DEPOSIT'
+    | 'VIEW_EARNING'
+    | 'CONSULTANT_PAYMENT'
+    | 'SALESMAN_COMMISSION'
+    | 'MONTHLY_PAYOUT'
+    | 'DIRECT_PAYMENT'
+    | 'PLATFORM_FEE';
+}
+
+export class WithdrawFundsDto {
+  amount: number; // Amount in cents
+  bankAccountId?: string; // Optional: specific bank account to withdraw to
+  description?: string;
+}
+
 @Controller('advertiser')
 export class AdvertiserController {
   constructor(
     private readonly advertiserService: AdvertiserService,
+    private readonly advertiserPaymentService: AdvertiserPaymentService,
     private readonly campaignService: CampaignService,
     private readonly promoterService: PromoterService,
   ) {}
@@ -345,6 +402,308 @@ export class AdvertiserController {
       success: true,
       data,
       message: 'Campaign retrieved successfully',
+    };
+  }
+
+  // Payment Setup Endpoints
+
+  @Get('payment-setup/status')
+  @HttpCode(HttpStatus.OK)
+  async getPaymentSetupStatus(@Request() req: { user: FirebaseUser }) {
+    const status = await this.advertiserPaymentService.getPaymentSetupStatus(
+      req.user.uid,
+    );
+
+    return {
+      success: true,
+      data: status,
+      message: 'Payment setup status retrieved successfully',
+    };
+  }
+
+  @Post('payment-setup/complete')
+  @HttpCode(HttpStatus.OK)
+  async completePaymentSetup(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: CompletePaymentSetupDto,
+  ) {
+    const result = await this.advertiserPaymentService.completePaymentSetup(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Payment setup completed successfully',
+    };
+  }
+
+  // Payment Methods Endpoints
+
+  @Get('payment-methods')
+  @HttpCode(HttpStatus.OK)
+  async getPaymentMethods(@Request() req: { user: FirebaseUser }) {
+    const paymentMethods =
+      await this.advertiserPaymentService.getPaymentMethods(req.user.uid);
+
+    return {
+      success: true,
+      data: paymentMethods,
+      message: 'Payment methods retrieved successfully',
+    };
+  }
+
+  @Post('payment-methods/setup-intent')
+  @HttpCode(HttpStatus.OK)
+  async createSetupIntent(@Request() req: { user: FirebaseUser }) {
+    const setupIntent = await this.advertiserPaymentService.createSetupIntent(
+      req.user.uid,
+    );
+
+    return {
+      success: true,
+      data: setupIntent,
+      message: 'Setup intent created successfully',
+    };
+  }
+
+  @Post('payment-methods')
+  @HttpCode(HttpStatus.OK)
+  async addPaymentMethod(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: AddPaymentMethodDto,
+  ) {
+    await this.advertiserPaymentService.addPaymentMethod(req.user.uid, dto);
+
+    return {
+      success: true,
+      message: 'Payment method added successfully',
+    };
+  }
+
+  @Delete('payment-methods/:paymentMethodId')
+  @HttpCode(HttpStatus.OK)
+  async removePaymentMethod(
+    @Request() req: { user: FirebaseUser },
+    @Param('paymentMethodId') paymentMethodId: string,
+  ) {
+    await this.advertiserPaymentService.removePaymentMethod(
+      req.user.uid,
+      paymentMethodId,
+    );
+
+    return {
+      success: true,
+      message: 'Payment method removed successfully',
+    };
+  }
+
+  @Put('payment-methods/:paymentMethodId/default')
+  @HttpCode(HttpStatus.OK)
+  async setDefaultPaymentMethod(
+    @Request() req: { user: FirebaseUser },
+    @Param('paymentMethodId') paymentMethodId: string,
+  ) {
+    await this.advertiserPaymentService.setDefaultPaymentMethod(
+      req.user.uid,
+      paymentMethodId,
+    );
+
+    return {
+      success: true,
+      message: 'Default payment method updated successfully',
+    };
+  }
+
+  // Wallet Management Endpoints
+
+  @Get('wallet/balance')
+  @HttpCode(HttpStatus.OK)
+  async getWalletBalance(@Request() req: { user: FirebaseUser }) {
+    const balance = await this.advertiserPaymentService.getWalletBalance(
+      req.user.uid,
+    );
+
+    return {
+      success: true,
+      data: balance,
+      message: 'Wallet balance retrieved successfully',
+    };
+  }
+
+  @Post('wallet/add-funds')
+  @HttpCode(HttpStatus.OK)
+  async addFunds(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: AddFundsDto,
+  ) {
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    const result = await this.advertiserPaymentService.addFunds(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Add funds request processed successfully',
+    };
+  }
+
+  // TODO: work back on this once advertiser will have a stripe connect id
+  @Post('wallet/withdraw-funds')
+  @HttpCode(HttpStatus.OK)
+  async withdrawFunds(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: WithdrawFundsDto,
+  ) {
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    if (dto.amount < 600) {
+      // Minimum $6 withdrawal to cover $5 fee + $1 net
+      throw new BadRequestException(
+        'Minimum withdrawal amount is $6.00 (includes $5.00 processing fee)',
+      );
+    }
+
+    const result = await this.advertiserPaymentService.withdrawFunds(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Withdrawal request processed successfully',
+    };
+  }
+
+  @Get('wallet/withdrawal-limits')
+  @HttpCode(HttpStatus.OK)
+  async getWithdrawalLimits(@Request() req: { user: FirebaseUser }) {
+    try {
+      const limits = await this.advertiserPaymentService.getWithdrawalLimits(
+        req.user.uid,
+      );
+
+      return {
+        success: true,
+        data: limits,
+        message: 'Withdrawal limits retrieved successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to retrieve withdrawal limits',
+      );
+    }
+  }
+
+  @Get('wallet/transactions')
+  @HttpCode(HttpStatus.OK)
+  async getWalletTransactions(
+    @Request() req: { user: FirebaseUser },
+    @Query() query: TransactionQueryDto,
+  ) {
+    // Validate pagination parameters
+    if (query.limit && (query.limit < 1 || query.limit > 100)) {
+      throw new BadRequestException('Limit must be between 1 and 100');
+    }
+
+    if (query.page && query.page < 1) {
+      throw new BadRequestException('Page must be greater than 0');
+    }
+
+    const transactions = await this.advertiserPaymentService.getTransactions(
+      req.user.uid,
+      query,
+    );
+
+    return {
+      success: true,
+      data: transactions,
+      message: 'Wallet transactions retrieved successfully',
+    };
+  }
+
+  // Campaign Funding Endpoints
+
+  @Post('campaigns/:campaignId/fund')
+  @HttpCode(HttpStatus.OK)
+  async fundCampaign(
+    @Request() req: { user: FirebaseUser },
+    @Param('campaignId') campaignId: string,
+    @Body() dto: FundCampaignDto,
+  ) {
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    if (dto.source === 'direct' && !dto.paymentMethodId) {
+      throw new BadRequestException(
+        'Payment method ID is required for direct payments',
+      );
+    }
+
+    const result = await this.advertiserPaymentService.fundCampaign(
+      req.user.uid,
+      campaignId,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Campaign funded successfully',
+    };
+  }
+
+  @Get('campaigns/:campaignId/funding-status')
+  @HttpCode(HttpStatus.OK)
+  async getCampaignFundingStatus(
+    @Request() req: { user: FirebaseUser },
+    @Param('campaignId') campaignId: string,
+  ) {
+    const status = await this.advertiserPaymentService.getCampaignFundingStatus(
+      req.user.uid,
+      campaignId,
+    );
+
+    return {
+      success: true,
+      data: status,
+      message: 'Campaign funding status retrieved successfully',
+    };
+  }
+
+  @Put('campaigns/:campaignId/budget')
+  @HttpCode(HttpStatus.OK)
+  async updateCampaignBudget(
+    @Request() req: { user: FirebaseUser },
+    @Param('campaignId') campaignId: string,
+    @Body() dto: UpdateBudgetDto,
+  ) {
+    if (dto.newBudget <= 0) {
+      throw new BadRequestException('Budget must be greater than 0');
+    }
+
+    const result = await this.advertiserPaymentService.updateCampaignBudget(
+      req.user.uid,
+      campaignId,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: 'Campaign budget updated successfully',
     };
   }
 }

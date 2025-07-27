@@ -5,6 +5,7 @@ import { Wallet } from '../database/entities/wallet.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { AdvertiserWallet } from '../interfaces/advertiser-dashboard';
 import { QueryResult } from 'src/types/query-result.types';
+import { UserType } from '../enums/user-type';
 
 @Injectable()
 export class AdvertiserWalletService {
@@ -17,12 +18,13 @@ export class AdvertiserWalletService {
 
   async getWalletInfo(advertiserId: string): Promise<AdvertiserWallet> {
     let wallet = await this.walletRepository.findOne({
-      where: { promoterId: advertiserId },
+      where: { userId: advertiserId, userType: UserType.ADVERTISER },
     });
 
     if (!wallet) {
       wallet = this.walletRepository.create({
-        promoterId: advertiserId,
+        userId: advertiserId,
+        userType: UserType.ADVERTISER,
         currentBalance: 0,
         pendingBalance: 0,
       });

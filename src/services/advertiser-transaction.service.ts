@@ -35,8 +35,8 @@ export class AdvertiserTransactionService {
       date: transaction.createdAt.toISOString(),
       campaign: transaction.campaign?.title || 'N/A',
       campaignId: transaction.campaignId || '',
-      promoter: transaction.promoter?.name,
-      promoterId: transaction.promoterId,
+      promoter: transaction.user?.name,
+      promoterId: transaction.userId,
       type: this.mapTransactionType(transaction.type),
       paymentMethod: transaction.paymentMethod as
         | 'WALLET'

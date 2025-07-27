@@ -2,17 +2,18 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 // Services
-import { PaymentServiceImpl } from '../services/payment-orchestrator.service';
-import { PaymentProcessingService } from '../services/payment-processing.service';
-import { AccountingService } from '../services/accounting.service';
+// import { PaymentServiceImpl } from '../services/payment-orchestrator.service'; // TODO: Disabled
+// import { PaymentProcessingService } from '../services/payment-processing.service'; // TODO: Disabled
+// import { AccountingService } from '../services/accounting.service'; // TODO: Disabled
 import { StripeIntegrationService } from '../services/stripe-integration.service';
 
 // Entities
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PayoutRecord as PayoutRecordEntity } from '../database/entities/payout-record.entity';
-import { AdvertiserCharge as AdvertiserChargeEntity } from '../database/entities/advertiser-charge.entity';
+import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import { PaymentRecord } from '../database/entities/payment-record.entity';
+import { Transaction } from '../database/entities/transaction.entity';
+import { Wallet } from '../database/entities/wallet.entity';
 import { PromoterBalance as PromoterBalanceEntity } from '../database/entities/promoter-balance.entity';
-import { AdvertiserSpend as AdvertiserSpendEntity } from '../database/entities/advertiser-spend.entity';
 import { UserEntity } from '../database/entities/user.entity';
 
 /**
@@ -22,33 +23,34 @@ import { UserEntity } from '../database/entities/user.entity';
   imports: [
     TypeOrmModule.forFeature([
       CampaignEntity,
-      PayoutRecordEntity,
-      AdvertiserChargeEntity,
+      PromoterCampaign,
+      PaymentRecord,
+      Transaction,
+      Wallet,
       PromoterBalanceEntity,
-      AdvertiserSpendEntity,
       UserEntity,
     ]),
   ],
   providers: [
     // Core payment services
-    PaymentProcessingService,
-    AccountingService,
+    // PaymentProcessingService, // TODO: Disabled until refactored to use PaymentRecord
+    // AccountingService, // TODO: Disabled until refactored to use PaymentRecord
     StripeIntegrationService,
 
     // Main orchestrator service
-    {
-      provide: 'PaymentService',
-      useClass: PaymentServiceImpl,
-    },
+    // {
+    //   provide: 'PaymentService',
+    //   useClass: PaymentServiceImpl,
+    // },
 
     // Also provide as PaymentServiceImpl for direct injection
-    PaymentServiceImpl,
+    // PaymentServiceImpl, // TODO: Disabled until refactored to use PaymentRecord
   ],
   exports: [
-    'PaymentService',
-    PaymentServiceImpl,
-    PaymentProcessingService,
-    AccountingService,
+    // 'PaymentService', // TODO: Disabled until refactored to use PaymentRecord
+    // PaymentServiceImpl, // TODO: Disabled until refactored to use PaymentRecord
+    // PaymentProcessingService, // TODO: Disabled until refactored to use PaymentRecord
+    // AccountingService, // TODO: Disabled until refactored to use PaymentRecord
     StripeIntegrationService,
   ],
 })

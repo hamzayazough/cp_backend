@@ -1,7 +1,6 @@
-import { UserType } from 'src/database/entities/billing-period-summary.entity';
 import { CampaignType } from 'src/enums/campaign-type';
 import { PromoterCampaignStatus } from 'src/interfaces';
-
+import { UserType } from 'src/enums/user-type';
 export interface AdvertiserDashboardData {
   stats: AdvertiserStats;
   activeCampaigns: AdvertiserActiveCampaign[];

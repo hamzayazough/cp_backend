@@ -14,6 +14,7 @@ export enum StripeAccountStatus {
   ACTIVE = 'active',
   RESTRICTED = 'restricted',
   REJECTED = 'rejected',
+  DEAUTHORIZED = 'deauthorized',
 }
 
 export enum CapabilityStatus {
@@ -27,7 +28,7 @@ export class StripeConnectAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
+  @Column({ name: 'user_id', type: 'varchar', length: 255, unique: true })
   userId: string;
 
   @Column({
@@ -45,14 +46,29 @@ export class StripeConnectAccount {
   })
   status: StripeAccountStatus;
 
-  // Requirements as JSON fields
-  @Column({ name: 'currently_due', type: 'json', default: () => "'[]'" })
+  // Requirements as TEXT[] fields (PostgreSQL arrays)
+  @Column({
+    name: 'currently_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   currentlyDue: string[];
 
-  @Column({ name: 'eventually_due', type: 'json', default: () => "'[]'" })
+  @Column({
+    name: 'eventually_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   eventuallyDue: string[];
 
-  @Column({ name: 'past_due', type: 'json', default: () => "'[]'" })
+  @Column({
+    name: 'past_due',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
   pastDue: string[];
 
   // Capabilities
@@ -90,6 +106,70 @@ export class StripeConnectAccount {
   @Column({ name: 'payouts_enabled', type: 'boolean', default: false })
   payoutsEnabled: boolean;
 
+  @Column({ name: 'details_submitted', type: 'boolean', default: false })
+  detailsSubmitted: boolean;
+
+  @Column({ name: 'account_type', type: 'varchar', length: 50, nullable: true })
+  accountType: string;
+
+  @Column({
+    name: 'business_type',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  businessType: string;
+
+  @Column({ name: 'onboarding_link', type: 'text', nullable: true })
+  onboardingLink: string;
+
+  @Column({
+    name: 'onboarding_expires_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  onboardingExpiresAt: Date;
+
+  @Column({
+    name: 'onboarding_type',
+    type: 'varchar',
+    length: 50,
+    default: 'account_links',
+  })
+  onboardingType: string; // 'oauth' or 'account_links'
+
+  @Column({
+    name: 'last_onboarding_attempt',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  lastOnboardingAttempt: Date;
+
+  @Column({
+    name: 'requirements_due_date',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  requirementsDueDate: Date;
+
+  @Column({
+    name: 'pending_verification',
+    type: 'text',
+    array: true,
+    default: () => 'ARRAY[]::TEXT[]',
+  })
+  pendingVerification: string[];
+
+  @Column({ name: 'onboarding_completed', type: 'boolean', default: false })
+  onboardingCompleted: boolean;
+
+  @Column({
+    name: 'onboarding_completed_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  onboardingCompletedAt: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
@@ -98,6 +178,6 @@ export class StripeConnectAccount {
 
   // Relations
   @ManyToOne(() => UserEntity, { nullable: false })
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'user_id', referencedColumnName: 'firebaseUid' })
   user: UserEntity;
 }

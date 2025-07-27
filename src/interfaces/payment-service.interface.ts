@@ -1,110 +1,115 @@
-import {
-  PayoutRecord,
-  AdvertiserCharge,
-  PromoterBalance,
-  AdvertiserSpend,
-  CreateChargeRequest,
-  CreatePayoutRequest,
-  MonthlyPromoterEarnings,
-  MonthlyAdvertiserSpend,
-  PaymentDashboard,
-} from '../interfaces/payment';
-import { CampaignType } from '../enums/campaign-type';
-import { CampaignEntity } from 'src/database/entities';
+/**
+ * Payment Service Interface - Simplified Schema
+ * Uses new minimal schema: PaymentRecord, Transaction, Wallet
+ */
 
-export interface PaymentService {
-  // Campaign funding and payouts
-  chargeCampaignBudget(
-    campaign: CampaignEntity,
-    promoterId: string,
-    paymentMethodId: string,
-  ): Promise<AdvertiserCharge>;
-  executePromoterPayout(
-    campaignId: string,
-    promoterId: string,
-    finalAmount?: number,
-  ): Promise<PayoutRecord>;
-  refundCampaignBudget(
-    campaignId: string,
-    promoterId: string,
-    amount?: number,
-  ): Promise<AdvertiserCharge>;
+import { UserType } from 'src/enums/user-type';
+import { PaymentRecord } from '../database/entities/payment-record.entity';
+import { Transaction } from '../database/entities/transaction.entity';
+import { Wallet } from '../database/entities/wallet.entity';
 
-  // Periodic accounting
-  calculateMonthlyPromoterEarnings(
-    promoterId: string,
-    periodStart: Date,
-    periodEnd: Date,
-  ): Promise<MonthlyPromoterEarnings>;
-  calculateMonthlyAdvertiserSpend(
-    advertiserId: string,
-    periodStart: Date,
-    periodEnd: Date,
-  ): Promise<MonthlyAdvertiserSpend>;
-  processMonthlyPayouts(minimumThreshold?: number): Promise<PayoutRecord[]>;
+export const PAYMENT_CONSTANTS = {
+  MINIMUM_PAYOUT_THRESHOLD: 2000, // $20.00 in cents
+  PLATFORM_FEE_PERCENTAGE: 10, // 10% platform fee
+  STRIPE_FEE_PERCENTAGE: 2.9, // 2.9% + 30¢ Stripe fee
+} as const;
 
-  // Balance tracking
-  getPromoterBalance(promoterId: string): Promise<PromoterBalance | null>;
-  getAdvertiserSpend(advertiserId: string): Promise<AdvertiserSpend | null>;
-  updatePromoterBalance(
-    promoterId: string,
-    campaignType: CampaignType,
+export interface PaymentServiceInterface {
+  // Payment Records Management
+  createPaymentRecord(
+    userId: string,
     amount: number,
-  ): Promise<void>;
+    method: string,
+    description?: string,
+    metadata?: Record<string, any>,
+  ): Promise<PaymentRecord>;
 
-  // Payment history and dashboard
+  getPaymentRecord(id: string): Promise<PaymentRecord | null>;
+
+  getPaymentHistory(
+    userId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<PaymentRecord[]>;
+
+  // Transaction Management
+  createTransaction(
+    fromWalletId: string | null,
+    toWalletId: string | null,
+    amount: number,
+    type: string,
+    description?: string,
+    campaignId?: string,
+    paymentRecordId?: string,
+  ): Promise<Transaction>;
+
+  getTransaction(id: string): Promise<Transaction | null>;
+
+  getTransactionHistory(
+    userId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<Transaction[]>;
+
+  // Wallet Management
+  createWallet(userId: string, type: string): Promise<Wallet>;
+
+  getWallet(userId: string, type: string): Promise<Wallet | null>;
+
+  getWalletBalance(userId: string, type: string): Promise<number>;
+
+  updateWalletBalance(
+    userId: string,
+    type: string,
+    amount: number,
+    operation: 'add' | 'subtract',
+  ): Promise<Wallet>;
+
+  // Financial Reporting
+  calculateMonthlyEarnings(
+    promoterId: string,
+    year: number,
+    month: number,
+  ): Promise<{
+    totalEarnings: number;
+    earningsByType: Record<string, number>;
+    transactionCount: number;
+  }>;
+
+  calculateMonthlySpend(
+    advertiserId: string,
+    year: number,
+    month: number,
+  ): Promise<{
+    totalSpent: number;
+    spendByType: Record<string, number>;
+    transactionCount: number;
+  }>;
+
+  // Payout Processing
+  processPayouts(minimumThreshold?: number): Promise<Transaction[]>;
+
+  getPendingPayouts(userId: string): Promise<number>;
+
+  // Dashboard Data
   getPaymentDashboard(
     userId: string,
-    userType: 'PROMOTER' | 'ADVERTISER',
-  ): Promise<PaymentDashboard>;
-  getPayoutHistory(promoterId: string, limit?: number): Promise<PayoutRecord[]>;
-  getChargeHistory(
-    advertiserId: string,
-    limit?: number,
-  ): Promise<AdvertiserCharge[]>;
+    userType: UserType,
+  ): Promise<{
+    currentBalance: number;
+    pendingPayouts: number;
+    totalEarningsThisMonth: number;
+    totalSpentThisMonth: number;
+    recentTransactions: Transaction[];
+    recentPayments: PaymentRecord[];
+  }>;
 
-  // Stripe integration helpers
+  // Stripe Integration
   validateStripeAccount(userId: string): Promise<boolean>;
-  createStripeConnectAccount(userId: string): Promise<string>; // Returns account ID
+
+  createStripeConnectAccount(userId: string): Promise<string>;
+
   getStripeAccountStatus(
     userId: string,
   ): Promise<'pending' | 'active' | 'rejected'>;
 }
-
-// Payment flow constants
-export const PAYMENT_CONSTANTS = {
-  MINIMUM_PAYOUT_THRESHOLD: 20.0,
-  STRIPE_FEE_PERCENTAGE: 0.029, // 2.9%
-  STRIPE_FIXED_FEE: 0.3, // $0.30
-  PAYOUT_SCHEDULE_DAY: 1, // 1st of every month
-  CONSULTANT_SELLER_IMMEDIATE_PAYOUT: true, // Pay immediately after completion
-  VISIBILITY_SALESMAN_MONTHLY_PAYOUT: true, // Monthly batch payouts
-} as const;
-
-// Campaign type payment behavior
-export const CAMPAIGN_PAYMENT_FLOWS = {
-  [CampaignType.VISIBILITY]: {
-    chargeUpfront: false,
-    payoutSchedule: 'monthly',
-    trackEarnings: 'incremental', // Track per view
-    requiresApproval: false,
-  },
-  [CampaignType.CONSULTANT]: {
-    chargeUpfront: true,
-    payoutSchedule: 'immediate',
-    trackEarnings: 'lumpsum', // Single payout on completion
-    requiresApproval: true,
-  },
-  [CampaignType.SELLER]: {
-    chargeUpfront: true,
-    payoutSchedule: 'immediate',
-    trackEarnings: 'lumpsum', // Single payout on completion
-    requiresApproval: true,
-  },
-  [CampaignType.SALESMAN]: {
-    chargeUpfront: false,
-    payoutSchedule: 'monthly',
-    trackEarnings: 'incremental', // Track per sale
-    requiresApproval: false,
-  },
-} as const;

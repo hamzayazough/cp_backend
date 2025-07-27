@@ -16,40 +16,6 @@ export enum ChargeStatus {
   PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
 }
 
-export interface PayoutRecord {
-  id: string;
-  promoterId: string;
-  campaignId?: string;
-  amount: number;
-  status: PayoutStatus;
-  stripeTransferId?: string;
-  stripePayoutId?: string;
-  periodStart?: Date;
-  periodEnd?: Date;
-  description?: string;
-  failureReason?: string;
-  processedAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AdvertiserCharge {
-  id: string;
-  advertiserId: string;
-  campaignId?: string;
-  amount: number;
-  status: ChargeStatus;
-  stripeChargeId?: string;
-  stripePaymentMethodId?: string;
-  currency: string;
-  description?: string;
-  failureReason?: string;
-  refundedAmount: number;
-  processedAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface PromoterBalance {
   id: string;
   promoterId: string;
@@ -61,20 +27,6 @@ export interface PromoterBalance {
   salesmanEarnings: number;
   totalEarnings: number;
   paidOut: boolean;
-  payoutRecordId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AdvertiserSpend {
-  id: string;
-  advertiserId: string;
-  periodStart: Date;
-  periodEnd: Date;
-  campaignsFunded: number;
-  totalSpent: number;
-  totalCharged: number;
-  remainingBalance: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,17 +76,6 @@ export interface MonthlyPromoterEarnings {
   payoutDate?: Date;
 }
 
-export interface MonthlyAdvertiserSpend {
-  advertiserId: string;
-  advertiserName: string;
-  periodStart: Date;
-  periodEnd: Date;
-  campaignsFunded: number;
-  totalSpent: number;
-  totalCharged: number;
-  remainingBalance: number;
-}
-
 export interface PaymentDashboard {
   // Promoter view
   currentBalance: number;
@@ -142,12 +83,12 @@ export interface PaymentDashboard {
   totalEarningsThisMonth: number;
   totalEarningsLastMonth: number;
   nextPayoutDate?: Date;
-  recentPayouts: PayoutRecord[];
-  
+  // recentPayouts: Replaced with Transaction queries
+
   // Advertiser view
   totalSpentThisMonth: number;
   totalSpentLastMonth: number;
   activeCampaignsBudget: number;
   prepaidBalance: number;
-  recentCharges: AdvertiserCharge[];
+  // recentCharges: Replaced with PaymentRecord queries
 }

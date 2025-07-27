@@ -52,7 +52,7 @@ import {
   ApplicationStatus,
 } from '../database/entities/campaign-applications.entity';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
-import { UserType } from 'src/database/entities/billing-period-summary.entity';
+import { UserType } from 'src/enums/user-type';
 import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
@@ -165,7 +165,7 @@ export class PromoterService {
     const earningsThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
-      .where('transaction.promoterId = :promoterId', { promoterId })
+      .where('transaction.userId = :promoterId', { promoterId })
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .getRawOne();
@@ -173,7 +173,7 @@ export class PromoterService {
     const earningsLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('SUM(transaction.amount)', 'total')
-      .where('transaction.promoterId = :promoterId', { promoterId })
+      .where('transaction.userId = :promoterId', { promoterId })
       .andWhere('transaction.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
@@ -197,7 +197,7 @@ export class PromoterService {
     const salesThisWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
-      .where('transaction.promoterId = :promoterId', { promoterId })
+      .where('transaction.userId = :promoterId', { promoterId })
       .andWhere('transaction.type = :type', { type: 'SALESMAN_COMMISSION' })
       .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
@@ -206,7 +206,7 @@ export class PromoterService {
     const salesLastWeek = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('COUNT(*)', 'total')
-      .where('transaction.promoterId = :promoterId', { promoterId })
+      .where('transaction.userId = :promoterId', { promoterId })
       .andWhere('transaction.type = :type', { type: 'SALESMAN_COMMISSION' })
       .andWhere('transaction.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
       .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
@@ -360,7 +360,7 @@ export class PromoterService {
     const transactions = await this.transactionRepository
       .createQueryBuilder('transaction')
       .leftJoinAndSelect('transaction.campaign', 'campaign')
-      .where('transaction.promoterId = :promoterId', { promoterId })
+      .where('transaction.userId = :promoterId', { promoterId })
       .orderBy('transaction.createdAt', 'DESC')
       .limit(limit)
       .getMany();
@@ -373,7 +373,7 @@ export class PromoterService {
       campaign: transaction.campaign?.title || 'N/A',
       campaignId: transaction.campaignId,
       type: transaction.type,
-      paymentMethod: transaction.paymentMethod,
+      paymentMethod: transaction.paymentMethod?.toString() || 'N/A',
       description: transaction.description,
       estimatedPaymentDate: transaction.estimatedPaymentDate?.toISOString(),
     }));
@@ -407,13 +407,14 @@ export class PromoterService {
 
   private async getWalletInfo(promoterId: string): Promise<PromoterWallet> {
     let wallet = await this.walletRepository.findOne({
-      where: { promoterId },
+      where: { userId: promoterId, userType: UserType.PROMOTER },
     });
 
     // Create wallet if it doesn't exist
     if (!wallet) {
       wallet = this.walletRepository.create({
-        promoterId,
+        userId: promoterId,
+        userType: UserType.PROMOTER,
         currentBalance: 0,
         pendingBalance: 0,
         totalEarned: 0,
@@ -429,17 +430,17 @@ export class PromoterService {
     const viewEarnings: PromoterWalletViewEarnings = {
       currentBalance: wallet.currentBalance,
       pendingBalance: wallet.pendingBalance,
-      totalEarned: wallet.totalEarned,
+      totalEarned: wallet.totalEarned || 0,
       totalWithdrawn: wallet.totalWithdrawn,
       lastPayoutDate: wallet.lastPayoutDate?.toISOString(),
       nextPayoutDate: wallet.nextPayoutDate?.toISOString(),
-      minimumThreshold: wallet.minimumThreshold,
+      minimumThreshold: wallet.minimumThreshold || 20,
     };
 
     const directEarnings: PromoterWalletDirectEarnings = {
-      totalEarned: wallet.directTotalEarned,
-      totalPaid: wallet.directTotalPaid,
-      pendingPayments: wallet.directPendingPayments,
+      totalEarned: wallet.directTotalEarned || 0,
+      totalPaid: wallet.directTotalPaid || 0,
+      pendingPayments: wallet.directPendingPayments || 0,
       lastPaymentDate: wallet.directLastPaymentDate?.toISOString(),
     };
 

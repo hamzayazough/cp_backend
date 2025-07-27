@@ -16,6 +16,8 @@
 -- 06_messaging_tables.sql
 -- 07_functions_triggers.sql
 -- 08_indexes.sql
+-- 09_stripe_connect_enhancements.sql
+
 
 -- Database is already created by Docker using POSTGRES_DB environment variable
 -- Just set up any global settings here if needed

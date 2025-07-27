@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { CampaignEntity } from './campaign.entity';
 import { UserEntity } from './user.entity';
+import { UserType } from '../../enums/user-type';
 
 export enum SaleVerificationStatus {
   PENDING = 'PENDING',
@@ -24,8 +25,16 @@ export class SalesRecordEntity {
   @Column({ name: 'campaign_id', type: 'uuid' })
   campaignId: string;
 
-  @Column({ name: 'promoter_id', type: 'uuid' })
-  promoterId: string;
+  @Column({ name: 'user_id', type: 'uuid' })
+  userId: string;
+
+  @Column({
+    name: 'user_type',
+    type: 'enum',
+    enum: UserType,
+    default: UserType.PROMOTER,
+  })
+  userType: UserType;
 
   @Column({
     name: 'sale_amount',
@@ -85,6 +94,6 @@ export class SalesRecordEntity {
   campaign: CampaignEntity;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'promoter_id' })
-  promoter: UserEntity;
+  @JoinColumn({ name: 'user_id' })
+  user: UserEntity;
 }

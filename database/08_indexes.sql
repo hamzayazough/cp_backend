@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns(created_at);
 CREATE INDEX IF NOT EXISTS idx_campaigns_expiry_date ON campaigns(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_campaigns_is_public ON campaigns(is_public);
-CREATE INDEX IF NOT EXISTS idx_campaigns_selected_promoter_id ON campaigns(selected_promoter_id);
+-- Removed: selected_promoter_id column doesn't exist in campaigns table
 CREATE INDEX IF NOT EXISTS idx_campaigns_min_budget ON campaigns(min_budget);
 CREATE INDEX IF NOT EXISTS idx_campaigns_max_budget ON campaigns(max_budget);
 CREATE INDEX IF NOT EXISTS idx_campaigns_advertiser_types ON campaigns USING GIN(advertiser_types);
@@ -106,28 +106,6 @@ CREATE INDEX IF NOT EXISTS idx_wallets_promoter_id ON wallets(promoter_id);
 CREATE INDEX IF NOT EXISTS idx_wallets_current_balance ON wallets(current_balance);
 CREATE INDEX IF NOT EXISTS idx_wallets_last_payout_date ON wallets(last_payout_date);
 
--- Payout records indexes
-CREATE INDEX IF NOT EXISTS idx_payout_records_promoter_id ON payout_records(promoter_id);
-CREATE INDEX IF NOT EXISTS idx_payout_records_campaign_id ON payout_records(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_payout_records_status ON payout_records(status);
-CREATE INDEX IF NOT EXISTS idx_payout_records_created_at ON payout_records(created_at);
-CREATE INDEX IF NOT EXISTS idx_payout_records_processed_at ON payout_records(processed_at);
-
--- Advertiser charges indexes
-CREATE INDEX IF NOT EXISTS idx_advertiser_charges_advertiser_id ON advertiser_charges(advertiser_id);
-CREATE INDEX IF NOT EXISTS idx_advertiser_charges_campaign_id ON advertiser_charges(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_advertiser_charges_status ON advertiser_charges(status);
-CREATE INDEX IF NOT EXISTS idx_advertiser_charges_created_at ON advertiser_charges(created_at);
-CREATE INDEX IF NOT EXISTS idx_advertiser_charges_processed_at ON advertiser_charges(processed_at);
-
--- Promoter balances indexes
-CREATE INDEX IF NOT EXISTS idx_promoter_balances_promoter_id ON promoter_balances(promoter_id);
-CREATE INDEX IF NOT EXISTS idx_promoter_balances_available_balance ON promoter_balances(available_balance);
-
--- Advertiser spends indexes
-CREATE INDEX IF NOT EXISTS idx_advertiser_spends_advertiser_id ON advertiser_spends(advertiser_id);
-CREATE INDEX IF NOT EXISTS idx_advertiser_spends_total_spent ON advertiser_spends(total_spent);
-
 -- Stripe Connect Accounts indexes
 CREATE INDEX IF NOT EXISTS idx_stripe_connect_accounts_user_id ON stripe_connect_accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_connect_accounts_stripe_account_id ON stripe_connect_accounts(stripe_account_id);
@@ -137,24 +115,6 @@ CREATE INDEX IF NOT EXISTS idx_stripe_connect_accounts_status ON stripe_connect_
 CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON payment_methods(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_methods_type ON payment_methods(type);
 CREATE INDEX IF NOT EXISTS idx_payment_methods_default ON payment_methods(user_id, is_default) WHERE is_default = TRUE;
-
--- Billing Period Summaries indexes
-CREATE INDEX IF NOT EXISTS idx_billing_summaries_user_id ON billing_period_summaries(user_id);
-CREATE INDEX IF NOT EXISTS idx_billing_summaries_period ON billing_period_summaries(period_start, period_end);
-CREATE INDEX IF NOT EXISTS idx_billing_summaries_user_type ON billing_period_summaries(user_type);
-
--- Payout Settings indexes
-CREATE INDEX IF NOT EXISTS idx_payout_settings_promoter_id ON payout_settings(promoter_id);
-
--- Invoices indexes
-CREATE INDEX IF NOT EXISTS idx_invoices_advertiser_id ON invoices(advertiser_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
-CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON invoices(due_date);
-CREATE INDEX IF NOT EXISTS idx_invoices_period ON invoices(period_start, period_end);
-
--- Financial Analytics indexes
-CREATE INDEX IF NOT EXISTS idx_financial_analytics_user_id ON financial_analytics(user_id);
-CREATE INDEX IF NOT EXISTS idx_financial_analytics_period ON financial_analytics(period_start, period_end);
 
 -- ========================================
 -- ANALYTICS TABLE INDEXES

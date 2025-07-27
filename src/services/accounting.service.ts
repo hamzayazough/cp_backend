@@ -6,105 +6,80 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 
-import { PAYMENT_CONSTANTS } from '../interfaces/payment-service.interface';
+import { PaymentRecord } from '../database/entities/payment-record.entity';
 import {
-  PromoterBalance,
-  AdvertiserSpend,
-  MonthlyPromoterEarnings,
-  MonthlyAdvertiserSpend,
-  PaymentDashboard,
-  PayoutStatus,
-  ChargeStatus,
-} from '../interfaces/payment';
-import { CampaignType } from '../enums/campaign-type';
-
-// Entities
-import { PayoutRecord as PayoutRecordEntity } from '../database/entities/payout-record.entity';
-import { AdvertiserCharge as AdvertiserChargeEntity } from '../database/entities/advertiser-charge.entity';
-import { PromoterBalance as PromoterBalanceEntity } from '../database/entities/promoter-balance.entity';
-import { AdvertiserSpend as AdvertiserSpendEntity } from '../database/entities/advertiser-spend.entity';
+  Transaction,
+  TransactionStatus,
+  TransactionType,
+  PaymentMethod,
+} from '../database/entities/transaction.entity';
+import { Wallet } from '../database/entities/wallet.entity';
+import { UserType } from 'src/enums/user-type';
 
 /**
  * Service responsible for accounting, balance tracking, and financial reporting
+ * Using new simplified schema (PaymentRecord, Transaction, Wallet)
  */
 @Injectable()
 export class AccountingService {
   private readonly logger = new Logger(AccountingService.name);
 
   constructor(
-    @InjectRepository(PayoutRecordEntity)
-    private readonly payoutRepository: Repository<PayoutRecordEntity>,
-    @InjectRepository(AdvertiserChargeEntity)
-    private readonly chargeRepository: Repository<AdvertiserChargeEntity>,
-    @InjectRepository(PromoterBalanceEntity)
-    private readonly promoterBalanceRepository: Repository<PromoterBalanceEntity>,
-    @InjectRepository(AdvertiserSpendEntity)
-    private readonly advertiserSpendRepository: Repository<AdvertiserSpendEntity>,
+    @InjectRepository(PaymentRecord)
+    private readonly paymentRecordRepo: Repository<PaymentRecord>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepo: Repository<Transaction>,
+    @InjectRepository(Wallet)
+    private readonly walletRepo: Repository<Wallet>,
   ) {}
 
   /**
-   * Calculate monthly earnings for a specific promoter
+   * Calculate monthly earnings for a promoter using Transaction data
    */
   async calculateMonthlyPromoterEarnings(
     promoterId: string,
     year: number,
     month: number,
-  ): Promise<MonthlyPromoterEarnings> {
+  ): Promise<{
+    totalEarnings: number;
+    earningsByType: Record<string, number>;
+    transactionCount: number;
+  }> {
     try {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0);
 
-      const payouts = await this.payoutRepository.find({
+      // Get all earnings transactions for the promoter in the period
+      const transactions = await this.transactionRepo.find({
         where: {
-          promoterId,
-          processedAt: Between(startDate, endDate),
-          status: PayoutStatus.COMPLETED,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
+          status: TransactionStatus.COMPLETED,
+          createdAt: Between(startDate, endDate),
         },
         relations: ['campaign'],
       });
 
-      const earnings: MonthlyPromoterEarnings = {
-        promoterId,
-        promoterName: '', // Will be filled later
-        periodStart: startDate,
-        periodEnd: endDate,
-        earningsByType: {
-          visibility: 0,
-          consultant: 0,
-          seller: 0,
-          salesman: 0,
-        },
-        totalEarnings: 0,
-        paidOut: false,
-        payoutDate: undefined,
-      };
+      const earningsByType: Record<string, number> = {};
+      let totalEarnings = 0;
 
-      for (const payout of payouts) {
-        earnings.totalEarnings += payout.amount;
+      for (const transaction of transactions) {
+        totalEarnings += transaction.amount;
 
-        // Categorize by campaign type
-        const campaignType = payout.campaign?.type;
-        switch (campaignType) {
-          case CampaignType.VISIBILITY:
-            earnings.earningsByType.visibility += payout.amount;
-            break;
-          case CampaignType.CONSULTANT:
-            earnings.earningsByType.consultant += payout.amount;
-            break;
-          case CampaignType.SELLER:
-            earnings.earningsByType.seller += payout.amount;
-            break;
-          case CampaignType.SALESMAN:
-            earnings.earningsByType.salesman += payout.amount;
-            break;
-        }
+        const transactionType = transaction.type || 'UNKNOWN';
+        earningsByType[transactionType] =
+          (earningsByType[transactionType] || 0) + transaction.amount;
       }
 
-      return earnings;
+      return {
+        totalEarnings,
+        earningsByType,
+        transactionCount: transactions.length,
+      };
     } catch (error) {
       this.logger.error(
-        `Failed to calculate monthly promoter earnings: ${error.message}`,
-        error.stack,
+        `Failed to calculate monthly promoter earnings: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new InternalServerErrorException(
         'Failed to calculate monthly earnings',
@@ -113,47 +88,50 @@ export class AccountingService {
   }
 
   /**
-   * Calculate monthly spend for a specific advertiser
+   * Calculate monthly spend for an advertiser using PaymentRecord data
    */
   async calculateMonthlyAdvertiserSpend(
     advertiserId: string,
     year: number,
     month: number,
-  ): Promise<MonthlyAdvertiserSpend> {
+  ): Promise<{
+    totalSpent: number;
+    spendByType: Record<string, number>;
+    transactionCount: number;
+  }> {
     try {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0);
 
-      const charges = await this.chargeRepository.find({
+      // Get all payment records for the advertiser in the period
+      const paymentRecords = await this.paymentRecordRepo.find({
         where: {
-          advertiserId,
+          userId: advertiserId,
+          status: 'COMPLETED',
           createdAt: Between(startDate, endDate),
-          status: ChargeStatus.SUCCEEDED,
         },
-        relations: ['campaign'],
       });
 
-      const spend: MonthlyAdvertiserSpend = {
-        advertiserId,
-        advertiserName: '', // Will be filled later
-        periodStart: startDate,
-        periodEnd: endDate,
-        campaignsFunded: 0,
-        totalSpent: 0,
-        totalCharged: 0,
-        remainingBalance: 0,
-      };
+      const spendByType: Record<string, number> = {};
+      let totalSpent = 0;
 
-      for (const charge of charges) {
-        spend.totalCharged += charge.amount;
-        spend.campaignsFunded += 1;
+      for (const payment of paymentRecords) {
+        totalSpent += payment.amountCents;
+
+        const paymentType = payment.paymentType || 'CAMPAIGN_FUNDING';
+        spendByType[paymentType] =
+          (spendByType[paymentType] || 0) + payment.amountCents;
       }
 
-      return spend;
+      return {
+        totalSpent,
+        spendByType,
+        transactionCount: paymentRecords.length,
+      };
     } catch (error) {
       this.logger.error(
-        `Failed to calculate monthly advertiser spend: ${error.message}`,
-        error.stack,
+        `Failed to calculate monthly advertiser spend: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new InternalServerErrorException(
         'Failed to calculate monthly spend',
@@ -162,58 +140,56 @@ export class AccountingService {
   }
 
   /**
-   * Process monthly payouts for all promoters above threshold
+   * Process monthly payouts using Wallet and Transaction entities
    */
   async processMonthlyPayouts(
-    minimumThreshold: number = PAYMENT_CONSTANTS.MINIMUM_PAYOUT_THRESHOLD,
-  ): Promise<PayoutRecordEntity[]> {
+    minimumThreshold: number = 2000,
+  ): Promise<Transaction[]> {
     this.logger.log(
       `Processing monthly payouts with threshold $${minimumThreshold / 100}`,
     );
 
     try {
-      // Find all promoter balances above threshold
-      const promoterBalances = await this.promoterBalanceRepository
-        .createQueryBuilder('balance')
-        .where('balance.totalEarnings >= :threshold', {
+      // Find all wallets with balance above threshold
+      const wallets = await this.walletRepo
+        .createQueryBuilder('wallet')
+        .where('wallet.currentBalance >= :threshold', {
           threshold: minimumThreshold,
         })
-        .andWhere('balance.paidOut = :paidOut', { paidOut: false })
         .getMany();
 
-      const processedPayouts: PayoutRecordEntity[] = [];
+      const processedPayouts: Transaction[] = [];
 
-      for (const balance of promoterBalances) {
+      for (const wallet of wallets) {
         try {
-          // Create monthly payout record
-          const payoutEntity = this.payoutRepository.create({
-            promoterId: balance.promoterId,
-            amount: balance.totalEarnings,
-            status: PayoutStatus.PENDING,
+          // Create payout transaction
+          const payoutTransaction = this.transactionRepo.create({
+            userId: wallet.userId,
+            userType: UserType.PROMOTER,
+            amount: wallet.currentBalance,
+            status: TransactionStatus.PENDING,
+            type: TransactionType.MONTHLY_PAYOUT,
+            paymentMethod: PaymentMethod.BANK_TRANSFER,
             description: `Monthly earnings payout - ${new Date().toISOString().slice(0, 7)}`,
             processedAt: new Date(),
           });
 
-          const savedPayout = await this.payoutRepository.save(payoutEntity);
-          processedPayouts.push(savedPayout);
+          const savedTransaction =
+            await this.transactionRepo.save(payoutTransaction);
+          processedPayouts.push(savedTransaction);
 
-          // Reset promoter balance after payout
-          await this.promoterBalanceRepository.update(balance.id, {
-            totalEarnings: 0,
-            visibilityEarnings: 0,
-            consultantEarnings: 0,
-            sellerEarnings: 0,
-            salesmanEarnings: 0,
-            paidOut: true,
-            payoutRecordId: savedPayout.id,
+          // Reset wallet balance after payout
+          await this.walletRepo.update(wallet.id, {
+            currentBalance: 0,
+            totalWithdrawn: wallet.totalWithdrawn + wallet.currentBalance,
           });
 
           this.logger.log(
-            `Created monthly payout of $${balance.totalEarnings / 100} for promoter ${balance.promoterId}`,
+            `Created monthly payout of $${wallet.currentBalance / 100} for promoter ${wallet.userId}`,
           );
         } catch (error) {
           this.logger.error(
-            `Failed to process payout for promoter ${balance.promoterId}: ${error.message}`,
+            `Failed to process payout for promoter ${wallet.userId}: ${(error as Error).message}`,
           );
           // Continue with other promoters
         }
@@ -223,8 +199,8 @@ export class AccountingService {
       return processedPayouts;
     } catch (error) {
       this.logger.error(
-        `Failed to process monthly payouts: ${error.message}`,
-        error.stack,
+        `Failed to process monthly payouts: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new InternalServerErrorException(
         'Failed to process monthly payouts',
@@ -233,99 +209,127 @@ export class AccountingService {
   }
 
   /**
-   * Get current promoter balance
+   * Get current promoter balance using Wallet entity
    */
-  async getPromoterBalance(
-    promoterId: string,
-  ): Promise<PromoterBalance | null> {
-    const balance = await this.promoterBalanceRepository.findOne({
-      where: { promoterId },
+  async getPromoterBalance(promoterId: string): Promise<{
+    currentBalance: number;
+    pendingBalance: number;
+    totalEarned: number;
+    totalWithdrawn: number;
+  } | null> {
+    const wallet = await this.walletRepo.findOne({
+      where: { userId: promoterId, userType: UserType.PROMOTER },
     });
 
-    return balance ? this.mapPromoterBalanceEntityToInterface(balance) : null;
+    if (!wallet) {
+      return null;
+    }
+
+    return {
+      currentBalance: wallet.currentBalance,
+      pendingBalance: wallet.pendingBalance,
+      totalEarned: wallet.totalEarned || 0,
+      totalWithdrawn: wallet.totalWithdrawn,
+    };
   }
 
   /**
-   * Get current advertiser spend
+   * Get advertiser spend summary using PaymentRecord entity
    */
-  async getAdvertiserSpend(
-    advertiserId: string,
-  ): Promise<AdvertiserSpend | null> {
-    const spend = await this.advertiserSpendRepository.findOne({
-      where: { advertiserId },
-    });
+  async getAdvertiserSpend(advertiserId: string): Promise<{
+    totalSpent: number;
+    totalRefunded: number;
+    lastPaymentDate: Date | null;
+  } | null> {
+    try {
+      // Get all payment records for the advertiser
+      const paymentRecords = await this.paymentRecordRepo.find({
+        where: { userId: advertiserId },
+        order: { createdAt: 'DESC' },
+      });
 
-    return spend ? this.mapAdvertiserSpendEntityToInterface(spend) : null;
+      if (paymentRecords.length === 0) {
+        return null;
+      }
+
+      let totalSpent = 0;
+      let totalRefunded = 0;
+      const lastPaymentDate = paymentRecords[0]?.createdAt || null;
+
+      for (const payment of paymentRecords) {
+        if (payment.status === 'COMPLETED') {
+          totalSpent += payment.amountCents;
+        } else if (payment.status === 'REFUNDED') {
+          totalRefunded += payment.amountCents;
+        }
+      }
+
+      return {
+        totalSpent,
+        totalRefunded,
+        lastPaymentDate,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get advertiser spend: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      return null;
+    }
   }
 
   /**
-   * Update promoter balance after earnings
+   * Update promoter balance using Wallet entity
    */
   async updatePromoterBalance(
     promoterId: string,
-    campaignType: CampaignType,
+    campaignType: string,
     amount: number,
   ): Promise<void> {
     try {
-      let balance = await this.promoterBalanceRepository.findOne({
-        where: {
-          promoterId,
-          periodStart: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth(),
-            1,
-          ),
-          periodEnd: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth() + 1,
-            0,
-          ),
-        },
+      let wallet = await this.walletRepo.findOne({
+        where: { userId: promoterId, userType: UserType.PROMOTER },
       });
 
-      if (!balance) {
-        // Create new balance record for current month
-        const now = new Date();
-        balance = this.promoterBalanceRepository.create({
-          promoterId,
-          periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
-          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-          totalEarnings: 0,
-          visibilityEarnings: 0,
-          consultantEarnings: 0,
-          sellerEarnings: 0,
-          salesmanEarnings: 0,
-          paidOut: false,
+      if (!wallet) {
+        // Create new wallet for promoter
+        wallet = this.walletRepo.create({
+          userId: promoterId,
+          userType: UserType.PROMOTER,
+          currentBalance: 0,
+          pendingBalance: 0,
+          totalEarned: 0,
+          totalWithdrawn: 0,
         });
       }
 
-      // Update total earnings
-      balance.totalEarnings += amount;
+      // Update balances
+      wallet.currentBalance += amount;
+      wallet.totalEarned = (wallet.totalEarned || 0) + amount;
 
-      // Update category-specific earnings
-      switch (campaignType) {
-        case CampaignType.VISIBILITY:
-          balance.visibilityEarnings += amount;
-          break;
-        case CampaignType.CONSULTANT:
-          balance.consultantEarnings += amount;
-          break;
-        case CampaignType.SELLER:
-          balance.sellerEarnings += amount;
-          break;
-        case CampaignType.SALESMAN:
-          balance.salesmanEarnings += amount;
-          break;
-      }
+      await this.walletRepo.save(wallet);
 
-      await this.promoterBalanceRepository.save(balance);
+      // Also create a transaction record for this earning
+      const transaction = this.transactionRepo.create({
+        userId: promoterId,
+        userType: UserType.PROMOTER,
+        amount,
+        status: TransactionStatus.COMPLETED,
+        type: this.mapCampaignTypeToTransactionType(campaignType),
+        paymentMethod: PaymentMethod.WALLET,
+        description: `Earnings from ${campaignType} campaign`,
+        processedAt: new Date(),
+      });
+
+      await this.transactionRepo.save(transaction);
+
       this.logger.log(
         `Updated promoter ${promoterId} balance by $${amount / 100} for ${campaignType}`,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to update promoter balance: ${error.message}`,
-        error.stack,
+        `Failed to update promoter balance: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new InternalServerErrorException(
         'Failed to update promoter balance',
@@ -334,157 +338,93 @@ export class AccountingService {
   }
 
   /**
-   * Update advertiser spend after charges
-   */
-  async updateAdvertiserSpend(
-    advertiserId: string,
-    campaignType: CampaignType,
-    amount: number,
-  ): Promise<void> {
-    try {
-      let spend = await this.advertiserSpendRepository.findOne({
-        where: {
-          advertiserId,
-          periodStart: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth(),
-            1,
-          ),
-          periodEnd: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth() + 1,
-            0,
-          ),
-        },
-      });
-
-      if (!spend) {
-        // Create new spend record for current month
-        const now = new Date();
-        spend = this.advertiserSpendRepository.create({
-          advertiserId,
-          periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
-          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-          campaignsFunded: 0,
-          totalSpent: 0,
-          totalCharged: 0,
-          remainingBalance: 0,
-        });
-      }
-
-      // Update spend tracking
-      spend.totalCharged += amount;
-      spend.campaignsFunded += 1;
-
-      await this.advertiserSpendRepository.save(spend);
-      this.logger.log(
-        `Updated advertiser ${advertiserId} spend by $${amount / 100} for ${campaignType}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to update advertiser spend: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Failed to update advertiser spend',
-      );
-    }
-  }
-
-  /**
-   * Get payment dashboard for user
+   * Get payment dashboard using new simplified schema
    */
   async getPaymentDashboard(
     userId: string,
-    userType: 'PROMOTER' | 'ADVERTISER',
-  ): Promise<PaymentDashboard> {
+    userType: UserType,
+  ): Promise<{
+    currentBalance: number;
+    pendingPayouts: number;
+    totalEarningsThisMonth: number;
+    totalSpentThisMonth: number;
+    recentTransactions: Transaction[];
+    recentPayments: PaymentRecord[];
+  }> {
     try {
-      if (userType === 'PROMOTER') {
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+
+      if (userType === UserType.PROMOTER) {
         const balance = await this.getPromoterBalance(userId);
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
         const monthlyEarnings = await this.calculateMonthlyPromoterEarnings(
           userId,
           currentYear,
           currentMonth,
         );
 
+        // Get recent transactions
+        const recentTransactions = await this.transactionRepo.find({
+          where: { userId: userId, userType: UserType.PROMOTER },
+          order: { createdAt: 'DESC' },
+          take: 10,
+        });
+
         return {
-          currentBalance: balance?.totalEarnings || 0,
-          pendingPayouts: balance?.totalEarnings || 0,
+          currentBalance: balance?.currentBalance || 0,
+          pendingPayouts: balance?.pendingBalance || 0,
           totalEarningsThisMonth: monthlyEarnings.totalEarnings,
-          totalEarningsLastMonth: 0, // Would need last month calculation
-          nextPayoutDate: undefined,
-          recentPayouts: [], // Would need to fetch recent payouts
-          totalSpentThisMonth: 0, // Not applicable for promoters
-          totalSpentLastMonth: 0, // Not applicable for promoters
-          activeCampaignsBudget: 0, // Not applicable for promoters
-          prepaidBalance: 0, // Not applicable for promoters
-          recentCharges: [], // Not applicable for promoters
+          totalSpentThisMonth: 0,
+          recentTransactions,
+          recentPayments: [],
         };
       } else {
-        const spend = await this.getAdvertiserSpend(userId);
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
         const monthlySpend = await this.calculateMonthlyAdvertiserSpend(
           userId,
           currentYear,
           currentMonth,
         );
 
+        // Get recent payments
+        const recentPayments = await this.paymentRecordRepo.find({
+          where: { userId },
+          order: { createdAt: 'DESC' },
+          take: 10,
+        });
+
         return {
-          currentBalance: 0, // Not applicable for advertisers
-          pendingPayouts: 0, // Not applicable for advertisers
-          totalEarningsThisMonth: 0, // Not applicable for advertisers
-          totalEarningsLastMonth: 0, // Not applicable for advertisers
-          nextPayoutDate: undefined, // Not applicable for advertisers
-          recentPayouts: [], // Not applicable for advertisers
-          totalSpentThisMonth: monthlySpend.totalCharged,
-          totalSpentLastMonth: 0, // Would need last month calculation
-          activeCampaignsBudget: 0, // Would need calculation
-          prepaidBalance: spend?.remainingBalance || 0,
-          recentCharges: [], // Would need to fetch recent charges
+          currentBalance: 0,
+          pendingPayouts: 0,
+          totalEarningsThisMonth: 0,
+          totalSpentThisMonth: monthlySpend.totalSpent,
+          recentTransactions: [],
+          recentPayments,
         };
       }
     } catch (error) {
       this.logger.error(
-        `Failed to get payment dashboard: ${error.message}`,
-        error.stack,
+        `Failed to get payment dashboard: ${(error as Error).message}`,
+        (error as Error).stack,
       );
       throw new InternalServerErrorException('Failed to get payment dashboard');
     }
   }
 
-  // Entity to interface mapping methods
-  private mapPromoterBalanceEntityToInterface = (
-    entity: PromoterBalanceEntity,
-  ): PromoterBalance => ({
-    id: entity.id,
-    promoterId: entity.promoterId,
-    periodStart: entity.periodStart,
-    periodEnd: entity.periodEnd,
-    totalEarnings: entity.totalEarnings,
-    visibilityEarnings: entity.visibilityEarnings,
-    consultantEarnings: entity.consultantEarnings,
-    sellerEarnings: entity.sellerEarnings,
-    salesmanEarnings: entity.salesmanEarnings,
-    paidOut: entity.paidOut,
-    createdAt: entity.createdAt,
-    updatedAt: entity.updatedAt,
-  });
-
-  private mapAdvertiserSpendEntityToInterface = (
-    entity: AdvertiserSpendEntity,
-  ): AdvertiserSpend => ({
-    id: entity.id,
-    advertiserId: entity.advertiserId,
-    periodStart: entity.periodStart,
-    periodEnd: entity.periodEnd,
-    campaignsFunded: entity.campaignsFunded,
-    totalSpent: entity.totalSpent,
-    totalCharged: entity.totalCharged,
-    remainingBalance: entity.remainingBalance,
-    createdAt: entity.createdAt,
-    updatedAt: entity.updatedAt,
-  });
+  /**
+   * Helper method to map campaign type to transaction type
+   */
+  private mapCampaignTypeToTransactionType(
+    campaignType: string,
+  ): TransactionType {
+    switch (campaignType.toUpperCase()) {
+      case 'VISIBILITY':
+        return TransactionType.VIEW_EARNING;
+      case 'CONSULTANT':
+        return TransactionType.CONSULTANT_PAYMENT;
+      case 'SALESMAN':
+        return TransactionType.SALESMAN_COMMISSION;
+      default:
+        return TransactionType.DIRECT_PAYMENT;
+    }
+  }
 }

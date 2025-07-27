@@ -68,8 +68,9 @@ END $$;
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
         CREATE TYPE transaction_type AS ENUM (
+            'WALLET_DEPOSIT', 'CAMPAIGN_FUNDING', 'WITHDRAWAL',
             'VIEW_EARNING', 'CONSULTANT_PAYMENT', 'SALESMAN_COMMISSION', 
-            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT'
+            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT', 'PLATFORM_FEE'
         );
     END IF;
 END $$;
@@ -178,7 +179,7 @@ END $$;
 -- Budget allocation status enum
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'budget_allocation_status') THEN
-        CREATE TYPE budget_allocation_status AS ENUM ('ACTIVE', 'EXHAUSTED', 'PAUSED');
+        CREATE TYPE budget_allocation_status AS ENUM ('ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED');
     END IF;
 END $$;
 
@@ -210,16 +211,57 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Invoice status enum
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
-        CREATE TYPE invoice_status AS ENUM ('DRAFT', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED');
-    END IF;
-END $$;
 
 -- Stripe Connect status enum
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stripe_connect_status') THEN
         CREATE TYPE stripe_connect_status AS ENUM ('pending', 'active', 'restricted', 'rejected');
+    END IF;
+END $$;
+
+-- Payment flow type enum for Stripe Connect
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_flow_type') THEN
+        CREATE TYPE payment_flow_type AS ENUM ('destination', 'direct', 'separate_transfer', 'hold_and_transfer');
+    END IF;
+END $$;
+
+-- Stripe payment intent status enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stripe_payment_intent_status') THEN
+        CREATE TYPE stripe_payment_intent_status AS ENUM (
+            'requires_payment_method', 'requires_confirmation', 'requires_action',
+            'processing', 'requires_capture', 'canceled', 'succeeded'
+        );
+    END IF;
+END $$;
+
+-- Stripe transfer status enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stripe_transfer_status') THEN
+        CREATE TYPE stripe_transfer_status AS ENUM ('pending', 'paid', 'failed', 'canceled');
+    END IF;
+END $$;
+
+-- Platform fee type enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'platform_fee_type') THEN
+        CREATE TYPE platform_fee_type AS ENUM ('percentage', 'fixed');
+    END IF;
+END $$;
+
+-- Business type enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'business_type') THEN
+        CREATE TYPE business_type AS ENUM (
+            'llc', 'corporation', 'partnership', 'sole_proprietorship', 'individual'
+        );
+    END IF;
+END $$;
+
+-- Verification status enum
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'verification_status') THEN
+        CREATE TYPE verification_status AS ENUM ('pending', 'verified', 'requires_action', 'rejected');
     END IF;
 END $$;
