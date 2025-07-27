@@ -68,8 +68,9 @@ END $$;
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
         CREATE TYPE transaction_type AS ENUM (
+            'WALLET_DEPOSIT', 'CAMPAIGN_FUNDING', 'WITHDRAWAL',
             'VIEW_EARNING', 'CONSULTANT_PAYMENT', 'SALESMAN_COMMISSION', 
-            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT', 'WITHDRAWAL'
+            'MONTHLY_PAYOUT', 'DIRECT_PAYMENT', 'PLATFORM_FEE'
         );
     END IF;
 END $$;
@@ -178,7 +179,7 @@ END $$;
 -- Budget allocation status enum
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'budget_allocation_status') THEN
-        CREATE TYPE budget_allocation_status AS ENUM ('ACTIVE', 'EXHAUSTED', 'PAUSED');
+        CREATE TYPE budget_allocation_status AS ENUM ('ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED');
     END IF;
 END $$;
 

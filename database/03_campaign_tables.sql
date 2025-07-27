@@ -108,42 +108,6 @@ CREATE TABLE IF NOT EXISTS view_stats (
     UNIQUE(campaign_id, promoter_id, date_tracked)
 );
 
--- Campaign Budget Allocations
--- Campaign Budget Allocation table (Simplified - works with existing financial tables)
-CREATE TABLE IF NOT EXISTS campaign_budget_allocations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE, -- NULL for visibility campaigns until promoter joins
-    campaign_type campaign_type NOT NULL,
-    
-    -- Core budget fields (campaign-level)
-    total_budget DECIMAL(12,2) NOT NULL, -- Total budget for this campaign-promoter allocation
-    min_budget DECIMAL(12,2), -- Minimum budget (for Consultant/Seller campaigns)
-    allocated_amount DECIMAL(12,2) DEFAULT 0.00, -- Amount currently allocated/reserved
-    spent_amount DECIMAL(12,2) DEFAULT 0.00, -- Amount actually spent/paid out
-    remaining_amount DECIMAL(12,2) DEFAULT 0.00, -- Remaining available budget
-    
-    -- Visibility campaign rate (other details tracked in wallets/sales_records)
-    rate_per_100_views DECIMAL(6,4), -- Rate per 100 views for visibility campaigns
-    
-    -- Salesman campaign rate (actual sales tracked in sales_records)
-    commission_rate DECIMAL(5,2), -- Commission rate percentage for salesman campaigns
-    
-    -- Stripe funding tracking
-    stripe_payment_intent_id VARCHAR(255), -- For pre-funding campaign budgets
-    is_funded BOOLEAN DEFAULT FALSE, -- Whether budget is funded in Stripe
-    funded_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Status and tracking
-    status budget_allocation_status DEFAULT 'ACTIVE',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Unique constraint for campaign-promoter pair
-    UNIQUE(campaign_id, promoter_id)
-);
-
 -- New table: campaign_deliverables
 CREATE TABLE IF NOT EXISTS campaign_deliverables (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

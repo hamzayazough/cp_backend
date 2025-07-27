@@ -30,7 +30,7 @@ export { PlatformMetrics } from './platform-metrics.entity';
 export { PaymentTransaction } from './payment-transaction.entity';
 export { StripeConnectAccount } from './stripe-connect-account.entity';
 export { PaymentMethod } from './payment-method.entity';
-export { CampaignBudgetAllocation } from './campaign-budget-allocation.entity';
+export { CampaignBudgetTracking } from './campaign-budget-tracking.entity';
 export { SalesRecordEntity } from './sales-record.entity';
 
 // Stripe Connect entities

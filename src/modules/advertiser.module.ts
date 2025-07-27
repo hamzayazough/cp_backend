@@ -26,7 +26,7 @@ import { CampaignDeliverableEntity } from '../database/entities/campaign-deliver
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import { PaymentMethod } from '../database/entities/payment-method.entity';
-import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 
 @Module({
@@ -46,7 +46,7 @@ import { PaymentRecord } from '../database/entities/payment-record.entity';
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
       PaymentMethod,
-      CampaignBudgetAllocation,
+      CampaignBudgetTracking,
       PaymentRecord,
     ]),
     PromoterModule,

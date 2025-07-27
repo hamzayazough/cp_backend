@@ -112,12 +112,13 @@ export class PaymentServiceImpl {
 
       // Get or create promoter wallet
       let wallet = await this.walletRepo.findOne({
-        where: { promoterId: promoterId },
+        where: { userId: promoterId, userType: UserType.PROMOTER },
       });
 
       if (!wallet) {
         wallet = this.walletRepo.create({
-          promoterId: promoterId,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
           currentBalance: 0,
         });
         wallet = await this.walletRepo.save(wallet);
@@ -125,7 +126,8 @@ export class PaymentServiceImpl {
 
       // Create payout transaction
       const transaction = this.transactionRepo.create({
-        promoterId,
+        userId: promoterId,
+        userType: UserType.PROMOTER,
         amount: finalAmount || 0,
         type: TransactionType.MONTHLY_PAYOUT,
         status: TransactionStatus.COMPLETED,
@@ -252,7 +254,8 @@ export class PaymentServiceImpl {
   ): Promise<Transaction[]> {
     return await this.transactionRepo.find({
       where: {
-        promoterId,
+        userId: promoterId,
+        userType: UserType.PROMOTER,
         type: TransactionType.MONTHLY_PAYOUT,
       },
       order: { createdAt: 'DESC' },

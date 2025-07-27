@@ -69,7 +69,20 @@ export class UpdateBudgetDto {
 export class TransactionQueryDto {
   page?: number = 1;
   limit?: number = 10;
-  type?: 'DEPOSIT' | 'WITHDRAWAL' | 'CAMPAIGN_FUNDING' | 'REFUND';
+  // Updated to support both legacy and new transaction types for backward compatibility
+  type?:
+    | 'DEPOSIT' // Legacy: maps to WALLET_DEPOSIT
+    | 'WITHDRAWAL' // Maps to WITHDRAWAL
+    | 'CAMPAIGN_FUNDING' // Maps to CAMPAIGN_FUNDING
+    | 'REFUND' // Legacy: searches for refund descriptions
+    // New unified transaction types
+    | 'WALLET_DEPOSIT'
+    | 'VIEW_EARNING'
+    | 'CONSULTANT_PAYMENT'
+    | 'SALESMAN_COMMISSION'
+    | 'MONTHLY_PAYOUT'
+    | 'DIRECT_PAYMENT'
+    | 'PLATFORM_FEE';
 }
 
 export class WithdrawFundsDto {

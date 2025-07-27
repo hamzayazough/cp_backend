@@ -1,5 +1,3 @@
-import { CampaignType } from '../enums/campaign-type';
-
 // Enhanced payment tracking interfaces
 export interface PaymentTransaction {
   id: string;
@@ -46,14 +44,14 @@ export interface StripePaymentMethod {
   createdAt: Date;
 }
 
-// Campaign budget allocation
-export interface CampaignBudgetAllocation {
+// Campaign budget tracking
+export interface CampaignBudgetTracking {
   campaignId: string;
-  campaignType: CampaignType;
-  totalBudget: number;
-  allocatedBudget: number;
-  remainingBudget: number;
-  spentAmount: number;
-  heldAmount: number;
-  status: 'ACTIVE' | 'EXHAUSTED' | 'PAUSED';
+  advertiserId: string;
+  allocatedBudgetCents: number;
+  spentBudgetCents: number;
+  platformFeesCollectedCents: number;
+  cpvCents?: number; // Cost per 100 views for visibility campaigns
+  commissionRate?: number; // Commission rate percentage for salesman campaigns
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 }

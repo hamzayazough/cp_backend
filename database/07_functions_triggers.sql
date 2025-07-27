@@ -68,9 +68,9 @@ CREATE TRIGGER update_promoter_campaigns_updated_at
     BEFORE UPDATE ON promoter_campaigns 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_campaign_budget_allocations_updated_at ON campaign_budget_allocations;
-CREATE TRIGGER update_campaign_budget_allocations_updated_at 
-    BEFORE UPDATE ON campaign_budget_allocations 
+DROP TRIGGER IF EXISTS update_campaign_budget_tracking_updated_at ON campaign_budget_tracking;
+CREATE TRIGGER update_campaign_budget_tracking_updated_at 
+    BEFORE UPDATE ON campaign_budget_tracking 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ========================================

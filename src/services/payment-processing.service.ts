@@ -18,6 +18,7 @@ import {
 } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { UserEntity } from '../database/entities/user.entity';
+import { UserType } from '../enums/user-type';
 
 // Import other services
 import { StripeIntegrationService } from './stripe-integration.service';
@@ -126,12 +127,13 @@ export class PaymentProcessingService {
 
       // Get or create promoter wallet
       let wallet = await this.walletRepository.findOne({
-        where: { promoterId: promoterId },
+        where: { userId: promoterId, userType: UserType.PROMOTER },
       });
 
       if (!wallet) {
         wallet = this.walletRepository.create({
-          promoterId: promoterId,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
           currentBalance: 0,
           pendingBalance: 0,
           totalEarned: 0,
@@ -142,7 +144,8 @@ export class PaymentProcessingService {
 
       // Create payout transaction
       const transaction = this.transactionRepository.create({
-        promoterId: promoterId,
+        userId: promoterId,
+        userType: UserType.PROMOTER,
         amount: finalAmount || 0,
         type: TransactionType.MONTHLY_PAYOUT,
         status: TransactionStatus.COMPLETED,
@@ -239,7 +242,8 @@ export class PaymentProcessingService {
     try {
       const transactions = await this.transactionRepository.find({
         where: {
-          promoterId: promoterId,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
           type: TransactionType.MONTHLY_PAYOUT,
         },
         order: { createdAt: 'DESC' },

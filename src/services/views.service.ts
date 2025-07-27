@@ -7,7 +7,7 @@ import { CampaignEntity } from '../database/entities/campaign.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
-import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { CampaignStatus } from '../enums/campaign-status';
 import { CampaignCompletionService } from './campaign-completion.service';
 
@@ -24,8 +24,8 @@ export class ViewsService {
     private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(PromoterDetailsEntity)
     private readonly promoterDetailsRepo: Repository<PromoterDetailsEntity>,
-    @InjectRepository(CampaignBudgetAllocation)
-    private readonly budgetAllocationRepo: Repository<CampaignBudgetAllocation>,
+    @InjectRepository(CampaignBudgetTracking)
+    private readonly budgetTrackingRepo: Repository<CampaignBudgetTracking>,
     private readonly campaignCompletionService: CampaignCompletionService,
   ) {}
 
@@ -103,19 +103,19 @@ export class ViewsService {
         );
         console.log('✅ Campaign counters updated');
 
-        // Update budget allocation spent amount
-        console.log('💰 Updating budget allocation spent amount...');
-        await this.budgetAllocationRepo.increment(
-          { campaignId, promoterId: cleanPromoterId },
-          'spentAmount',
-          costPerView,
+        // Update budget tracking spent amount
+        console.log('💰 Updating budget tracking spent amount...');
+        await this.budgetTrackingRepo.increment(
+          { campaignId },
+          'spentBudgetCents',
+          Math.round(costPerView * 100), // Convert to cents
         );
-        await this.budgetAllocationRepo.increment(
-          { campaignId, promoterId: cleanPromoterId },
-          'remainingAmount',
-          -costPerView, // Decrease remaining amount
+        await this.budgetTrackingRepo.increment(
+          { campaignId },
+          'platformFeesCollectedCents',
+          Math.round(costPerView * 100 * 0.2), // 20% platform fee in cents
         );
-        console.log('✅ Budget allocation updated');
+        console.log('✅ Budget tracking updated');
 
         // Update promoter's view count and earnings
         console.log('👤 Updating promoter campaign stats...');

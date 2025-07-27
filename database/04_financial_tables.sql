@@ -3,45 +3,106 @@
 -- ========================================
 -- This file contains all financial, payment, and transaction-related tables
 
--- Transactions table for tracking all financial movements
+-- Payment records table for tracking Stripe payments
+CREATE TABLE IF NOT EXISTS payment_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stripe_payment_intent_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    -- Business relationships (what Stripe doesn't know)
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    
+    -- Basic payment info (for quick queries without API calls)
+    amount_cents INTEGER NOT NULL,
+    currency VARCHAR(3) DEFAULT 'USD',
+    payment_type VARCHAR(50) NOT NULL, -- 'CAMPAIGN_FUNDING', 'WALLET_DEPOSIT', 'WITHDRAWAL'
+    
+    -- Simple status tracking
+    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed', 'failed', 'cancelled'
+    
+    -- Minimal metadata
+    description TEXT,
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Enhanced transactions table for tracking all internal financial movements
 CREATE TABLE IF NOT EXISTS transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE, -- Works for both advertisers and promoters
+    user_type user_type NOT NULL, -- 'ADVERTISER' or 'PROMOTER'
     campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
     type transaction_type NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
+    
+    -- Enhanced amount tracking with platform fees
+    gross_amount_cents INTEGER, -- Full amount before platform fees
+    platform_fee_cents INTEGER DEFAULT 0, -- Platform's 20% fee in cents
+    amount DECIMAL(10,2) NOT NULL, -- Net amount (gross - platform_fee) in dollars
+    
     status transaction_status DEFAULT 'PENDING',
     description TEXT,
     payment_method payment_method,
     stripe_transaction_id VARCHAR(255),
+    payment_record_id UUID REFERENCES payment_records(id), -- Link to Stripe payment if applicable
     estimated_payment_date TIMESTAMP WITH TIME ZONE,
     processed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Wallet management for promoters
+-- Unified wallet management for both advertisers and promoters
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    promoter_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE, -- Works for both advertisers and promoters
+    user_type user_type NOT NULL, -- 'ADVERTISER' or 'PROMOTER'
     
-    -- View earnings (accumulated from visibility/salesman campaigns)
-    current_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (current_balance >= 0),
-    pending_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (pending_balance >= 0),
-    total_earned DECIMAL(12,2) DEFAULT 0.00 CHECK (total_earned >= 0),
+    -- Common fields for both user types
+    current_balance DECIMAL(12,2) DEFAULT 0.00 CHECK (current_balance >= 0),
+    pending_balance DECIMAL(12,2) DEFAULT 0.00 CHECK (pending_balance >= 0),
+    total_deposited DECIMAL(12,2) DEFAULT 0.00 CHECK (total_deposited >= 0), -- For advertisers: lifetime deposits
     total_withdrawn DECIMAL(12,2) DEFAULT 0.00 CHECK (total_withdrawn >= 0),
     last_payout_date TIMESTAMP WITH TIME ZONE,
-    next_payout_date TIMESTAMP WITH TIME ZONE,
-    minimum_threshold DECIMAL(6,2) DEFAULT 20.00, -- $20 threshold for visibility/salesman campaigns
     
-    -- Direct earnings (consultant/seller campaigns)
-    direct_total_earned DECIMAL(12,2) DEFAULT 0.00 CHECK (direct_total_earned >= 0),
-    direct_total_paid DECIMAL(12,2) DEFAULT 0.00 CHECK (direct_total_paid >= 0),
-    direct_pending_payments DECIMAL(10,2) DEFAULT 0.00 CHECK (direct_pending_payments >= 0),
+    -- Advertiser-specific fields (nullable for promoters)
+    held_for_campaigns DECIMAL(12,2) DEFAULT 0.00, -- Budget reserved for active campaigns
+    
+    -- Promoter-specific fields (nullable for advertisers)
+    total_earned DECIMAL(12,2) DEFAULT 0.00, -- Lifetime earnings from campaigns
+    next_payout_date TIMESTAMP WITH TIME ZONE,
+    minimum_threshold DECIMAL(6,2) DEFAULT 20.00, -- Payout threshold for visibility/salesman campaigns
+    direct_total_earned DECIMAL(12,2) DEFAULT 0.00, -- Earnings from consultant/seller campaigns
+    direct_total_paid DECIMAL(12,2) DEFAULT 0.00, -- Direct payments received
+    direct_pending_payments DECIMAL(10,2) DEFAULT 0.00, -- Pending direct payments
     direct_last_payment_date TIMESTAMP WITH TIME ZONE,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Campaign budget tracking table (replaces campaign_budget_allocations)
+CREATE TABLE IF NOT EXISTS campaign_budget_tracking (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    advertiser_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Budget allocation from advertiser wallet
+    allocated_budget_cents INTEGER NOT NULL, -- Total budget allocated to campaign (in cents)
+    spent_budget_cents INTEGER DEFAULT 0, -- Total spent so far (net to promoters)
+    platform_fees_collected_cents INTEGER DEFAULT 0, -- Platform's 20% fee collected
+    
+    -- Campaign-specific rates
+    cpv_cents INTEGER, -- Cost per 100 views (for visibility campaigns) in cents
+    commission_rate DECIMAL(5,2), -- Commission rate percentage (for salesman campaigns)
+    
+    -- Status and tracking
+    status budget_allocation_status DEFAULT 'ACTIVE',
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(campaign_id) -- One budget record per campaign
 );
 
 
@@ -49,7 +110,8 @@ CREATE TABLE IF NOT EXISTS wallets (
 CREATE TABLE IF NOT EXISTS sales_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE, -- Promoter who made the sale
+    user_type user_type DEFAULT 'PROMOTER' NOT NULL, -- Should always be PROMOTER for sales
     sale_amount DECIMAL(10,2) NOT NULL,
     commission_rate DECIMAL(5,2) NOT NULL, -- Percentage commission
     commission_earned DECIMAL(10,2) NOT NULL,
@@ -128,3 +190,10 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_payment_records_campaign_id ON payment_records(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_payment_records_user_id ON payment_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_records_status ON payment_records(status);
+CREATE INDEX IF NOT EXISTS idx_payment_records_type ON payment_records(payment_type);
+CREATE INDEX IF NOT EXISTS idx_payment_records_created ON payment_records(created_at);

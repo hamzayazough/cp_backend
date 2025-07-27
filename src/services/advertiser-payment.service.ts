@@ -22,10 +22,11 @@ import {
   PaymentMethod as TxnPaymentMethod,
 } from '../database/entities/transaction.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { CampaignBudgetAllocation } from '../database/entities/campaign-budget-allocation.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { CampaignStatus } from '../enums/campaign-status';
+import { UserType } from '../enums/user-type';
 import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
@@ -87,12 +88,17 @@ export interface TransactionResponse {
     id: string;
     type: string;
     amount: number;
+    grossAmount?: number; // Gross amount before fees (for transparency)
+    platformFee?: number; // Platform fee amount (for transparency)
     description: string;
     campaignId?: string;
     campaignTitle?: string;
     status: string;
+    paymentMethod?: string; // Payment method used
     createdAt: string;
+    processedAt?: string; // When transaction was actually processed
     paymentIntentId?: string;
+    paymentRecordId?: string; // Link to payment record for audit trail
   }>;
   total: number;
   page: number;
@@ -165,8 +171,8 @@ export class AdvertiserPaymentService {
     private readonly transactionRepo: Repository<Transaction>,
     @InjectRepository(CampaignEntity)
     private readonly campaignRepo: Repository<CampaignEntity>,
-    @InjectRepository(CampaignBudgetAllocation)
-    private readonly budgetAllocationRepo: Repository<CampaignBudgetAllocation>,
+    @InjectRepository(CampaignBudgetTracking)
+    private readonly budgetTrackingRepo: Repository<CampaignBudgetTracking>,
     @InjectRepository(PaymentRecord)
     private readonly paymentRecordRepo: Repository<PaymentRecord>,
     @InjectRepository(Wallet)
@@ -422,62 +428,41 @@ export class AdvertiserPaymentService {
   }
 
   /**
-   * Get advertiser wallet balance from payment records
+   * Get advertiser wallet balance using the unified wallet system
    *
-   * Calculates real-time balance by aggregating all completed payment transactions:
-   * - INCOMING: WALLET_DEPOSIT (user deposits from card)
-   * - OUTGOING: CAMPAIGN_FUNDING, WITHDRAWAL (money leaving wallet)
-   * - PENDING: Tracks transactions still processing
-   *
-   * This approach ensures balance accuracy by using payment_records as single source
-   * of truth rather than maintaining separate wallet balance tracking.
+   * Uses the wallets table as the primary source of truth for current balances,
+   * with payment_records providing pending transaction details for accuracy.
    *
    * @param firebaseUid - Firebase UID of the advertiser
    * @returns Promise<WalletBalance> with current balance, pending amounts, and totals
    *
    * Business Logic:
-   * - currentBalance = totalDeposited - totalSpent
-   * - availableForWithdrawal = currentBalance - pendingOutgoing
-   * - pendingCharges = pendingIncoming + pendingOutgoing
-   *
-   * Example Flow:
-   * 1. User deposits $500 → WALLET_DEPOSIT (+$500)
-   * 2. User funds campaign $200 → CAMPAIGN_FUNDING (-$200)
-   * 3. User withdraws $100 → WITHDRAWAL (-$100)
-   * 4. Result: currentBalance = $200, availableForWithdrawal = $200
+   * - Uses wallet.current_balance as authoritative current balance
+   * - Uses wallet.total_deposited and total_withdrawn for lifetime totals
+   * - Calculates pending amounts from payment_records with 'pending' status
+   * - availableForWithdrawal = current_balance - pending_outgoing - held_for_campaigns
    */
   async getWalletBalance(firebaseUid: string): Promise<WalletBalance> {
     const user = await this.findUserByFirebaseUid(firebaseUid);
 
-    // Get all completed transactions that ADD money to wallet (positive amounts)
-    const totalIncoming: { total: string | null } | undefined =
-      await this.paymentRecordRepo
-        .createQueryBuilder('payment')
-        .select('SUM(payment.amountCents)', 'total')
-        .where('payment.userId = :userId', { userId: user.id })
-        .andWhere('payment.paymentType IN (:...incomingTypes)', {
-          incomingTypes: ['WALLET_DEPOSIT'], // Only deposits add money
-        })
-        .andWhere('payment.status = :status', { status: 'completed' })
-        .getRawOne();
+    // Get or create advertiser wallet
+    let wallet = await this.walletRepo.findOne({
+      where: { userId: user.id, userType: UserType.ADVERTISER },
+    });
 
-    const totalIncomingCents = parseInt(totalIncoming?.total || '0');
-    const totalDeposited = totalIncomingCents / 100;
-
-    // Get all completed transactions that REMOVE money from wallet (negative amounts)
-    const totalOutgoing: { total: string | null } | undefined =
-      await this.paymentRecordRepo
-        .createQueryBuilder('payment')
-        .select('SUM(payment.amountCents)', 'total')
-        .where('payment.userId = :userId', { userId: user.id })
-        .andWhere('payment.paymentType IN (:...outgoingTypes)', {
-          outgoingTypes: ['CAMPAIGN_FUNDING', 'WITHDRAWAL'], // Both reduce wallet balance
-        })
-        .andWhere('payment.status = :status', { status: 'completed' })
-        .getRawOne();
-
-    const totalOutgoingCents = parseInt(totalOutgoing?.total || '0');
-    const totalSpent = totalOutgoingCents / 100;
+    if (!wallet) {
+      // Create wallet if it doesn't exist
+      wallet = this.walletRepo.create({
+        userId: user.id,
+        userType: UserType.ADVERTISER,
+        currentBalance: 0,
+        pendingBalance: 0,
+        totalDeposited: 0,
+        totalWithdrawn: 0,
+        heldForCampaigns: 0,
+      });
+      await this.walletRepo.save(wallet);
+    }
 
     // Get pending incoming transactions (deposits still processing)
     const pendingIncoming: { total: string | null } | undefined =
@@ -492,7 +477,7 @@ export class AdvertiserPaymentService {
         .getRawOne();
 
     const pendingIncomingCents = parseInt(pendingIncoming?.total || '0');
-    const pendingAmount = pendingIncomingCents / 100;
+    const pendingDeposits = pendingIncomingCents / 100;
 
     // Get pending outgoing transactions (withdrawals/funding still processing)
     const pendingOutgoing: { total: string | null } | undefined =
@@ -507,23 +492,81 @@ export class AdvertiserPaymentService {
         .getRawOne();
 
     const pendingOutgoingCents = parseInt(pendingOutgoing?.total || '0');
-    const pendingCharges = pendingOutgoingCents / 100;
+    const pendingWithdrawals = pendingOutgoingCents / 100;
 
-    // Calculate current balance: incoming - outgoing
-    const currentBalance = totalDeposited - totalSpent;
+    // Calculate total spent (total_deposited - current_balance + held_for_campaigns)
+    const totalSpent =
+      wallet.totalDeposited -
+      wallet.currentBalance +
+      (wallet.heldForCampaigns || 0);
 
-    // Available for withdrawal = current balance - pending outgoing
-    const availableForWithdrawal = Math.max(0, currentBalance - pendingCharges);
+    // Available for withdrawal = current balance - pending outgoing - held for campaigns
+    const availableForWithdrawal = Math.max(
+      0,
+      wallet.currentBalance -
+        pendingWithdrawals -
+        (wallet.heldForCampaigns || 0),
+    );
 
     return {
-      currentBalance: Number(currentBalance.toFixed(2)),
-      pendingCharges: Number((pendingAmount + pendingCharges).toFixed(2)), // Total pending changes
-      totalDeposited: Number(totalDeposited.toFixed(2)),
+      currentBalance: Number(wallet.currentBalance.toFixed(2)),
+      pendingCharges: Number((pendingDeposits + pendingWithdrawals).toFixed(2)), // Total pending changes
+      totalDeposited: Number(wallet.totalDeposited.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
       availableForWithdrawal: Number(availableForWithdrawal.toFixed(2)),
     };
   }
 
+  /**
+   * Add funds to advertiser wallet using Stripe payment processing
+   *
+   * This method handles the complete flow of depositing money into an advertiser's wallet:
+   * 1. Calculates gross amount to charge including Stripe processing fees (2.9% + $0.30)
+   * 2. Creates a Stripe PaymentIntent for the gross amount (including fees)
+   * 3. Processes payment using the specified or default payment method
+   * 4. Creates a PaymentRecord for tracking and audit purposes
+   * 5. If payment succeeds immediately, updates wallet balance and creates transaction record
+   * 6. For async payments, wallet update happens via webhook (payment.intent.succeeded)
+   *
+   * @param firebaseUid - Firebase UID of the advertiser
+   * @param dto - AddFundsDto containing net amount (what user wants in wallet), payment method, and optional description
+   * @returns Promise<FundingResult> with PaymentIntent ID and client secret for frontend confirmation
+   *
+   * Business Rules:
+   * - Minimum deposit: $1.00 (100 cents) net amount
+   * - Maximum deposit: No limit (subject to payment method limits)
+   * - Fee Structure: Stripe fees (2.9% + $0.30) are added to the requested amount
+   * - User specifies net amount they want in wallet, we calculate gross amount to charge
+   * - Payment methods: Credit/debit cards via Stripe
+   * - Processing: Immediate for most cards, may require 3D Secure for some
+   *
+   * Fee Calculation Example:
+   * - User wants $100.00 in wallet ($10,000 cents)
+   * - Gross amount to charge: ($100.00 + $0.30) / 0.971 = $103.40
+   * - Stripe fees: $103.40 - $100.00 = $3.40
+   * - Net amount added to wallet: $100.00 (exactly what user requested)
+   *
+   * Error Handling:
+   * - BadRequestException: No default payment method found
+   * - NotFoundException: User or advertiser details not found
+   * - Stripe errors: Payment declined, invalid payment method, etc.
+   *
+   * Database Operations:
+   * - Creates PaymentRecord with net amount and 'pending' or 'completed' status
+   * - If payment succeeds immediately: updates Wallet balance and creates Transaction
+   * - If payment is async: webhook will handle wallet/transaction updates later
+   *
+   * Security Considerations:
+   * - Payment method ownership verified via Stripe customer association
+   * - All monetary amounts handled in cents to avoid floating-point precision issues
+   * - Stripe PaymentIntent provides built-in fraud protection and 3D Secure when needed
+   * - Metadata attached to PaymentIntent for debugging and reconciliation
+   *
+   * Integration Points:
+   * - Frontend: Uses returned clientSecret for payment confirmation with Stripe.js
+   * - Webhooks: payment.intent.succeeded webhook processes async payment completion
+   * - Audit: All operations logged and tracked via PaymentRecord and Transaction entities
+   */
   async addFunds(
     firebaseUid: string,
     dto: AddFundsDto,
@@ -546,9 +589,17 @@ export class AdvertiserPaymentService {
       paymentMethodId = defaultMethod.stripePaymentMethodId;
     }
 
-    // Create payment intent
+    // Calculate gross amount to charge including Stripe fees (2.9% + $0.30)
+    // dto.amount is the net amount the user wants in their wallet
+    // We need to calculate the gross amount to charge to cover fees
+    // Formula: grossAmount = (netAmount + 30) / (1 - 0.029)
+    const netAmountCents = dto.amount; // This is what user wants in wallet
+    const grossAmountCents = Math.round((netAmountCents + 30) / (1 - 0.029));
+    const stripeFees = grossAmountCents - netAmountCents;
+
+    // Create payment intent with the gross amount (including fees)
     const paymentIntent = await this.stripe.paymentIntents.create({
-      amount: dto.amount,
+      amount: grossAmountCents,
       currency: 'usd',
       customer: advertiserDetails.stripeCustomerId,
       payment_method: paymentMethodId,
@@ -560,15 +611,14 @@ export class AdvertiserPaymentService {
         type: 'wallet_funding',
         userId: user.id,
         firebaseUid: user.firebaseUid,
+        netAmount: netAmountCents.toString(),
+        stripeFees: stripeFees.toString(),
       },
     });
     console.log('Creating payment record for intent:', paymentIntent.id);
-
-    // Calculate net amount after Stripe fees (2.9% + $0.30)
-    // User pays: dto.amount (includes fees)
-    // Net amount for wallet: dto.amount - Stripe fees
-    const stripeFees = Math.round(dto.amount * 0.029) + 30;
-    const netAmountCents = dto.amount - stripeFees;
+    console.log(
+      `Net amount: $${(netAmountCents / 100).toFixed(2)}, Gross amount: $${(grossAmountCents / 100).toFixed(2)}, Stripe fees: $${(stripeFees / 100).toFixed(2)}`,
+    );
 
     // Save payment record to database for tracking
     try {
@@ -576,7 +626,7 @@ export class AdvertiserPaymentService {
         stripePaymentIntentId: paymentIntent.id,
         // campaignId is optional, so we can omit it for wallet funding
         userId: user.id,
-        amountCents: netAmountCents, // Store net amount that goes to wallet
+        amountCents: netAmountCents, // Store the net amount that goes to wallet
         currency: 'USD',
         paymentType: 'WALLET_DEPOSIT',
         status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
@@ -594,6 +644,15 @@ export class AdvertiserPaymentService {
         'Payment record successfully saved with ID:',
         savedPaymentRecord.id,
       );
+
+      // If payment succeeded immediately, update wallet and create transaction
+      if (paymentIntent.status === 'succeeded') {
+        await this.processSuccessfulDeposit(
+          user.id,
+          netAmountCents,
+          savedPaymentRecord,
+        );
+      }
 
       // Verify it was saved by querying it back
       const verifyRecord = await this.paymentRecordRepo.findOne({
@@ -619,6 +678,32 @@ export class AdvertiserPaymentService {
     };
   }
 
+  /**
+   * Get paginated transaction history for an advertiser
+   *
+   * Retrieves transaction records from the unified transactions table, filtered by:
+   * - User ID and User Type (ADVERTISER)
+   * - Optional transaction type filtering
+   * - Chronological ordering (most recent first)
+   *
+   * @param firebaseUid - Firebase UID of the advertiser
+   * @param query - Query parameters for pagination and filtering
+   * @returns Promise<TransactionResponse> with paginated transaction data
+   *
+   * New Architecture Features:
+   * - Uses unified transaction table with user_type discrimination
+   * - Includes gross amounts and platform fees for transparency
+   * - Links to payment records for full audit trail
+   * - Supports all new transaction types (WALLET_DEPOSIT, VIEW_EARNING, etc.)
+   * - Provides processing timestamps for better tracking
+   *
+   * Response Fields:
+   * - Basic transaction info (id, type, amount, status, date)
+   * - Fee breakdown (gross amount, platform fees) when available
+   * - Campaign association for campaign-related transactions
+   * - Payment method and processing details
+   * - Stripe transaction IDs for external reconciliation
+   */
   async getTransactions(
     firebaseUid: string,
     query: TransactionQueryDto,
@@ -631,13 +716,49 @@ export class AdvertiserPaymentService {
     const queryBuilder = this.transactionRepo
       .createQueryBuilder('transaction')
       .leftJoinAndSelect('transaction.campaign', 'campaign')
-      .where('transaction.promoterId = :userId', { userId: user.id })
+      .leftJoinAndSelect('transaction.paymentRecord', 'paymentRecord')
+      .where('transaction.userId = :userId', { userId: user.id })
+      .andWhere('transaction.userType = :userType', {
+        userType: UserType.ADVERTISER,
+      })
       .orderBy('transaction.createdAt', 'DESC')
       .skip(offset)
       .take(limit);
 
+    // Map old DTO values to new TransactionType enum values
     if (query.type) {
-      queryBuilder.andWhere('transaction.type = :type', { type: query.type });
+      let mappedType: TransactionType | undefined;
+      switch (query.type) {
+        case 'DEPOSIT':
+          mappedType = TransactionType.WALLET_DEPOSIT;
+          break;
+        case 'WITHDRAWAL':
+          mappedType = TransactionType.WITHDRAWAL;
+          break;
+        case 'CAMPAIGN_FUNDING':
+          mappedType = TransactionType.CAMPAIGN_FUNDING;
+          break;
+        case 'REFUND':
+          // Special case: search for refund-like transactions in description
+          queryBuilder.andWhere(
+            'transaction.description ILIKE :refundPattern',
+            { refundPattern: '%refund%' },
+          );
+          break;
+        default:
+          // Check if exact match exists in new TransactionType enum
+          if (
+            Object.values(TransactionType).includes(
+              query.type as TransactionType,
+            )
+          ) {
+            mappedType = query.type as TransactionType;
+          }
+      }
+
+      if (mappedType) {
+        queryBuilder.andWhere('transaction.type = :type', { type: mappedType });
+      }
     }
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
@@ -647,12 +768,23 @@ export class AdvertiserPaymentService {
         id: txn.id,
         type: txn.type,
         amount: txn.amount,
+        // Include fee breakdown for transparency
+        grossAmount: txn.grossAmountCents
+          ? txn.grossAmountCents / 100
+          : undefined,
+        platformFee: txn.platformFeeCents
+          ? txn.platformFeeCents / 100
+          : undefined,
         description: txn.description || '',
         campaignId: txn.campaignId,
         campaignTitle: txn.campaign?.title,
         status: txn.status,
+        paymentMethod: txn.paymentMethod,
         createdAt: txn.createdAt.toISOString(),
+        processedAt: txn.processedAt?.toISOString(),
         paymentIntentId: txn.stripeTransactionId,
+        // Additional context for audit trail
+        paymentRecordId: txn.paymentRecordId,
       })),
       total,
       page,
@@ -701,23 +833,29 @@ export class AdvertiserPaymentService {
       throw new NotFoundException('Campaign not found');
     }
 
-    const budgetAllocation = await this.budgetAllocationRepo.findOne({
+    const budgetTracking = await this.budgetTrackingRepo.findOne({
       where: { campaignId },
     });
 
     const paymentHistory = await this.transactionRepo.find({
-      where: { campaignId, promoterId: user.id },
+      where: { campaignId, userId: user.id },
       order: { createdAt: 'DESC' },
       take: 10,
     });
 
     return {
       campaignId,
-      totalBudget: budgetAllocation?.totalBudget || 0,
-      spentAmount: budgetAllocation?.spentAmount || 0,
-      remainingBudget:
-        (budgetAllocation?.totalBudget || 0) -
-        (budgetAllocation?.spentAmount || 0),
+      totalBudget: budgetTracking?.allocatedBudgetCents
+        ? budgetTracking.allocatedBudgetCents / 100
+        : 0,
+      spentAmount: budgetTracking?.spentBudgetCents
+        ? budgetTracking.spentBudgetCents / 100
+        : 0,
+      remainingBudget: budgetTracking
+        ? (budgetTracking.allocatedBudgetCents -
+            budgetTracking.spentBudgetCents) /
+          100
+        : 0,
       pendingPayments: 0, // Calculate from pending transactions
       lastPaymentDate: paymentHistory[0]?.createdAt?.toISOString(),
       paymentHistory: paymentHistory.map((txn) => ({
@@ -840,7 +978,8 @@ export class AdvertiserPaymentService {
 
     // Create withdrawal transaction record (full amount deducted from wallet)
     const withdrawalTransaction = this.transactionRepo.create({
-      promoterId: user.id,
+      userId: user.id,
+      userType: UserType.ADVERTISER,
       type: TransactionType.WITHDRAWAL,
       amount: -withdrawalAmountDollars, // Full amount deducted from wallet
       status: TransactionStatus.PENDING,
@@ -913,7 +1052,7 @@ export class AdvertiserPaymentService {
       await this.transactionRepo
         .createQueryBuilder('transaction')
         .select('SUM(ABS(transaction.amount))', 'total')
-        .where('transaction.promoterId = :userId', { userId })
+        .where('transaction.userId = :userId', { userId })
         .andWhere('transaction.type = :type', {
           type: TransactionType.WITHDRAWAL,
         })
@@ -995,7 +1134,8 @@ export class AdvertiserPaymentService {
 
     // Create transaction record
     const transaction = this.transactionRepo.create({
-      promoterId: userId,
+      userId: userId,
+      userType: UserType.ADVERTISER,
       campaignId,
       type: TransactionType.DIRECT_PAYMENT,
       amount: -amountDollars, // Negative for outflow
@@ -1414,5 +1554,65 @@ export class AdvertiserPaymentService {
       transferId: placeholderTransferId,
       status: 'requires_manual_processing',
     });
+  }
+
+  /**
+   * Process a successful deposit by updating wallet balance and creating transaction record
+   * This ensures wallet balance stays in sync with payment records
+   */
+  private async processSuccessfulDeposit(
+    userId: string,
+    netAmountCents: number,
+    paymentRecord: PaymentRecord,
+  ): Promise<void> {
+    const netAmountDollars = netAmountCents / 100;
+
+    // Get or create advertiser wallet
+    let wallet = await this.walletRepo.findOne({
+      where: { userId, userType: UserType.ADVERTISER },
+    });
+
+    if (!wallet) {
+      wallet = this.walletRepo.create({
+        userId,
+        userType: UserType.ADVERTISER,
+        currentBalance: 0,
+        pendingBalance: 0,
+        totalDeposited: 0,
+        totalWithdrawn: 0,
+        heldForCampaigns: 0,
+      });
+    }
+
+    // Update wallet balances
+    wallet.currentBalance += netAmountDollars;
+    wallet.totalDeposited += netAmountDollars;
+
+    await this.walletRepo.save(wallet);
+
+    // Create transaction record for audit trail
+    const transaction = this.transactionRepo.create({
+      userId,
+      userType: UserType.ADVERTISER,
+      type: TransactionType.WALLET_DEPOSIT,
+      amount: netAmountDollars,
+      grossAmountCents:
+        paymentRecord.amountCents +
+        Math.round(paymentRecord.amountCents * 0.029) +
+        30, // Original amount before fees
+      platformFeeCents: 0, // No platform fee for deposits
+      status: TransactionStatus.COMPLETED,
+      description: paymentRecord.description,
+      paymentMethod: TxnPaymentMethod.BANK_TRANSFER,
+      stripeTransactionId: paymentRecord.stripePaymentIntentId,
+      paymentRecordId: paymentRecord.id,
+      processedAt: new Date(),
+    });
+
+    await this.transactionRepo.save(transaction);
+
+    this.logger.log(
+      `Wallet deposit processed: User ${userId}, Amount: $${netAmountDollars}, New Balance: $${wallet.currentBalance}`,
+    );
   }
 }

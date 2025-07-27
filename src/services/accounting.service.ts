@@ -52,7 +52,8 @@ export class AccountingService {
       // Get all earnings transactions for the promoter in the period
       const transactions = await this.transactionRepo.find({
         where: {
-          promoterId,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
           status: TransactionStatus.COMPLETED,
           createdAt: Between(startDate, endDate),
         },
@@ -163,7 +164,8 @@ export class AccountingService {
         try {
           // Create payout transaction
           const payoutTransaction = this.transactionRepo.create({
-            promoterId: wallet.promoterId,
+            userId: wallet.userId,
+            userType: UserType.PROMOTER,
             amount: wallet.currentBalance,
             status: TransactionStatus.PENDING,
             type: TransactionType.MONTHLY_PAYOUT,
@@ -183,11 +185,11 @@ export class AccountingService {
           });
 
           this.logger.log(
-            `Created monthly payout of $${wallet.currentBalance / 100} for promoter ${wallet.promoterId}`,
+            `Created monthly payout of $${wallet.currentBalance / 100} for promoter ${wallet.userId}`,
           );
         } catch (error) {
           this.logger.error(
-            `Failed to process payout for promoter ${wallet.promoterId}: ${(error as Error).message}`,
+            `Failed to process payout for promoter ${wallet.userId}: ${(error as Error).message}`,
           );
           // Continue with other promoters
         }
@@ -216,7 +218,7 @@ export class AccountingService {
     totalWithdrawn: number;
   } | null> {
     const wallet = await this.walletRepo.findOne({
-      where: { promoterId },
+      where: { userId: promoterId, userType: UserType.PROMOTER },
     });
 
     if (!wallet) {
@@ -226,7 +228,7 @@ export class AccountingService {
     return {
       currentBalance: wallet.currentBalance,
       pendingBalance: wallet.pendingBalance,
-      totalEarned: wallet.totalEarned,
+      totalEarned: wallet.totalEarned || 0,
       totalWithdrawn: wallet.totalWithdrawn,
     };
   }
@@ -286,13 +288,14 @@ export class AccountingService {
   ): Promise<void> {
     try {
       let wallet = await this.walletRepo.findOne({
-        where: { promoterId },
+        where: { userId: promoterId, userType: UserType.PROMOTER },
       });
 
       if (!wallet) {
         // Create new wallet for promoter
         wallet = this.walletRepo.create({
-          promoterId,
+          userId: promoterId,
+          userType: UserType.PROMOTER,
           currentBalance: 0,
           pendingBalance: 0,
           totalEarned: 0,
@@ -302,13 +305,14 @@ export class AccountingService {
 
       // Update balances
       wallet.currentBalance += amount;
-      wallet.totalEarned += amount;
+      wallet.totalEarned = (wallet.totalEarned || 0) + amount;
 
       await this.walletRepo.save(wallet);
 
       // Also create a transaction record for this earning
       const transaction = this.transactionRepo.create({
-        promoterId,
+        userId: promoterId,
+        userType: UserType.PROMOTER,
         amount,
         status: TransactionStatus.COMPLETED,
         type: this.mapCampaignTypeToTransactionType(campaignType),
@@ -361,7 +365,7 @@ export class AccountingService {
 
         // Get recent transactions
         const recentTransactions = await this.transactionRepo.find({
-          where: { promoterId: userId },
+          where: { userId: userId, userType: UserType.PROMOTER },
           order: { createdAt: 'DESC' },
           take: 10,
         });
