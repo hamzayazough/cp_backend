@@ -421,64 +421,106 @@ export class AdvertiserPaymentService {
     await this.paymentMethodRepo.save(savedMethod);
   }
 
+  /**
+   * Get advertiser wallet balance from payment records
+   *
+   * Calculates real-time balance by aggregating all completed payment transactions:
+   * - INCOMING: WALLET_DEPOSIT (user deposits from card)
+   * - OUTGOING: CAMPAIGN_FUNDING, WITHDRAWAL (money leaving wallet)
+   * - PENDING: Tracks transactions still processing
+   *
+   * This approach ensures balance accuracy by using payment_records as single source
+   * of truth rather than maintaining separate wallet balance tracking.
+   *
+   * @param firebaseUid - Firebase UID of the advertiser
+   * @returns Promise<WalletBalance> with current balance, pending amounts, and totals
+   *
+   * Business Logic:
+   * - currentBalance = totalDeposited - totalSpent
+   * - availableForWithdrawal = currentBalance - pendingOutgoing
+   * - pendingCharges = pendingIncoming + pendingOutgoing
+   *
+   * Example Flow:
+   * 1. User deposits $500 → WALLET_DEPOSIT (+$500)
+   * 2. User funds campaign $200 → CAMPAIGN_FUNDING (-$200)
+   * 3. User withdraws $100 → WITHDRAWAL (-$100)
+   * 4. Result: currentBalance = $200, availableForWithdrawal = $200
+   */
   async getWalletBalance(firebaseUid: string): Promise<WalletBalance> {
     const user = await this.findUserByFirebaseUid(firebaseUid);
 
-    // Get total deposited from completed wallet deposits using PaymentRecord
-    const totalDeposits: { total: string | null } | undefined =
+    // Get all completed transactions that ADD money to wallet (positive amounts)
+    const totalIncoming: { total: string | null } | undefined =
       await this.paymentRecordRepo
         .createQueryBuilder('payment')
         .select('SUM(payment.amountCents)', 'total')
         .where('payment.userId = :userId', { userId: user.id })
-        .andWhere('payment.paymentType = :paymentType', {
-          paymentType: 'WALLET_DEPOSIT',
+        .andWhere('payment.paymentType IN (:...incomingTypes)', {
+          incomingTypes: ['WALLET_DEPOSIT'], // Only deposits add money
         })
         .andWhere('payment.status = :status', { status: 'completed' })
         .getRawOne();
 
-    const totalDepositedCents = parseInt(totalDeposits?.total || '0');
-    const totalDeposited = totalDepositedCents / 100; // Convert cents to dollars
+    const totalIncomingCents = parseInt(totalIncoming?.total || '0');
+    const totalDeposited = totalIncomingCents / 100;
 
-    // Get pending deposits
-    const pendingDeposits: { total: string | null } | undefined =
+    // Get all completed transactions that REMOVE money from wallet (negative amounts)
+    const totalOutgoing: { total: string | null } | undefined =
       await this.paymentRecordRepo
         .createQueryBuilder('payment')
         .select('SUM(payment.amountCents)', 'total')
         .where('payment.userId = :userId', { userId: user.id })
-        .andWhere('payment.paymentType = :paymentType', {
-          paymentType: 'WALLET_DEPOSIT',
+        .andWhere('payment.paymentType IN (:...outgoingTypes)', {
+          outgoingTypes: ['CAMPAIGN_FUNDING', 'WITHDRAWAL'], // Both reduce wallet balance
+        })
+        .andWhere('payment.status = :status', { status: 'completed' })
+        .getRawOne();
+
+    const totalOutgoingCents = parseInt(totalOutgoing?.total || '0');
+    const totalSpent = totalOutgoingCents / 100;
+
+    // Get pending incoming transactions (deposits still processing)
+    const pendingIncoming: { total: string | null } | undefined =
+      await this.paymentRecordRepo
+        .createQueryBuilder('payment')
+        .select('SUM(payment.amountCents)', 'total')
+        .where('payment.userId = :userId', { userId: user.id })
+        .andWhere('payment.paymentType IN (:...incomingTypes)', {
+          incomingTypes: ['WALLET_DEPOSIT'],
         })
         .andWhere('payment.status = :status', { status: 'pending' })
         .getRawOne();
 
-    const pendingAmount = parseInt(pendingDeposits?.total || '0') / 100;
+    const pendingIncomingCents = parseInt(pendingIncoming?.total || '0');
+    const pendingAmount = pendingIncomingCents / 100;
 
-    // Get total spent from campaign funding and other outgoing transactions
-    const totalSpentFromPayments: { total: string | null } | undefined =
+    // Get pending outgoing transactions (withdrawals/funding still processing)
+    const pendingOutgoing: { total: string | null } | undefined =
       await this.paymentRecordRepo
         .createQueryBuilder('payment')
         .select('SUM(payment.amountCents)', 'total')
         .where('payment.userId = :userId', { userId: user.id })
-        .andWhere('payment.paymentType = :paymentType', {
-          paymentType: 'CAMPAIGN_FUNDING',
+        .andWhere('payment.paymentType IN (:...outgoingTypes)', {
+          outgoingTypes: ['CAMPAIGN_FUNDING', 'WITHDRAWAL'],
         })
-        .andWhere('payment.status = :status', { status: 'completed' })
+        .andWhere('payment.status = :status', { status: 'pending' })
         .getRawOne();
 
-    const totalSpentCents = parseInt(totalSpentFromPayments?.total || '0');
-    const totalSpent = totalSpentCents / 100; // Convert cents to dollars
+    const pendingOutgoingCents = parseInt(pendingOutgoing?.total || '0');
+    const pendingCharges = pendingOutgoingCents / 100;
 
+    // Calculate current balance: incoming - outgoing
     const currentBalance = totalDeposited - totalSpent;
+
+    // Available for withdrawal = current balance - pending outgoing
+    const availableForWithdrawal = Math.max(0, currentBalance - pendingCharges);
 
     return {
       currentBalance: Number(currentBalance.toFixed(2)),
-      pendingCharges: Number(pendingAmount.toFixed(2)),
+      pendingCharges: Number((pendingAmount + pendingCharges).toFixed(2)), // Total pending changes
       totalDeposited: Number(totalDeposited.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
-      availableForWithdrawal: Math.max(
-        0,
-        Number((currentBalance - pendingAmount).toFixed(2)),
-      ),
+      availableForWithdrawal: Number(availableForWithdrawal.toFixed(2)),
     };
   }
 

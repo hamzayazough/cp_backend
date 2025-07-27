@@ -541,6 +541,7 @@ export class AdvertiserController {
     };
   }
 
+  // TODO: work back on this once advertiser will have a stripe connect id
   @Post('wallet/withdraw-funds')
   @HttpCode(HttpStatus.OK)
   async withdrawFunds(
