@@ -91,6 +91,10 @@ export class WithdrawFundsDto {
   description?: string;
 }
 
+export class CheckCampaignFundingDto {
+  estimatedBudgetCents: number; // in cents
+}
+
 @Controller('advertiser')
 export class AdvertiserController {
   constructor(
@@ -704,6 +708,31 @@ export class AdvertiserController {
       success: true,
       data: result,
       message: 'Campaign budget updated successfully',
+    };
+  }
+
+  @Post('campaigns/funding-check')
+  @HttpCode(HttpStatus.OK)
+  async checkCampaignFundingFeasibility(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: CheckCampaignFundingDto,
+  ) {
+    if (!dto.estimatedBudgetCents || dto.estimatedBudgetCents <= 0) {
+      throw new BadRequestException('Estimated budget must be greater than 0');
+    }
+
+    const feasibility =
+      await this.advertiserPaymentService.checkCampaignFundingFeasibility(
+        req.user.uid,
+        dto.estimatedBudgetCents,
+      );
+
+    return {
+      success: true,
+      data: feasibility,
+      message: feasibility.canAfford
+        ? 'Sufficient funds available for campaign'
+        : `Additional funding of $${feasibility.shortfallAmount.toFixed(2)} required`,
     };
   }
 }

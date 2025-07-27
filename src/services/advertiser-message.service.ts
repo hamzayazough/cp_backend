@@ -14,7 +14,7 @@ export class AdvertiserMessageService {
   ) {}
 
   async getRecentMessages(
-    advertiserId: number,
+    advertiserId: string,
     limit: number = 10,
   ): Promise<AdvertiserMessage[]> {
     const messages = await this.messageRepository

@@ -28,6 +28,8 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
 import { PaymentMethod } from '../database/entities/payment-method.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
+import { ViewStatEntity } from '../database/entities/view-stat.entity';
+import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { PaymentRecord } from '../database/entities/payment-record.entity';
       PaymentMethod,
       CampaignBudgetTracking,
       PaymentRecord,
+      ViewStatEntity,
+      SalesRecordEntity,
     ]),
     PromoterModule,
     StripeModule,

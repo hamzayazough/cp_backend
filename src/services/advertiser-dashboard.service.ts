@@ -35,9 +35,7 @@ export class AdvertiserDashboardService {
     const [stats, activeCampaigns, recentTransactions, recentMessages, wallet] =
       await Promise.all([
         request.includeStats
-          ? this.advertiserStatsService.getAdvertiserStats(
-              parseInt(advertiserId),
-            )
+          ? this.advertiserStatsService.getAdvertiserStats(advertiserId)
           : Promise.resolve(undefined),
         request.includeCampaigns
           ? this.advertiserCampaignService.getActiveCampaigns(
@@ -113,10 +111,7 @@ export class AdvertiserDashboardService {
     advertiserId: string,
     limit: number,
   ): Promise<AdvertiserMessage[]> {
-    return this.advertiserMessageService.getRecentMessages(
-      parseInt(advertiserId),
-      limit,
-    );
+    return this.advertiserMessageService.getRecentMessages(advertiserId, limit);
   }
 
   async getDashboardSummary(

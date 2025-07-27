@@ -76,7 +76,7 @@ export class AdvertiserService {
     const advertiserId = advertiser.id;
     const data: AdvertiserDashboardData = {
       stats: request.includeStats
-        ? await this.statsService.getAdvertiserStats(parseInt(advertiserId))
+        ? await this.statsService.getAdvertiserStats(advertiserId)
         : {
             spendingThisWeek: 0,
             spendingLastWeek: 0,
@@ -104,7 +104,7 @@ export class AdvertiserService {
         : [],
       recentMessages: request.includeMessages
         ? await this.messageService.getRecentMessages(
-            parseInt(advertiserId),
+            advertiserId,
             request.messageLimit || 10,
           )
         : [],

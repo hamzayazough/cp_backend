@@ -10,6 +10,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
+import { Wallet } from '../database/entities/wallet.entity';
+import {
+  Transaction,
+  TransactionType,
+  TransactionStatus,
+  PaymentMethod,
+} from '../database/entities/transaction.entity';
 import { S3Service, S3FileType } from './s3.service';
 import {
   Campaign,
@@ -18,6 +26,7 @@ import {
 } from '../interfaces/campaign';
 import { CampaignType } from '../enums/campaign-type';
 import { Deliverable } from '../enums/deliverable';
+import { UserType } from '../enums/user-type';
 
 // Helpers
 import { FileValidationHelper } from '../helpers/file-validation.helper';
@@ -53,6 +62,12 @@ export class CampaignService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignDeliverableEntity)
     private deliverableRepository: Repository<CampaignDeliverableEntity>,
+    @InjectRepository(CampaignBudgetTracking)
+    private campaignBudgetTrackingRepository: Repository<CampaignBudgetTracking>,
+    @InjectRepository(Wallet)
+    private walletRepository: Repository<Wallet>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
     private s3Service: S3Service,
   ) {}
 
@@ -158,8 +173,21 @@ export class CampaignService {
         user.id,
       );
 
+      // Financial validation and budget allocation
+      if (campaign.budgetAllocated && campaign.budgetAllocated > 0) {
+        await this.validateAndAllocateCampaignBudget(
+          user.id,
+          campaign.budgetAllocated,
+        );
+      }
+
       // Save campaign first to get its ID
       const savedCampaign = await this.campaignRepository.save(campaign);
+
+      // Create budget tracking record if budget was allocated
+      if (savedCampaign.budgetAllocated && savedCampaign.budgetAllocated > 0) {
+        await this.createCampaignBudgetTracking(savedCampaign);
+      }
 
       // Create deliverable entities based on campaign type
       if (campaignData.type === CampaignType.CONSULTANT) {
@@ -242,5 +270,76 @@ export class CampaignService {
     });
 
     return await this.deliverableRepository.save(deliverableEntities);
+  }
+
+  /**
+   * Validates that advertiser has sufficient funds and allocates budget for campaign
+   * Updates wallet to hold funds for the campaign
+   */
+  private async validateAndAllocateCampaignBudget(
+    advertiserId: string,
+    budgetDollars: number,
+  ): Promise<void> {
+    // Get or create advertiser wallet
+    const wallet = await this.walletRepository.findOne({
+      where: { userId: advertiserId, userType: UserType.ADVERTISER },
+    });
+
+    if (!wallet) {
+      throw new BadRequestException(
+        'Advertiser wallet not found. Please add funds to your wallet first.',
+      );
+    }
+
+    // Calculate available balance (current balance minus already held amounts)
+    const availableBalance =
+      wallet.currentBalance - (wallet.heldForCampaigns || 0);
+
+    if (availableBalance < budgetDollars) {
+      const shortfall = budgetDollars - availableBalance;
+      throw new BadRequestException(
+        `Insufficient funds. You need an additional $${shortfall.toFixed(2)} to create this campaign. ` +
+          `Available: $${availableBalance.toFixed(2)}, Required: $${budgetDollars.toFixed(2)}`,
+      );
+    }
+
+    // Hold the budget amount for this campaign
+    wallet.heldForCampaigns = (wallet.heldForCampaigns || 0) + budgetDollars;
+    await this.walletRepository.save(wallet);
+
+    // Create transaction record for audit trail
+    const transaction = this.transactionRepository.create({
+      userId: advertiserId,
+      userType: UserType.ADVERTISER,
+      type: TransactionType.CAMPAIGN_FUNDING,
+      amount: -budgetDollars, // Negative for money held/allocated
+      status: TransactionStatus.COMPLETED,
+      description: `Budget allocated for campaign creation - $${budgetDollars.toFixed(2)}`,
+      paymentMethod: PaymentMethod.WALLET, // Using wallet funds
+    });
+
+    await this.transactionRepository.save(transaction);
+  }
+
+  /**
+   * Creates budget tracking record for campaign management
+   */
+  private async createCampaignBudgetTracking(
+    campaign: CampaignEntity,
+  ): Promise<void> {
+    const budgetCents = Math.round((campaign.budgetAllocated || 0) * 100);
+
+    const budgetTracking = this.campaignBudgetTrackingRepository.create({
+      campaignId: campaign.id,
+      advertiserId: campaign.advertiserId,
+      allocatedBudgetCents: budgetCents,
+      spentBudgetCents: 0,
+      platformFeesCollectedCents: 0,
+      // Set campaign-type specific rates
+      cpvCents: campaign.cpv ? Math.round(campaign.cpv * 100) : null,
+      commissionRate: campaign.commissionPerSale || null,
+    });
+
+    await this.campaignBudgetTrackingRepository.save(budgetTracking);
   }
 }

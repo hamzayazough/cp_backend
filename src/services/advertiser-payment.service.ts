@@ -81,6 +81,7 @@ export interface WalletBalance {
   totalDeposited: number;
   totalSpent: number;
   availableForWithdrawal: number;
+  totalHeldForCampaign: number;
 }
 
 export interface TransactionResponse {
@@ -153,6 +154,19 @@ export interface WithdrawalLimits {
   };
   processingTime: string;
   description: string;
+}
+
+export interface CampaignFundingFeasibility {
+  canAfford: boolean;
+  currentAvailableBalance: number; // Available balance for new campaigns (excluding held amounts)
+  estimatedBudget: number; // Budget needed for the new campaign
+  shortfallAmount: number; // How much more is needed (0 if can afford)
+  recommendedDeposit: number; // Recommended deposit amount (includes buffer and Stripe fees)
+  walletSummary?: {
+    totalBalance: number; // Total current balance
+    heldForExistingCampaigns: number; // Amount held for existing campaigns
+    pendingTransactions: number; // Pending deposits/withdrawals
+  };
 }
 
 @Injectable()
@@ -495,10 +509,9 @@ export class AdvertiserPaymentService {
     const pendingWithdrawals = pendingOutgoingCents / 100;
 
     // Calculate total spent (total_deposited - current_balance + held_for_campaigns)
-    const totalSpent =
-      wallet.totalDeposited -
-      wallet.currentBalance +
-      (wallet.heldForCampaigns || 0);
+    const totalSpent = wallet.totalDeposited - wallet.currentBalance;
+
+    const totalHeldForCampaign = wallet.heldForCampaigns || 0;
 
     // Available for withdrawal = current balance - pending outgoing - held for campaigns
     const availableForWithdrawal = Math.max(
@@ -514,6 +527,7 @@ export class AdvertiserPaymentService {
       totalDeposited: Number(wallet.totalDeposited.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
       availableForWithdrawal: Number(availableForWithdrawal.toFixed(2)),
+      totalHeldForCampaign: Number(totalHeldForCampaign.toFixed(2)),
     };
   }
 
@@ -1614,5 +1628,106 @@ export class AdvertiserPaymentService {
     this.logger.log(
       `Wallet deposit processed: User ${userId}, Amount: $${netAmountDollars}, New Balance: $${wallet.currentBalance}`,
     );
+  }
+
+  /**
+   * Check if advertiser has sufficient funds for a new campaign
+   *
+   * This method calculates:
+   * 1. Current available balance (current_balance - held_for_campaigns - pending_outgoing)
+   * 2. Whether the advertiser can afford the estimated budget for new campaign
+   * 3. If not, how much additional funding is needed
+   *
+   * @param firebaseUid - Firebase UID of the advertiser
+   * @param estimatedBudgetCents - Estimated budget for the new campaign in cents
+   * @returns Object with funding feasibility information
+   */
+  async checkCampaignFundingFeasibility(
+    firebaseUid: string,
+    estimatedBudgetCents: number,
+  ): Promise<CampaignFundingFeasibility> {
+    const user = await this.findUserByFirebaseUid(firebaseUid);
+
+    // Get current wallet balance details
+    const balance = await this.getWalletBalance(firebaseUid);
+
+    // Get wallet entity for held_for_campaigns amount
+    const wallet = await this.walletRepo.findOne({
+      where: { userId: user.id, userType: UserType.ADVERTISER },
+    });
+
+    if (!wallet) {
+      return {
+        canAfford: false,
+        currentAvailableBalance: 0,
+        estimatedBudget: estimatedBudgetCents / 100,
+        shortfallAmount: estimatedBudgetCents / 100,
+        recommendedDeposit: this.calculateRecommendedDeposit(
+          estimatedBudgetCents / 100,
+        ),
+      };
+    }
+
+    // Calculate available balance for new campaigns
+    // This is current balance minus what's already held for existing campaigns and pending outgoing
+    const availableForNewCampaigns = Math.max(
+      0,
+      wallet.currentBalance - (wallet.heldForCampaigns || 0),
+    );
+
+    const estimatedBudgetDollars = estimatedBudgetCents / 100;
+    const canAfford = availableForNewCampaigns >= estimatedBudgetDollars;
+    const shortfallAmount = canAfford
+      ? 0
+      : estimatedBudgetDollars - availableForNewCampaigns;
+
+    return {
+      canAfford,
+      currentAvailableBalance: Number(availableForNewCampaigns.toFixed(2)),
+      estimatedBudget: estimatedBudgetDollars,
+      shortfallAmount: Number(shortfallAmount.toFixed(2)),
+      recommendedDeposit:
+        shortfallAmount > 0
+          ? this.calculateRecommendedDeposit(shortfallAmount)
+          : 0,
+      walletSummary: {
+        totalBalance: balance.currentBalance,
+        heldForExistingCampaigns: Number(
+          (wallet.heldForCampaigns || 0).toFixed(2),
+        ),
+        pendingTransactions: balance.pendingCharges,
+      },
+    };
+  }
+
+  /**
+   * Calculate recommended deposit amount including a buffer and accounting for Stripe fees
+   *
+   * @param shortfallAmount - The minimum amount needed in dollars
+   * @returns Recommended deposit amount including buffer and fees
+   */
+  private calculateRecommendedDeposit(shortfallAmount: number): number {
+    // Add 20% buffer to the shortfall
+    const amountWithBuffer = shortfallAmount * 1.2;
+
+    // Calculate gross amount needed to get the net amount after Stripe fees
+    // Using our existing fee calculation logic
+    const grossAmountCents = this.calculateTotalAmountForNetDeposit(
+      amountWithBuffer * 100,
+    );
+
+    return Number((grossAmountCents / 100).toFixed(2));
+  }
+
+  /**
+   * Calculate total amount needed to be charged to get a specific net deposit amount
+   * Accounts for Stripe processing fees (2.9% + $0.30)
+   *
+   * @param netAmountCents - Net amount user wants in wallet (in cents)
+   * @returns Gross amount to charge including fees (in cents)
+   */
+  private calculateTotalAmountForNetDeposit(netAmountCents: number): number {
+    // Formula: grossAmount = (netAmount + 30) / (1 - 0.029)
+    return Math.round((netAmountCents + 30) / (1 - 0.029));
   }
 }
