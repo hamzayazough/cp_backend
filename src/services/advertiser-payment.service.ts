@@ -543,7 +543,7 @@ export class AdvertiserPaymentService {
 
     return {
       currentBalance: currentBalance,
-      pendingCharges: Number((pendingDeposits + pendingWithdrawals).toFixed(2)), // Total pending changes
+      pendingCharges: Number((pendingDeposits + pendingWithdrawals).toFixed(2)),
       totalDeposited: Number(wallet.totalDeposited.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
       availableForWithdrawal: Number(availableForWithdrawal.toFixed(2)),

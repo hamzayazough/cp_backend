@@ -30,7 +30,6 @@ import {
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
-  AdvertiserDashboardSummary,
   CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
@@ -224,31 +223,6 @@ export class AdvertiserController {
         error instanceof Error
           ? error.message
           : 'Failed to retrieve campaigns list',
-      );
-    }
-  }
-
-  @Get('dashboard/summary')
-  async getDashboardSummary(@Request() req: { user: FirebaseUser }): Promise<{
-    success: boolean;
-    data: AdvertiserDashboardSummary;
-    message?: string;
-  }> {
-    try {
-      const firebaseUid = req.user.uid;
-      const data =
-        await this.advertiserService.getDashboardSummary(firebaseUid);
-
-      return {
-        success: true,
-        data,
-        message: 'Dashboard summary retrieved successfully',
-      };
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error
-          ? error.message
-          : 'Failed to retrieve dashboard summary',
       );
     }
   }

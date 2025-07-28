@@ -19,11 +19,9 @@ import {
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
-  AdvertiserDashboardSummary,
   CampaignFilters,
   CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
-import { AdvertiserDashboardService } from './advertiser-dashboard.service';
 import { AdvertiserCampaignService } from './advertiser-campaign.service';
 import { AdvertiserWalletService } from './advertiser-wallet.service';
 import { AdvertiserStatsService } from './advertiser-stats.service';
@@ -52,7 +50,6 @@ export class AdvertiserService {
     private messageRepository: Repository<Message>,
     @InjectRepository(CampaignApplicationEntity)
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
-    private dashboardService: AdvertiserDashboardService,
     private campaignService: AdvertiserCampaignService,
     private walletService: AdvertiserWalletService,
     private statsService: AdvertiserStatsService,
@@ -146,19 +143,6 @@ export class AdvertiserService {
     return this.campaignService.getCampaignsList(advertiser.id, request);
   }
 
-  async getDashboardSummary(
-    firebaseUid: string,
-  ): Promise<AdvertiserDashboardSummary> {
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
-    });
-
-    if (!advertiser) {
-      throw new Error('Advertiser not found');
-    }
-
-    return this.dashboardService.getDashboardSummary(advertiser.id);
-  }
   getCampaignFilters(): CampaignFilters {
     return this.campaignService.getCampaignFilters();
   }

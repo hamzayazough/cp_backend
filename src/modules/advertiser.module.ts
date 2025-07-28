@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
 import { AdvertiserService } from '../services/advertiser.service';
 import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
-import { AdvertiserDashboardService } from '../services/advertiser-dashboard.service';
 import { AdvertiserCampaignService } from '../services/advertiser-campaign.service';
 import { AdvertiserWalletService } from '../services/advertiser-wallet.service';
 import { AdvertiserStatsService } from '../services/advertiser-stats.service';
@@ -64,7 +63,6 @@ import { StripeConnectAccount } from '../database/entities/stripe-connect-accoun
   providers: [
     AdvertiserService,
     AdvertiserPaymentService,
-    AdvertiserDashboardService,
     AdvertiserCampaignService,
     AdvertiserWalletService,
     AdvertiserStatsService,
