@@ -537,9 +537,12 @@ export class AdvertiserPaymentService {
         pendingWithdrawals -
         (wallet.heldForCampaigns || 0),
     );
+    const currentBalance =
+      Number(wallet.currentBalance.toFixed(2)) -
+      Number(totalHeldForCampaign.toFixed(2));
 
     return {
-      currentBalance: Number(wallet.currentBalance.toFixed(2)),
+      currentBalance: currentBalance,
       pendingCharges: Number((pendingDeposits + pendingWithdrawals).toFixed(2)), // Total pending changes
       totalDeposited: Number(wallet.totalDeposited.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
@@ -1839,7 +1842,12 @@ export class AdvertiserPaymentService {
     // 11. Update promoter campaign record
     promoterCampaign.earnings =
       (promoterCampaign.earnings || 0) + netPaymentDollars;
-    await this.promoterCampaignRepo.save(promoterCampaign);
+    promoterCampaign.spentBudget =
+      (promoterCampaign.spentBudget || 0) + amountDollars;
+    promoterCampaign.finalPayoutAmount =
+      (promoterCampaign.finalPayoutAmount || 0) + amountDollars;
+    const temp = await this.promoterCampaignRepo.save(promoterCampaign);
+    console.log('saved promotercampaign: ', temp);
 
     // 12. Calculate total amount paid to this promoter for this campaign
     const totalPaidToPromoter: { total: string | null } | undefined =
@@ -2209,9 +2217,7 @@ export class AdvertiserPaymentService {
       };
     } catch (error) {
       console.error('Error adding test funds to platform:', error);
-      throw new BadRequestException(
-        `Failed to add test funds: ${error.message}`,
-      );
+      throw new BadRequestException(`Failed to add test funds: ${error}`);
     }
   }
 }
