@@ -95,6 +95,13 @@ export class CheckCampaignFundingDto {
   estimatedBudgetCents: number; // in cents
 }
 
+export class PayPromoterDto {
+  campaignId: string;
+  promoterId: string;
+  amount: number; // in cents
+  description?: string;
+}
+
 @Controller('advertiser')
 export class AdvertiserController {
   constructor(
@@ -545,7 +552,6 @@ export class AdvertiserController {
     if (dto.amount <= 0) {
       throw new BadRequestException('Amount must be greater than 0');
     }
-
     const result = await this.advertiserPaymentService.addFunds(
       req.user.uid,
       dto,
@@ -733,6 +739,37 @@ export class AdvertiserController {
       message: feasibility.canAfford
         ? 'Sufficient funds available for campaign'
         : `Additional funding of $${feasibility.shortfallAmount.toFixed(2)} required`,
+    };
+  }
+
+  @Post('campaigns/pay-promoter')
+  @HttpCode(HttpStatus.OK)
+  async payPromoter(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: PayPromoterDto,
+  ) {
+    if (!dto.campaignId || !dto.promoterId) {
+      throw new BadRequestException('Campaign ID and Promoter ID are required');
+    }
+
+    if (!dto.amount || dto.amount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than 0');
+    }
+
+    // Minimum payment of $1.00
+    if (dto.amount < 100) {
+      throw new BadRequestException('Minimum payment amount is $1.00');
+    }
+
+    const result = await this.advertiserPaymentService.payPromoter(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: `Payment of $${(dto.amount / 100).toFixed(2)} processed successfully`,
     };
   }
 }

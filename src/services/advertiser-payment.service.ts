@@ -11,6 +11,8 @@ import Stripe from 'stripe';
 import { STRIPE_CLIENT } from '../stripe/stripe.constants';
 import { UserEntity } from '../database/entities/user.entity';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
+import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
+import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
 import {
   PaymentMethod,
   PaymentMethodType,
@@ -25,6 +27,10 @@ import { CampaignEntity } from '../database/entities/campaign.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { Wallet } from '../database/entities/wallet.entity';
+import {
+  PromoterCampaign,
+  PromoterCampaignStatus,
+} from '../database/entities/promoter-campaign.entity';
 import { CampaignStatus } from '../enums/campaign-status';
 import { UserType } from '../enums/user-type';
 import {
@@ -169,6 +175,11 @@ export interface CampaignFundingFeasibility {
   };
 }
 
+export interface PayPromoterResult {
+  paymentId: string; // Transaction ID for the payment
+  newBudgetAllocated: number; // Total amount allocated to this promoter for this campaign
+}
+
 @Injectable()
 export class AdvertiserPaymentService {
   private readonly logger = new Logger(AdvertiserPaymentService.name);
@@ -179,6 +190,10 @@ export class AdvertiserPaymentService {
     private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(AdvertiserDetailsEntity)
     private readonly advertiserDetailsRepo: Repository<AdvertiserDetailsEntity>,
+    @InjectRepository(PromoterDetailsEntity)
+    private readonly promoterDetailsRepo: Repository<PromoterDetailsEntity>,
+    @InjectRepository(StripeConnectAccount)
+    private readonly stripeConnectAccountRepo: Repository<StripeConnectAccount>,
     @InjectRepository(PaymentMethod)
     private readonly paymentMethodRepo: Repository<PaymentMethod>,
     @InjectRepository(Transaction)
@@ -191,6 +206,8 @@ export class AdvertiserPaymentService {
     private readonly paymentRecordRepo: Repository<PaymentRecord>,
     @InjectRepository(Wallet)
     private readonly walletRepo: Repository<Wallet>,
+    @InjectRepository(PromoterCampaign)
+    private readonly promoterCampaignRepo: Repository<PromoterCampaign>,
   ) {}
 
   async getPaymentSetupStatus(
@@ -1419,18 +1436,6 @@ export class AdvertiserPaymentService {
 
       // Convert dollars to cents for Stripe
       const amountCents = Math.round(netAmountDollars * 100);
-
-      // TODO: uncomment once we add stripeConnectedAccount to advertiserDetails
-      // If user has a Stripe Connect account, use transfers
-      // if (advertiserDetails.stripeConnectedAccountId) {
-      //   return await this.processConnectTransfer(
-      //     advertiserDetails,
-      //     user,
-      //     amountCents,
-      //     bankAccountId,
-      //   );
-      // } else {
-      // Fallback: Use direct payout to customer's external account
       return await this.processDirectPayout(
         advertiserDetails,
         user,
@@ -1462,93 +1467,18 @@ export class AdvertiserPaymentService {
   }
 
   /**
-   * Process transfer using Stripe Connect (for connected accounts)
-   */
-  private async processConnectTransfer(
-    advertiserDetails: AdvertiserDetailsEntity,
-    user: UserEntity,
-    amountCents: number,
-    bankAccountId?: string,
-  ): Promise<{ transferId: string; status: string }> {
-    console.log(bankAccountId);
-    // TODO: once we added  we will need to uncomment that
-    // If no specific bank account provided, use the default external account
-    // let destinationAccountId = bankAccountId;
-
-    // if (!destinationAccountId) {
-    //   // Get the default external account from Stripe Connect account
-    //   const account = await this.stripe.accounts.retrieve(
-    //     advertiserDetails.stripeConnectedAccountId,
-    //   );
-
-    //   if (!account.external_accounts?.data?.[0]) {
-    //     throw new Error(
-    //       'No bank account found for withdrawal. Please add a bank account first.',
-    //     );
-    //   }
-
-    //   destinationAccountId = account.external_accounts.data[0].id;
-    // }
-
-    // // Create Stripe transfer to the connected account
-    // const transfer = await this.stripe.transfers.create({
-    //   amount: amountCents,
-    //   currency: 'usd',
-    //   destination: advertiserDetails.stripeConnectedAccountId,
-    //   description: `Wallet withdrawal for user ${user.firebaseUid}`,
-    //   metadata: {
-    //     userId: user.id,
-    //     firebaseUid: user.firebaseUid,
-    //     withdrawalType: 'wallet_withdrawal',
-    //     bankAccountId: destinationAccountId || '',
-    //   },
-    // });
-
-    // Create a payout to move money to their bank account
-    try {
-      // const payout = await this.stripe.payouts.create(
-      //   {
-      //     amount: amountCents,
-      //     currency: 'usd',
-      //     description: `Wallet withdrawal payout`,
-      //     metadata: {
-      //       transferId: transfer.id,
-      //       userId: user.id,
-      //     },
-      //   },
-      //   {
-      //     stripeAccount: advertiserDetails.stripeConnectedAccountId,
-      //   },
-      // );
-      // this.logger.log(
-      //   `Payout created for transfer ${transfer.id}: ${payout.id}`,
-      // );
-    } catch (payoutError) {
-      const errorMessage =
-        payoutError instanceof Error
-          ? payoutError.message
-          : 'Unknown payout error';
-      this.logger.warn(
-        `Payout creation failed for transfer : ${errorMessage}. ` +
-          `Funds transferred to connected account balance.`,
-      );
-    }
-
-    return {
-      transferId: 'temporary', // TODO: change for transfer.id
-      status: 'completed', // Stripe transfers are processed immediately
-    };
-  }
-
-  /**
    * Process direct payout (fallback when no Connect account)
    */
   private processDirectPayout(
     advertiserDetails: AdvertiserDetailsEntity,
     user: UserEntity,
-    _amountCents: number,
-    _bankAccountId?: string,
+    amountCents: number,
+    bankAccountId?: string,
   ): Promise<{ transferId: string; status: string }> {
+    // Avoid unused parameter warnings
+    void advertiserDetails;
+    void amountCents;
+    void bankAccountId;
     // For now, we'll create a record but not actually process the payout
     // This would require setting up external accounts on the customer
     // which is more complex and typically requires Stripe Connect
@@ -1729,5 +1659,559 @@ export class AdvertiserPaymentService {
   private calculateTotalAmountForNetDeposit(netAmountCents: number): number {
     // Formula: grossAmount = (netAmount + 30) / (1 - 0.029)
     return Math.round((netAmountCents + 30) / (1 - 0.029));
+  }
+
+  /**
+   * Pay a promoter for their work on a campaign
+   *
+   * This method handles the complete flow of paying a promoter:
+   * 1. Validates campaign ownership and promoter participation
+   * 2. Checks advertiser wallet balance and campaign budget
+   * 3. Deducts amount from advertiser wallet
+   * 4. Calculates platform fee (20%) and net payment to promoter
+   * 5. Processes Stripe payment to promoter
+   * 6. Updates campaign budget tracking
+   * 7. Creates transaction records for audit trail
+   *
+   * @param firebaseUid - Firebase UID of the advertiser
+   * @param dto - PayPromoterDto with campaign, promoter, and amount details
+   * @returns PayPromoterResult with payment ID and updated budget allocation
+   */
+  async payPromoter(
+    firebaseUid: string,
+    dto: {
+      campaignId: string;
+      promoterId: string;
+      amount: number;
+      description?: string;
+    },
+  ): Promise<PayPromoterResult> {
+    const user = await this.findUserByFirebaseUid(firebaseUid);
+
+    // 1. Validate campaign ownership
+    const campaign = await this.campaignRepo.findOne({
+      where: { id: dto.campaignId, advertiserId: user.id },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(
+        'Campaign not found or you do not have permission to access it',
+      );
+    }
+
+    // 2. Validate campaign status
+    if (campaign.status !== CampaignStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Campaign must be active to process payments',
+      );
+    }
+
+    // 3. Validate promoter participation
+    const promoterCampaign = await this.promoterCampaignRepo.findOne({
+      where: {
+        campaignId: dto.campaignId,
+        promoterId: dto.promoterId,
+        status: PromoterCampaignStatus.ONGOING, // Use enum value instead of string
+      },
+    });
+
+    if (!promoterCampaign) {
+      throw new NotFoundException(
+        'Promoter is not actively working on this campaign',
+      );
+    }
+
+    // 4. Get campaign budget tracking (create if doesn't exist for campaigns without initial budget)
+    let budgetTracking = await this.budgetTrackingRepo.findOne({
+      where: { campaignId: dto.campaignId },
+    });
+
+    if (!budgetTracking) {
+      // Create budget tracking for campaigns that were created without initial budget
+      budgetTracking = this.budgetTrackingRepo.create({
+        campaignId: dto.campaignId,
+        advertiserId: campaign.advertiserId,
+        allocatedBudgetCents: 0,
+        spentBudgetCents: 0,
+        platformFeesCollectedCents: 0,
+      });
+      await this.budgetTrackingRepo.save(budgetTracking);
+    }
+
+    // 5. Validate advertiser wallet balance
+    const advertiserWallet = await this.walletRepo.findOne({
+      where: { userId: user.id, userType: UserType.ADVERTISER },
+    });
+
+    if (!advertiserWallet) {
+      throw new BadRequestException('Advertiser wallet not found');
+    }
+
+    const amountDollars = dto.amount / 100;
+    if (advertiserWallet.currentBalance < amountDollars) {
+      throw new BadRequestException(
+        `Insufficient wallet balance. Available: $${advertiserWallet.currentBalance.toFixed(2)}, Required: $${amountDollars.toFixed(2)}`,
+      );
+    }
+
+    // 6. Calculate platform fee (20%) and net payment
+    const platformFeeCents = Math.round(dto.amount * 0.2);
+    const netPaymentCents = dto.amount - platformFeeCents;
+    const netPaymentDollars = netPaymentCents / 100;
+
+    // 7. Process payment to promoter via Stripe
+    const promoter = await this.userRepo.findOne({
+      where: { id: dto.promoterId },
+    });
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    // Create transaction record for advertiser (deduction)
+    const advertiserTransaction = this.transactionRepo.create({
+      userId: user.id,
+      userType: UserType.ADVERTISER,
+      campaignId: dto.campaignId,
+      type: TransactionType.DIRECT_PAYMENT,
+      amount: -amountDollars, // Negative for outflow
+      grossAmountCents: dto.amount,
+      platformFeeCents: platformFeeCents,
+      status: TransactionStatus.COMPLETED,
+      description: `Payment to promoter ${promoter.name} for campaign ${campaign.title}`,
+      paymentMethod: TxnPaymentMethod.WALLET,
+    });
+
+    const savedAdvertiserTransaction = await this.transactionRepo.save(
+      advertiserTransaction,
+    );
+
+    // Create transaction record for promoter (earning)
+    const promoterTransaction = this.transactionRepo.create({
+      userId: dto.promoterId,
+      userType: UserType.PROMOTER,
+      campaignId: dto.campaignId,
+      type: TransactionType.DIRECT_PAYMENT,
+      amount: netPaymentDollars, // Positive for income
+      grossAmountCents: dto.amount,
+      platformFeeCents: platformFeeCents,
+      status: TransactionStatus.PENDING, // Will be updated when Stripe payment succeeds
+      description: `Payment from advertiser ${user.name} for campaign ${campaign.title}`,
+      paymentMethod: TxnPaymentMethod.BANK_TRANSFER,
+    });
+
+    const savedPromoterTransaction =
+      await this.transactionRepo.save(promoterTransaction);
+
+    // 8. Update advertiser wallet
+    advertiserWallet.currentBalance -= amountDollars;
+    advertiserWallet.heldForCampaigns =
+      (advertiserWallet.heldForCampaigns || 0) - amountDollars;
+    await this.walletRepo.save(advertiserWallet);
+
+    // 9. Update promoter wallet
+    let promoterWallet = await this.walletRepo.findOne({
+      where: { userId: dto.promoterId, userType: UserType.PROMOTER },
+    });
+
+    if (!promoterWallet) {
+      // Create promoter wallet if it doesn't exist
+      promoterWallet = this.walletRepo.create({
+        userId: dto.promoterId,
+        userType: UserType.PROMOTER,
+        currentBalance: 0,
+        pendingBalance: 0,
+        totalDeposited: 0,
+        totalWithdrawn: 0,
+        totalEarned: 0,
+      });
+    }
+
+    promoterWallet.currentBalance += netPaymentDollars;
+    promoterWallet.totalEarned =
+      (promoterWallet.totalEarned || 0) + netPaymentDollars;
+    await this.walletRepo.save(promoterWallet);
+
+    // 10. Update campaign budget tracking
+    budgetTracking.spentBudgetCents += dto.amount;
+    budgetTracking.platformFeesCollectedCents += platformFeeCents;
+    await this.budgetTrackingRepo.save(budgetTracking);
+
+    // 11. Update promoter campaign record
+    promoterCampaign.earnings =
+      (promoterCampaign.earnings || 0) + netPaymentDollars;
+    await this.promoterCampaignRepo.save(promoterCampaign);
+
+    // 12. Calculate total amount paid to this promoter for this campaign
+    const totalPaidToPromoter: { total: string | null } | undefined =
+      await this.transactionRepo
+        .createQueryBuilder('transaction')
+        .select('SUM(ABS(transaction.grossAmountCents))', 'total')
+        .where('transaction.userId = :advertiserId', { advertiserId: user.id })
+        .andWhere('transaction.campaignId = :campaignId', {
+          campaignId: dto.campaignId,
+        })
+        .andWhere('transaction.type = :type', {
+          type: TransactionType.DIRECT_PAYMENT,
+        })
+        .andWhere('transaction.userType = :userType', {
+          userType: UserType.ADVERTISER,
+        })
+        .andWhere('transaction.description LIKE :promoterPattern', {
+          promoterPattern: `%${promoter.name}%`,
+        })
+        .getRawOne();
+
+    const newBudgetAllocated = parseInt(
+      totalPaidToPromoter?.total || dto.amount.toString(),
+    );
+
+    // 13. Process actual Stripe payment to promoter
+    try {
+      const stripeTransferResult = await this.processPromoterPayment(
+        promoter,
+        netPaymentCents,
+        `Payment from campaign: ${campaign.title}`,
+      );
+
+      // Update promoter transaction with Stripe transfer info
+      savedPromoterTransaction.stripeTransactionId =
+        stripeTransferResult.transferId;
+      savedPromoterTransaction.status = TransactionStatus.COMPLETED;
+      savedPromoterTransaction.processedAt = new Date();
+      await this.transactionRepo.save(savedPromoterTransaction);
+
+      this.logger.log(
+        `Stripe transfer successful: ${stripeTransferResult.transferId} for promoter ${dto.promoterId}`,
+      );
+    } catch (stripeError) {
+      // If Stripe transfer fails, log error but don't fail the entire operation
+      // The promoter transaction will remain in PENDING status
+      const errorMessage =
+        stripeError instanceof Error
+          ? stripeError.message
+          : 'Unknown Stripe error';
+      this.logger.error(
+        `Stripe transfer failed for promoter ${dto.promoterId}: ${errorMessage}`,
+      );
+
+      // Optionally, you could set the transaction to FAILED status or implement retry logic
+      savedPromoterTransaction.description += ` (Stripe transfer failed: ${errorMessage})`;
+      await this.transactionRepo.save(savedPromoterTransaction);
+    }
+
+    this.logger.log(
+      `Promoter payment processed: Advertiser ${user.id} paid $${amountDollars} to promoter ${dto.promoterId} for campaign ${dto.campaignId}. ` +
+        `Platform fee: $${(platformFeeCents / 100).toFixed(2)}, Net to promoter: $${netPaymentDollars.toFixed(2)}`,
+    );
+
+    return {
+      paymentId: savedAdvertiserTransaction.id,
+      newBudgetAllocated: newBudgetAllocated,
+    };
+  }
+
+  /**
+   * Process payment to promoter via Stripe Connect
+   * Since advertisers have already funded their wallet (money is in platform's Stripe account),
+   * we just need to transfer from platform account to promoter's connected account
+   *
+   * @param promoter - Promoter user entity
+   * @param amountCents - Amount to transfer in cents
+   * @param description - Payment description
+   * @returns Transfer result with ID and status
+   */
+  private async processPromoterPayment(
+    promoter: UserEntity,
+    amountCents: number,
+    description: string,
+  ): Promise<{ transferId: string; status: string }> {
+    try {
+      this.logger.log(
+        `Processing Stripe Connect transfer: $${amountCents / 100} USD to promoter ${promoter.name} (${promoter.id})`,
+      );
+
+      // Get promoter's Stripe Connect account ID (using firebase UID, not internal ID)
+      const stripeConnectAccount = await this.stripeConnectAccountRepo.findOne({
+        where: { userId: promoter.firebaseUid },
+      });
+
+      if (!stripeConnectAccount || !stripeConnectAccount.stripeAccountId) {
+        this.logger.error(
+          `Stripe Connect account not found for promoter ${promoter.id} (${promoter.firebaseUid})`,
+        );
+        throw new Error(
+          'Promoter does not have a Stripe Connect account setup. Please complete payment onboarding.',
+        );
+      }
+
+      // Verify the Stripe Connect account is active and can receive payouts
+      const account = await this.stripe.accounts.retrieve(
+        stripeConnectAccount.stripeAccountId,
+      );
+
+      if (!account.payouts_enabled) {
+        throw new Error(
+          "Promoter's Stripe Connect account is not enabled for payouts. Please complete account verification.",
+        );
+      }
+
+      if (!account.charges_enabled) {
+        this.logger.warn(
+          `Promoter ${promoter.id} Connect account has charges disabled, but payouts are enabled. Proceeding with transfer.`,
+        );
+      }
+
+      // Create Stripe transfer from platform account to promoter's connected account
+      const transfer = await this.stripe.transfers.create({
+        amount: amountCents,
+        currency: 'usd',
+        destination: stripeConnectAccount.stripeAccountId,
+        description: description,
+        metadata: {
+          promoterId: promoter.id,
+          promoterName: promoter.name,
+          paymentType: 'campaign_work_payment',
+          platformUserId: promoter.id,
+        },
+      });
+
+      this.logger.log(
+        `Stripe Connect transfer successful: ${transfer.id} - $${amountCents / 100} USD to promoter ${promoter.name}`,
+      );
+
+      return {
+        transferId: transfer.id,
+        status: 'completed', // Stripe transfers are processed immediately
+      };
+    } catch (error) {
+      this.logger.error(
+        `Stripe Connect transfer failed for promoter ${promoter.id}:`,
+        error,
+      );
+
+      // Provide more specific error messages based on Stripe error types
+      if (error && typeof error === 'object' && 'type' in error) {
+        const stripeError = error as { type: string; message: string };
+        if (stripeError.type === 'StripeInvalidRequestError') {
+          throw new Error(
+            `Transfer failed: ${stripeError.message}. Please verify promoter's payment setup.`,
+          );
+        } else if (stripeError.type === 'StripeConnectionError') {
+          throw new Error(
+            'Payment processing temporarily unavailable. Please try again.',
+          );
+        }
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown transfer error';
+      throw new Error(`Payment transfer failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Process bank transfer for promoter payment (ACH/Wire transfer)
+   * This method is a placeholder since we primarily use Stripe Connect
+   *
+   * @param promoter - Promoter user entity
+   * @param amountCents - Amount to transfer in cents
+   * @param description - Transfer description
+   * @returns Transfer result with ID and status
+   */
+  private async processBankTransfer(
+    promoter: UserEntity,
+    amountCents: number,
+    description: string,
+  ): Promise<{ transferId: string; status: string }> {
+    try {
+      const amountDollars = amountCents / 100;
+
+      this.logger.log(
+        `Bank transfer requested: $${amountDollars} USD to promoter ${promoter.name} (${promoter.id}). Description: ${description}`,
+      );
+
+      // Check if promoter has completed payment onboarding
+      const promoterDetails = await this.promoterDetailsRepo.findOne({
+        where: { userId: promoter.id },
+      });
+
+      if (!promoterDetails) {
+        throw new Error(
+          'Promoter details not found. Payment onboarding required.',
+        );
+      }
+
+      // For now, we don't support direct bank transfers
+      // All promoters should use Stripe Connect for instant transfers
+      this.logger.warn(
+        `Direct bank transfer not supported for promoter ${promoter.id}. ` +
+          `Promoter should complete Stripe Connect onboarding for instant payments.`,
+      );
+
+      // Create a placeholder transfer record for tracking
+      const transferId = `bank_pending_${Date.now()}_${promoter.id}`;
+
+      // Log transfer details for manual processing
+      this.logger.log(
+        `Bank transfer requires manual processing: ID ${transferId}, Amount: $${amountDollars}, ` +
+          `Promoter: ${promoter.name}. Recommend promoter complete Stripe Connect setup.`,
+      );
+
+      return {
+        transferId,
+        status: 'requires_stripe_connect_setup',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Bank transfer error for promoter ${promoter.id}:`,
+        error,
+      );
+      throw new Error(
+        `Bank transfer failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Validate US routing number format (9 digits)
+   */
+  private isValidRoutingNumber(routingNumber: string): boolean {
+    // US routing numbers are exactly 9 digits
+    const routingRegex = /^\d{9}$/;
+    return routingRegex.test(routingNumber);
+  }
+
+  /**
+   * Validate US bank account number format (4-17 digits)
+   */
+  private isValidAccountNumber(accountNumber: string): boolean {
+    // US bank account numbers are typically 4-17 digits
+    const accountRegex = /^\d{4,17}$/;
+    return accountRegex.test(accountNumber);
+  }
+
+  /**
+   * Determine the best payout method for a promoter based on their Stripe Connect setup
+   *
+   * @param promoter - Promoter user entity
+   * @returns Payout method and any additional setup required
+   */
+  private async getPromoterPayoutMethod(promoter: UserEntity): Promise<{
+    method: 'stripe_connect' | 'manual' | 'direct_deposit';
+    requiresSetup: boolean;
+    setupInstructions?: string;
+  }> {
+    try {
+      // Check if promoter has Stripe Connect account (using firebase UID)
+      const stripeConnectAccount = await this.stripeConnectAccountRepo.findOne({
+        where: { userId: promoter.firebaseUid },
+      });
+
+      if (stripeConnectAccount?.stripeAccountId) {
+        // Verify the Stripe Connect account is complete and active
+        try {
+          const account = await this.stripe.accounts.retrieve(
+            stripeConnectAccount.stripeAccountId,
+          );
+
+          if (account.charges_enabled && account.payouts_enabled) {
+            return {
+              method: 'stripe_connect',
+              requiresSetup: false,
+            };
+          } else {
+            return {
+              method: 'stripe_connect',
+              requiresSetup: true,
+              setupInstructions: `Complete Stripe Connect account verification. Status: charges_enabled=${account.charges_enabled}, payouts_enabled=${account.payouts_enabled}`,
+            };
+          }
+        } catch (stripeError) {
+          this.logger.warn(
+            `Stripe Connect account verification failed for promoter ${promoter.id}:`,
+            stripeError,
+          );
+          return {
+            method: 'manual',
+            requiresSetup: true,
+            setupInstructions:
+              'Stripe Connect account is invalid or inaccessible. Please re-setup payment method.',
+          };
+        }
+      }
+
+      // No Stripe Connect account found - require setup
+      return {
+        method: 'manual',
+        requiresSetup: true,
+        setupInstructions:
+          'Promoter needs to complete Stripe Connect onboarding for instant payments. Please set up Stripe Connect account.',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error determining payout method for promoter ${promoter.id}:`,
+        error,
+      );
+
+      // Fallback to manual processing on any error
+      return {
+        method: 'manual',
+        requiresSetup: true,
+        setupInstructions:
+          'Payment method verification failed. Please contact support to setup payment processing.',
+      };
+    }
+  }
+
+  /**
+   * Add test funds to platform Stripe account balance (TEST MODE ONLY)
+   *
+   * In test mode, payments made through addFunds don't add to available balance
+   * for Connect transfers. This method uses Stripe's topup functionality to
+   * simulate adding funds to the platform account for testing purposes.
+   *
+   * @param amountCents - Amount in cents to add to platform balance
+   * @returns Topup object with status and details
+   */
+  async addTestFundsToPlatform(amountCents: number) {
+    // Only allow in test mode
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException(
+        'Test funds can only be added in test mode',
+      );
+    }
+
+    try {
+      console.log(`Adding ${amountCents} cents to platform test balance...`);
+
+      // Create a topup to add funds to platform account
+      const topup = await this.stripe.topups.create({
+        amount: amountCents,
+        currency: 'usd',
+        description: 'Test funds for Connect transfers',
+        statement_descriptor: 'Test funds',
+      });
+
+      console.log('Topup created:', topup.id, 'Status:', topup.status);
+
+      // Check current balance
+      const balance = await this.stripe.balance.retrieve();
+      console.log(
+        'Platform balance after topup:',
+        JSON.stringify(balance, null, 2),
+      );
+
+      return {
+        topupId: topup.id,
+        status: topup.status,
+        amount: topup.amount,
+        balance: balance.available,
+      };
+    } catch (error) {
+      console.error('Error adding test funds to platform:', error);
+      throw new BadRequestException(
+        `Failed to add test funds: ${error.message}`,
+      );
+    }
   }
 }

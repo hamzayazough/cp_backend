@@ -30,6 +30,8 @@ import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tra
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { ViewStatEntity } from '../database/entities/view-stat.entity';
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
+import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
+import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { SalesRecordEntity } from '../database/entities/sales-record.entity';
       PaymentRecord,
       ViewStatEntity,
       SalesRecordEntity,
+      PromoterDetailsEntity,
+      StripeConnectAccount,
     ]),
     PromoterModule,
     StripeModule,
