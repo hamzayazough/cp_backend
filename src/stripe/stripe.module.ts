@@ -18,7 +18,6 @@ import {
   AdvertiserDetailsEntity,
 } from '../database/entities';
 import { ConnectController } from './controllers/connect.controller';
-import { PaymentController } from './controllers/payment.controller';
 import { WebhookController } from './controllers/webhook.controller';
 import { UserModule } from '../modules/user.module';
 
@@ -38,7 +37,7 @@ import { UserModule } from '../modules/user.module';
     ]),
     UserModule, // Import UserModule to access UserService
   ],
-  controllers: [ConnectController, PaymentController, WebhookController],
+  controllers: [ConnectController, WebhookController],
   providers: [
     {
       provide: STRIPE_CLIENT,
