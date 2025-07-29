@@ -15,16 +15,9 @@ export { Transaction } from './transaction.entity';
 export { Wallet } from './wallet.entity';
 export { PromoterCampaign } from './promoter-campaign.entity';
 export { CampaignApplicationEntity } from './campaign-applications.entity';
-export { ViewStatEntity } from './view-stat.entity';
 export { UniqueViewEntity } from './unique-view.entity';
 export { Message, MessageThread } from './message.entity';
 export { PromoterBalance } from './promoter-balance.entity';
-
-// Analytics entities
-export { CampaignAnalytics } from './campaign-analytics.entity';
-export { PromoterPerformanceMetrics } from './promoter-performance-metrics.entity';
-export { AdvertiserAnalytics } from './advertiser-analytics.entity';
-export { PlatformMetrics } from './platform-metrics.entity';
 
 // Financial entities
 export { PaymentTransaction } from './payment-transaction.entity';

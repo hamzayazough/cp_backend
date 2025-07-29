@@ -140,15 +140,16 @@ export class WalletService {
     }
 
     // Calculate pending charges from payment records
-    const pendingPayments: { total: string | null } | undefined = await this.paymentRecordRepo
-      .createQueryBuilder('payment')
-      .select('COALESCE(SUM(payment.amountCents), 0)', 'total')
-      .where('payment.userId = :userId', { userId: user.id })
-      .andWhere('payment.status = :status', { status: 'pending' })
-      .getRawOne();
+    const pendingPayments: { total: string | null } | undefined =
+      await this.paymentRecordRepo
+        .createQueryBuilder('payment')
+        .select('COALESCE(SUM(payment.amountCents), 0)', 'total')
+        .where('payment.userId = :userId', { userId: user.id })
+        .andWhere('payment.status = :status', { status: 'pending' })
+        .getRawOne();
 
-    const pendingCharges = pendingPayments?.total 
-      ? parseInt(pendingPayments.total) / 100 
+    const pendingCharges = pendingPayments?.total
+      ? parseInt(pendingPayments.total) / 100
       : 0;
 
     // Calculate available for withdrawal (current balance minus held amounts and pending outgoing)
@@ -184,22 +185,24 @@ export class WalletService {
       const customer = await this.stripe.customers.retrieve(
         advertiserDetails.stripeCustomerId,
       );
-      
+
       if (typeof customer !== 'object' || customer.deleted) {
         throw new BadRequestException('Invalid Stripe customer');
       }
-      
-      const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
-      
+
+      const defaultPaymentMethod =
+        customer.invoice_settings?.default_payment_method;
+
       if (!defaultPaymentMethod) {
         throw new BadRequestException(
           'No default payment method found. Please add a payment method first.',
         );
       }
 
-      paymentMethodId = typeof defaultPaymentMethod === 'string' 
-        ? defaultPaymentMethod 
-        : defaultPaymentMethod.id;
+      paymentMethodId =
+        typeof defaultPaymentMethod === 'string'
+          ? defaultPaymentMethod
+          : defaultPaymentMethod.id;
     }
 
     // Calculate gross amount to charge including Stripe fees (2.9% + $0.30)
@@ -243,7 +246,8 @@ export class WalletService {
         description: dto.description || 'Add funds to wallet',
       });
 
-      const savedPaymentRecord = await this.paymentRecordRepo.save(paymentRecord);
+      const savedPaymentRecord =
+        await this.paymentRecordRepo.save(paymentRecord);
 
       // If payment succeeded immediately, update wallet balance
       if (paymentIntent.status === 'succeeded') {
@@ -345,7 +349,8 @@ export class WalletService {
 
     if (wallet) {
       wallet.currentBalance -= withdrawalAmountDollars;
-      wallet.totalWithdrawn = (wallet.totalWithdrawn || 0) + withdrawalAmountDollars;
+      wallet.totalWithdrawn =
+        (wallet.totalWithdrawn || 0) + withdrawalAmountDollars;
       await this.walletRepo.save(wallet);
     }
 
@@ -389,35 +394,10 @@ export class WalletService {
       .skip(offset)
       .take(limit);
 
-    // Map old DTO values to new TransactionType enum values
     if (query.type) {
-      switch (query.type) {
-        case 'DEPOSIT':
-          queryBuilder.andWhere('transaction.type = :type', {
-            type: TransactionType.WALLET_DEPOSIT,
-          });
-          break;
-        case 'WITHDRAWAL':
-          queryBuilder.andWhere('transaction.type = :type', {
-            type: TransactionType.WITHDRAWAL,
-          });
-          break;
-        case 'CAMPAIGN_FUNDING':
-          queryBuilder.andWhere('transaction.type = :type', {
-            type: TransactionType.DIRECT_PAYMENT,
-          });
-          break;
-        case 'REFUND':
-          queryBuilder.andWhere('transaction.description LIKE :refund', {
-            refund: '%refund%',
-          });
-          break;
-        default:
-          // For new transaction types, use them directly
-          queryBuilder.andWhere('transaction.type = :type', {
-            type: query.type,
-          });
-      }
+      queryBuilder.andWhere('transaction.type = :type', {
+        type: query.type,
+      });
     }
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
@@ -492,7 +472,8 @@ export class WalletService {
         canWithdrawFullBalance: true,
       },
       processingTime: '3-5 business days',
-      description: 'No active campaigns. You can withdraw up to your available balance minus the $10 minimum required.',
+      description:
+        'No active campaigns. You can withdraw up to your available balance minus the $10 minimum required.',
     };
   }
 

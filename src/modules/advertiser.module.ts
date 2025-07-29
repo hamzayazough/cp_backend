@@ -23,9 +23,9 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
-import { ViewStatEntity } from '../database/entities/view-stat.entity';
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
+import { UniqueViewEntity } from 'src/database/entities';
 
 @Module({
   imports: [
@@ -43,9 +43,9 @@ import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tra
       CampaignDeliverableEntity,
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
-      ViewStatEntity,
       SalesRecordEntity,
       CampaignBudgetTracking, // Added back for AdvertiserStatsService
+      UniqueViewEntity,
     ]),
     PromoterModule,
     PaymentModule, // Import the payment module instead of individual services

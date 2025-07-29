@@ -72,7 +72,7 @@ export class CampaignCompletionService {
   }
 
   /**
-   * Completes a campaign by updating its status to ENDED and all associated promoter campaigns to COMPLETED
+   * Completes a campaign by updating its status to INACTIVE and all associated promoter campaigns to COMPLETED
    * @param campaignId - The ID of the campaign to complete
    */
   private async completeCampaign(campaignId: string): Promise<void> {
@@ -91,12 +91,12 @@ export class CampaignCompletionService {
         throw new Error(`Campaign not found: ${campaignId}`);
       }
 
-      // Update campaign status to ENDED
+      // Update campaign status to INACTIVE
       await this.campaignRepo.update(
         { id: campaignId },
-        { status: CampaignStatus.ENDED },
+        { status: CampaignStatus.INACTIVE },
       );
-      this.logger.log(`✅ Campaign status updated to ENDED: ${campaignId}`);
+      this.logger.log(`✅ Campaign status updated to INACTIVE: ${campaignId}`);
 
       // Get all promoters who had ONGOING campaigns for this campaign
       const ongoingPromoterCampaigns = await this.promoterCampaignRepo.find({
@@ -158,7 +158,7 @@ export class CampaignCompletionService {
       throw new Error(`Campaign not found: ${campaignId}`);
     }
 
-    if (campaign.status === CampaignStatus.ENDED) {
+    if (campaign.status === CampaignStatus.INACTIVE) {
       this.logger.warn(`⚠️ Campaign ${campaignId} is already ended`);
       return;
     }

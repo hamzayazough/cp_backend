@@ -419,8 +419,6 @@ export class AccountingService {
     switch (campaignType.toUpperCase()) {
       case 'VISIBILITY':
         return TransactionType.VIEW_EARNING;
-      case 'CONSULTANT':
-        return TransactionType.CONSULTANT_PAYMENT;
       case 'SALESMAN':
         return TransactionType.SALESMAN_COMMISSION;
       default:

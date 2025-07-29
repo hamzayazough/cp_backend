@@ -2,8 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { Transaction } from '../database/entities/transaction.entity';
+import {
+  PromoterCampaign,
+  PromoterCampaignStatus,
+} from '../database/entities/promoter-campaign.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../database/entities/transaction.entity';
 import { CampaignApplicationEntity } from 'src/database/entities/campaign-applications.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
@@ -19,6 +25,7 @@ import { AdvertiserActiveCampaign } from '../interfaces/advertiser-dashboard';
 import { CampaignDeliverable } from '../interfaces/promoter-campaigns';
 import { CampaignStatus, CampaignType } from '../enums/campaign-type';
 import { transformUserToPromoter } from '../helpers/user-transformer.helper';
+import { TransactionStatus } from 'src/interfaces';
 
 @Injectable()
 export class AdvertiserCampaignService {
@@ -49,11 +56,7 @@ export class AdvertiserCampaignService {
       .createQueryBuilder('campaign')
       .where('campaign.advertiserId = :advertiserId', { advertiserId })
       .andWhere('campaign.status IN (:...statuses)', {
-        statuses: [
-          CampaignStatus.ACTIVE,
-          CampaignStatus.PAUSED,
-          CampaignStatus.ENDED,
-        ],
+        statuses: [CampaignStatus.ACTIVE, CampaignStatus.INACTIVE],
       })
       .orderBy('campaign.updatedAt', 'DESC')
       .limit(limit)
@@ -81,14 +84,18 @@ export class AdvertiserCampaignService {
           .where('transaction.campaignId = :campaignId', {
             campaignId: campaign.id,
           })
-          .andWhere('transaction.type = :type', { type: 'SALESMAN_COMMISSION' })
-          .andWhere('transaction.status = :status', { status: 'COMPLETED' })
+          .andWhere('transaction.type = :type', {
+            type: TransactionType.SALESMAN_COMMISSION,
+          })
+          .andWhere('transaction.status = :status', {
+            status: TransactionStatus.COMPLETED,
+          })
           .getCount();
         return {
           id: campaign.id,
           title: campaign.title,
           type: campaign.type,
-          status: this.mapCampaignStatus(campaign.status),
+          status: this.mapCampaignStatus(campaign.status, promoterCampaigns),
           views: totalViews,
           spent: totalSpent,
           applications,
@@ -316,17 +323,19 @@ export class AdvertiserCampaignService {
 
   private mapCampaignStatus(
     status: CampaignStatus,
-  ): 'ONGOING' | 'AWAITING_PROMOTER' | 'COMPLETED' | 'PAUSED' {
-    switch (status) {
-      case CampaignStatus.ACTIVE:
-        return 'ONGOING';
-      case CampaignStatus.PAUSED:
-        return 'PAUSED';
-      case CampaignStatus.ENDED:
-        return 'COMPLETED';
-      default:
-        return 'AWAITING_PROMOTER';
+    promoterCampaigns: PromoterCampaign[],
+  ): PromoterCampaignStatus {
+    if (status === CampaignStatus.INACTIVE) {
+      return PromoterCampaignStatus.COMPLETED;
     }
+    const awaitingReviewCampaign = promoterCampaigns.find(
+      (pc) => pc.status === PromoterCampaignStatus.AWAITING_REVIEW,
+    );
+
+    if (awaitingReviewCampaign) {
+      return PromoterCampaignStatus.AWAITING_REVIEW;
+    }
+    return PromoterCampaignStatus.ONGOING;
   }
   private mapCampaignDetails(campaign: CampaignEntity): any {
     const baseDetails = {
@@ -445,7 +454,9 @@ export class AdvertiserCampaignService {
     const totalCompletedCampaigns = await this.campaignRepository
       .createQueryBuilder('campaign')
       .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('campaign.status = :status', { status: CampaignStatus.ENDED })
+      .andWhere('campaign.status = :status', {
+        status: CampaignStatus.INACTIVE,
+      })
       .getCount(); // Calculate total allocated budget across all campaigns
     const budgetResult: { totalAllocated: string } | undefined =
       await this.campaignRepository

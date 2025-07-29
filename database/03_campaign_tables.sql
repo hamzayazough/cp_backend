@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     target_audience TEXT,
     preferred_platforms social_platform[],
     min_followers INTEGER DEFAULT 0,
+    can_have_multiple_promoters BOOLEAN DEFAULT FALSE,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -75,7 +76,7 @@ CREATE TABLE IF NOT EXISTS promoter_campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
     promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(50) DEFAULT 'ONGOING', -- ONGOING, AWAITING_REVIEW, COMPLETED, PAUSED
+    status VARCHAR(50) DEFAULT 'ONGOING', -- ONGOING, AWAITING_REVIEW, COMPLETED
     views_generated INTEGER DEFAULT 0,
     earnings DECIMAL(10,2) DEFAULT 0.00,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -94,19 +95,6 @@ CREATE TABLE IF NOT EXISTS promoter_campaigns (
     UNIQUE(campaign_id, promoter_id)
 );
 
--- View statistics tracking
-CREATE TABLE IF NOT EXISTS view_stats (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-    promoter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    view_count INTEGER DEFAULT 0,
-    unique_views INTEGER DEFAULT 0,
-    clicks INTEGER DEFAULT 0,
-    date_tracked DATE DEFAULT CURRENT_DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    UNIQUE(campaign_id, promoter_id, date_tracked)
-);
 
 -- New table: campaign_deliverables
 CREATE TABLE IF NOT EXISTS campaign_deliverables (

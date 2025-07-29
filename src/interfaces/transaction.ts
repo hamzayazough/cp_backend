@@ -1,10 +1,4 @@
-export enum TransactionType {
-  VIEW_EARNING = 'VIEW_EARNING',
-  CONSULTANT_PAYMENT = 'CONSULTANT_PAYMENT',
-  SALESMAN_COMMISSION = 'SALESMAN_COMMISSION',
-  MONTHLY_PAYOUT = 'MONTHLY_PAYOUT',
-  DIRECT_PAYMENT = 'DIRECT_PAYMENT',
-}
+import { TransactionType } from '../database/entities/transaction.entity';
 
 export enum TransactionStatus {
   COMPLETED = 'COMPLETED',
@@ -55,7 +49,6 @@ export interface TransactionSummary {
   };
   breakdown: {
     [TransactionType.VIEW_EARNING]: number;
-    [TransactionType.CONSULTANT_PAYMENT]: number;
     [TransactionType.SALESMAN_COMMISSION]: number;
     [TransactionType.MONTHLY_PAYOUT]: number;
     [TransactionType.DIRECT_PAYMENT]: number;

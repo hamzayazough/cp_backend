@@ -52,7 +52,6 @@ export class AdvertiserTransactionService {
   ):
     | 'CAMPAIGN_PAYMENT'
     | 'PROMOTER_PAYMENT'
-    | 'CONSULTANT_FEE'
     | 'COMMISSION_PAYMENT'
     | 'REFUND'
     | 'WALLET_DEPOSIT' {
@@ -60,13 +59,11 @@ export class AdvertiserTransactionService {
       string,
       | 'CAMPAIGN_PAYMENT'
       | 'PROMOTER_PAYMENT'
-      | 'CONSULTANT_FEE'
       | 'COMMISSION_PAYMENT'
       | 'REFUND'
       | 'WALLET_DEPOSIT'
     > = {
       VIEW_EARNING: 'PROMOTER_PAYMENT',
-      CONSULTANT_PAYMENT: 'CONSULTANT_FEE',
       SALESMAN_COMMISSION: 'COMMISSION_PAYMENT',
       MONTHLY_PAYOUT: 'PROMOTER_PAYMENT',
       DIRECT_PAYMENT: 'CAMPAIGN_PAYMENT',

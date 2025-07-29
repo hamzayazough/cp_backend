@@ -37,6 +37,7 @@ import { CampaignWork } from '../interfaces/promoter-campaigns';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
+import { TransactionType } from 'src/database/entities/transaction.entity';
 
 // Payment DTOs
 export class CompletePaymentSetupDto {
@@ -68,20 +69,7 @@ export class UpdateBudgetDto {
 export class TransactionQueryDto {
   page?: number = 1;
   limit?: number = 10;
-  // Updated to support both legacy and new transaction types for backward compatibility
-  type?:
-    | 'DEPOSIT' // Legacy: maps to WALLET_DEPOSIT
-    | 'WITHDRAWAL' // Maps to WITHDRAWAL
-    | 'CAMPAIGN_FUNDING' // Maps to CAMPAIGN_FUNDING
-    | 'REFUND' // Legacy: searches for refund descriptions
-    // New unified transaction types
-    | 'WALLET_DEPOSIT'
-    | 'VIEW_EARNING'
-    | 'CONSULTANT_PAYMENT'
-    | 'SALESMAN_COMMISSION'
-    | 'MONTHLY_PAYOUT'
-    | 'DIRECT_PAYMENT'
-    | 'PLATFORM_FEE';
+  type?: TransactionType;
 }
 
 export class WithdrawFundsDto {

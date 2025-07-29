@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Wallet } from '../database/entities/wallet.entity';
-import { Transaction } from '../database/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../database/entities/transaction.entity';
 import { AdvertiserWallet } from '../interfaces/advertiser-dashboard';
 import { QueryResult } from 'src/types/query-result.types';
 import { UserType } from '../enums/user-type';
@@ -63,7 +66,11 @@ export class AdvertiserWalletService {
       .where('campaign.advertiserId = :advertiserId', { advertiserId })
       .andWhere('transaction.status = :status', { status: 'COMPLETED' })
       .andWhere('transaction.type IN (:...types)', {
-        types: ['CONSULTANT_PAYMENT', 'SALESMAN_COMMISSION', 'DIRECT_PAYMENT'],
+        types: [
+          TransactionType.SALESMAN_COMMISSION,
+          TransactionType.DIRECT_PAYMENT,
+          TransactionType.VIEW_EARNING,
+        ],
       })
       .getRawOne()) as QueryResult;
 

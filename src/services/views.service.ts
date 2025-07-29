@@ -5,7 +5,6 @@ import { createHash } from 'crypto';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { UserEntity } from '../database/entities/user.entity';
 import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { CampaignStatus } from '../enums/campaign-status';
@@ -20,8 +19,6 @@ export class ViewsService {
     private readonly campaignRepo: Repository<CampaignEntity>,
     @InjectRepository(PromoterCampaign)
     private readonly promoterCampaignRepo: Repository<PromoterCampaign>,
-    @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>,
     @InjectRepository(PromoterDetailsEntity)
     private readonly promoterDetailsRepo: Repository<PromoterDetailsEntity>,
     @InjectRepository(CampaignBudgetTracking)

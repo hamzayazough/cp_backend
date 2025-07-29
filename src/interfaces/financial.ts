@@ -1,3 +1,5 @@
+import { BudgetAllocationStatus } from 'src/enums/budget-allocation-status';
+
 // Enhanced payment tracking interfaces
 export interface PaymentTransaction {
   id: string;
@@ -53,5 +55,5 @@ export interface CampaignBudgetTracking {
   platformFeesCollectedCents: number;
   cpvCents?: number; // Cost per 100 views for visibility campaigns
   commissionRate?: number; // Commission rate percentage for salesman campaigns
-  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+  status: BudgetAllocationStatus;
 }

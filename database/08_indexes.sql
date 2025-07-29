@@ -80,11 +80,6 @@ CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_promoter_id ON promoter_campai
 CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_status ON promoter_campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_joined_at ON promoter_campaigns(joined_at);
 
--- View stats indexes
-CREATE INDEX IF NOT EXISTS idx_view_stats_campaign_id ON view_stats(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_view_stats_promoter_id ON view_stats(promoter_id);
-CREATE INDEX IF NOT EXISTS idx_view_stats_date_tracked ON view_stats(date_tracked);
-
 -- Campaign Budget Allocations indexes
 CREATE INDEX IF NOT EXISTS idx_budget_allocations_campaign_id ON campaign_budget_allocations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_budget_allocations_status ON campaign_budget_allocations(status);
@@ -115,31 +110,6 @@ CREATE INDEX IF NOT EXISTS idx_stripe_connect_accounts_status ON stripe_connect_
 CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON payment_methods(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_methods_type ON payment_methods(type);
 CREATE INDEX IF NOT EXISTS idx_payment_methods_default ON payment_methods(user_id, is_default) WHERE is_default = TRUE;
-
--- ========================================
--- ANALYTICS TABLE INDEXES
--- ========================================
-
--- Campaign Analytics indexes
-CREATE INDEX IF NOT EXISTS idx_campaign_analytics_campaign_id ON campaign_analytics(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_campaign_analytics_created_at ON campaign_analytics(created_at);
-CREATE INDEX IF NOT EXISTS idx_campaign_analytics_views_generated ON campaign_analytics(views_generated);
-CREATE INDEX IF NOT EXISTS idx_campaign_analytics_roi ON campaign_analytics(roi);
-
--- Promoter Performance Metrics indexes
-CREATE INDEX IF NOT EXISTS idx_promoter_performance_metrics_promoter_id ON promoter_performance_metrics(promoter_id);
-CREATE INDEX IF NOT EXISTS idx_promoter_performance_metrics_period ON promoter_performance_metrics(period_start, period_end);
-CREATE INDEX IF NOT EXISTS idx_promoter_performance_metrics_performance_score ON promoter_performance_metrics(performance_score);
-
--- Advertiser Analytics indexes
-CREATE INDEX IF NOT EXISTS idx_advertiser_analytics_advertiser_id ON advertiser_analytics(advertiser_id);
-CREATE INDEX IF NOT EXISTS idx_advertiser_analytics_period ON advertiser_analytics(period_start, period_end);
-CREATE INDEX IF NOT EXISTS idx_advertiser_analytics_total_spent ON advertiser_analytics(total_spent);
-
--- Platform Metrics indexes
-CREATE INDEX IF NOT EXISTS idx_platform_metrics_date_calculated ON platform_metrics(date_calculated);
-CREATE INDEX IF NOT EXISTS idx_platform_metrics_period ON platform_metrics(period_start, period_end);
-CREATE INDEX IF NOT EXISTS idx_platform_metrics_total_users ON platform_metrics(total_users);
 
 -- ========================================
 -- MESSAGING TABLE INDEXES

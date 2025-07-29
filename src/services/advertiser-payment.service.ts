@@ -759,40 +759,10 @@ export class AdvertiserPaymentService {
       .skip(offset)
       .take(limit);
 
-    // Map old DTO values to new TransactionType enum values
     if (query.type) {
-      let mappedType: TransactionType | undefined;
-      switch (query.type) {
-        case 'DEPOSIT':
-          mappedType = TransactionType.WALLET_DEPOSIT;
-          break;
-        case 'WITHDRAWAL':
-          mappedType = TransactionType.WITHDRAWAL;
-          break;
-        case 'CAMPAIGN_FUNDING':
-          mappedType = TransactionType.CAMPAIGN_FUNDING;
-          break;
-        case 'REFUND':
-          // Special case: search for refund-like transactions in description
-          queryBuilder.andWhere(
-            'transaction.description ILIKE :refundPattern',
-            { refundPattern: '%refund%' },
-          );
-          break;
-        default:
-          // Check if exact match exists in new TransactionType enum
-          if (
-            Object.values(TransactionType).includes(
-              query.type as TransactionType,
-            )
-          ) {
-            mappedType = query.type as TransactionType;
-          }
-      }
-
-      if (mappedType) {
-        queryBuilder.andWhere('transaction.type = :type', { type: mappedType });
-      }
+      queryBuilder.andWhere('transaction.type = :type', {
+        type: query.type,
+      });
     }
 
     const [transactions, total] = await queryBuilder.getManyAndCount();

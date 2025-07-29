@@ -454,7 +454,7 @@ export class ConnectController {
         });
 
         // Redirect to frontend with error
-        const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=${encodeURIComponent(error)}`;
+        const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=${encodeURIComponent(error)}`;
         return res.redirect(frontendUrl);
       }
 
@@ -475,10 +475,10 @@ export class ConnectController {
             // Mark as onboarded in our database
             await this.stripeConnectService.markAccountAsOnboarded(accountId);
 
-            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success&account=${accountId}`;
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success&account=${accountId}`;
             return res.redirect(frontendUrl);
           } else {
-            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=incomplete&account=${accountId}`;
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=incomplete&account=${accountId}`;
             return res.redirect(frontendUrl);
           }
         } catch (verifyError) {
@@ -487,7 +487,7 @@ export class ConnectController {
             verifyError,
           );
 
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=verification_failed`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=verification_failed`;
           return res.redirect(frontendUrl);
         }
       }
@@ -512,12 +512,12 @@ export class ConnectController {
           );
 
           // Redirect to frontend with success
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success&account=${oauthResult.stripeAccountId}`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success&account=${oauthResult.stripeAccountId}`;
           return res.redirect(frontendUrl);
         } catch (exchangeError) {
           this.logger.error('Failed to exchange OAuth code', exchangeError);
 
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=exchange_failed`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=exchange_failed`;
           return res.redirect(frontendUrl);
         }
       }
@@ -549,10 +549,10 @@ export class ConnectController {
                 stateData.accountId!,
               );
 
-              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success`;
+              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success`;
               return res.redirect(frontendUrl);
             } else {
-              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=incomplete`;
+              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=incomplete`;
               return res.redirect(frontendUrl);
             }
           }
@@ -562,12 +562,12 @@ export class ConnectController {
       }
 
       // Fallback - redirect to dashboard
-      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=unknown`;
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=unknown`;
       return res.redirect(frontendUrl);
     } catch (error) {
       this.logger.error('OAuth callback handler failed', error);
 
-      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=callback_failed`;
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=callback_failed`;
       if (res) {
         return res.redirect(frontendUrl);
       }

@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { ViewStatEntity } from '../database/entities/view-stat.entity';
+import { Transaction } from '../database/entities/transaction.entity';
+import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { AdvertiserStats } from '../interfaces/advertiser-dashboard';
+import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 
 // Type for raw query results
 interface QueryResult {
@@ -17,12 +18,14 @@ export class AdvertiserStatsService {
   constructor(
     @InjectRepository(CampaignEntity)
     private campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(CampaignBudgetTracking)
-    private campaignBudgetTrackingRepository: Repository<CampaignBudgetTracking>,
-    @InjectRepository(ViewStatEntity)
-    private viewStatsRepository: Repository<ViewStatEntity>,
+    @InjectRepository(UniqueViewEntity)
+    private uniqueViewRepository: Repository<UniqueViewEntity>,
     @InjectRepository(SalesRecordEntity)
     private salesRecordRepository: Repository<SalesRecordEntity>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
+    @InjectRepository(PromoterCampaign)
+    private promoterCampaignRepository: Repository<PromoterCampaign>,
   ) {}
 
   async getAdvertiserStats(advertiserId: string): Promise<AdvertiserStats> {
@@ -42,40 +45,65 @@ export class AdvertiserStatsService {
       yesterday.getDate(),
     );
 
-    // Get spending data from campaign_budget_tracking (this shows actual campaign spending)
-    const spendingThisWeek = (await this.campaignBudgetTrackingRepository
-      .createQueryBuilder('cbt')
-      .innerJoin('cbt.campaign', 'campaign')
-      .select('COALESCE(SUM(cbt.spentBudgetCents), 0)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('cbt.updatedAt >= :weekAgo', { weekAgo })
+    // Get spending data from transactions for specific types
+    const transactionTypes = [
+      'DIRECT_PAYMENT',
+      'VIEW_EARNING',
+      'SALESMAN_COMMISSION',
+      'MONTHLY_PAYOUT',
+    ];
+
+    // This week
+    const spendingThisWeek = (await this.transactionRepository
+      .createQueryBuilder('txn')
+      .select('COALESCE(SUM(txn.amount), 0)', 'total')
+      .where('txn.userId = :advertiserId', { advertiserId })
+      .andWhere('txn.type IN (:...types)', { types: transactionTypes })
+      .andWhere('txn.createdAt >= :weekAgo', { weekAgo })
       .getRawOne()) as QueryResult;
 
-    const spendingLastWeek = (await this.campaignBudgetTrackingRepository
-      .createQueryBuilder('cbt')
-      .innerJoin('cbt.campaign', 'campaign')
-      .select('COALESCE(SUM(cbt.spentBudgetCents), 0)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('cbt.updatedAt >= :twoWeeksAgo', { twoWeeksAgo })
-      .andWhere('cbt.updatedAt < :weekAgo', { weekAgo })
+    // Last week
+    const spendingLastWeek = (await this.transactionRepository
+      .createQueryBuilder('txn')
+      .select('COALESCE(SUM(txn.amount), 0)', 'total')
+      .where('txn.userId = :advertiserId', { advertiserId })
+      .andWhere('txn.type IN (:...types)', { types: transactionTypes })
+      .andWhere('txn.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
+      .andWhere('txn.createdAt < :weekAgo', { weekAgo })
       .getRawOne()) as QueryResult;
 
-    // Get views data from view_stats table (more accurate daily tracking)
-    const viewsToday = (await this.viewStatsRepository
-      .createQueryBuilder('vs')
-      .innerJoin('vs.campaign', 'campaign')
-      .select('COALESCE(SUM(vs.viewCount), 0)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('vs.dateTracked >= :startOfToday', { startOfToday })
+    // Get views data from unique_views table (unique views per campaign/promoter/fingerprint)
+    const viewsToday = (await this.uniqueViewRepository
+      .createQueryBuilder('uv')
+      .select('COUNT(DISTINCT uv.id)', 'total')
+      .where('uv.createdAt >= :startOfToday', { startOfToday })
+      .andWhere(
+        'uv.campaignId IN (' +
+          this.campaignRepository
+            .createQueryBuilder('c')
+            .select('c.id')
+            .where('c.advertiserId = :advertiserId', { advertiserId })
+            .getQuery() +
+          ')',
+      )
+      .setParameter('advertiserId', advertiserId)
       .getRawOne()) as QueryResult;
 
-    const viewsYesterday = (await this.viewStatsRepository
-      .createQueryBuilder('vs')
-      .innerJoin('vs.campaign', 'campaign')
-      .select('COALESCE(SUM(vs.viewCount), 0)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('vs.dateTracked >= :startOfYesterday', { startOfYesterday })
-      .andWhere('vs.dateTracked < :startOfToday', { startOfToday })
+    const viewsYesterday = (await this.uniqueViewRepository
+      .createQueryBuilder('uv')
+      .select('COUNT(DISTINCT uv.id)', 'total')
+      .where('uv.createdAt >= :startOfYesterday', { startOfYesterday })
+      .andWhere('uv.createdAt < :startOfToday', { startOfToday })
+      .andWhere(
+        'uv.campaignId IN (' +
+          this.campaignRepository
+            .createQueryBuilder('c')
+            .select('c.id')
+            .where('c.advertiserId = :advertiserId', { advertiserId })
+            .getQuery() +
+          ')',
+      )
+      .setParameter('advertiserId', advertiserId)
       .getRawOne()) as QueryResult;
 
     // Get conversions data from sales_records (more accurate than transaction counting)
@@ -105,11 +133,44 @@ export class AdvertiserStatsService {
       .andWhere('campaign.status = :status', { status: 'ACTIVE' })
       .getCount();
 
-    const pendingApprovalCampaigns = await this.campaignRepository
+    // Custom logic for pending approval campaigns with promoter logic
+    const campaigns = await this.campaignRepository
       .createQueryBuilder('campaign')
       .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('campaign.status = :status', { status: 'PENDING_APPROVAL' })
-      .getCount();
+      .andWhere('campaign.status = :status', { status: 'ACTIVE' })
+      .getMany();
+
+    let pendingApprovalCount = 0;
+    for (const campaign of campaigns) {
+      if (campaign.canHaveMultiplePromoters) {
+        // Count all promoter_campaigns in AWAITING_REVIEW for this campaign
+        const awaitingReviewCount = await this.promoterCampaignRepository
+          .createQueryBuilder('pc')
+          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
+          .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
+          .getCount();
+        pendingApprovalCount += awaitingReviewCount;
+      } else {
+        // Check if there is any promoter_campaign in ONGOING or COMPLETED
+        const hasActiveOrCompleted = await this.promoterCampaignRepository
+          .createQueryBuilder('pc')
+          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
+          .andWhere('pc.status IN (:...statuses)', {
+            statuses: ['ONGOING', 'COMPLETED'],
+          })
+          .getCount();
+        if (hasActiveOrCompleted === 0) {
+          // If none, count the AWAITING_REVIEW one (if exists)
+          const awaitingReviewCount = await this.promoterCampaignRepository
+            .createQueryBuilder('pc')
+            .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
+            .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
+            .getCount();
+          pendingApprovalCount += awaitingReviewCount;
+        }
+      }
+    }
+    const pendingApprovalCampaigns = pendingApprovalCount;
 
     // Calculate percentage changes with safe value extraction
     const spendingThisWeekNum = Number(spendingThisWeek?.total || 0) / 100; // Convert cents to dollars

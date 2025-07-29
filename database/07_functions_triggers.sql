@@ -98,30 +98,6 @@ CREATE TRIGGER update_payment_methods_updated_at
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ========================================
--- TRIGGERS FOR ANALYTICS TABLES
--- ========================================
-
-DROP TRIGGER IF EXISTS update_campaign_analytics_updated_at ON campaign_analytics;
-CREATE TRIGGER update_campaign_analytics_updated_at 
-    BEFORE UPDATE ON campaign_analytics 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_promoter_performance_metrics_updated_at ON promoter_performance_metrics;
-CREATE TRIGGER update_promoter_performance_metrics_updated_at 
-    BEFORE UPDATE ON promoter_performance_metrics 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_advertiser_analytics_updated_at ON advertiser_analytics;
-CREATE TRIGGER update_advertiser_analytics_updated_at 
-    BEFORE UPDATE ON advertiser_analytics 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_platform_metrics_updated_at ON platform_metrics;
-CREATE TRIGGER update_platform_metrics_updated_at 
-    BEFORE UPDATE ON platform_metrics 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- ========================================
 -- TRIGGERS FOR MESSAGING TABLES
 -- ========================================
 

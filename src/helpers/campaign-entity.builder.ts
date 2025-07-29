@@ -71,7 +71,7 @@ export class CampaignEntityBuilder {
     ) {
       campaign.status = CampaignStatus.ACTIVE;
     } else {
-      campaign.status = CampaignStatus.PAUSED;
+      campaign.status = CampaignStatus.INACTIVE;
     }
     campaign.createdAt = new Date();
     campaign.updatedAt = new Date();
@@ -134,7 +134,8 @@ export class CampaignEntityBuilder {
     campaign.trackingLink = data.trackingLink;
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
-    campaign.budgetAllocated = (data.cpv * (data.maxViews || 1000)) / 100; // TODO: change that
+    campaign.budgetAllocated = (data.cpv * (data.maxViews || 10000)) / 100; // TODO: change that
+    campaign.canHaveMultiplePromoters = data.isPublic;
   }
 
   /**

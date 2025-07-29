@@ -1,10 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-// Services
-// import { PaymentServiceImpl } from '../services/payment-orchestrator.service'; // TODO: Disabled
-// import { PaymentProcessingService } from '../services/payment-processing.service'; // TODO: Disabled
-// import { AccountingService } from '../services/accounting.service'; // TODO: Disabled
 import { StripeIntegrationService } from '../services/stripe-integration.service';
 
 // Entities

@@ -18,9 +18,12 @@ import { SocialPlatform } from '../../enums/social-platform';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
+import { Transaction } from './transaction.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
+  @OneToMany(() => Transaction, (transaction) => transaction.campaign)
+  transactions!: Transaction[];
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -221,6 +224,13 @@ export class CampaignEntity {
 
   @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
   discordInviteLink?: string;
+
+  @Column({
+    name: 'can_have_multiple_promoters',
+    type: 'boolean',
+    default: false,
+  })
+  canHaveMultiplePromoters?: boolean;
 
   @OneToMany(
     () => CampaignDeliverableEntity,
