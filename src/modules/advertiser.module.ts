@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
 import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
 import { AdvertiserCampaignService } from '../services/advertiser-campaign.service';
 import { AdvertiserWalletService } from '../services/advertiser-wallet.service';
 import { AdvertiserStatsService } from '../services/advertiser-stats.service';
@@ -11,7 +10,7 @@ import { AdvertiserMessageService } from '../services/advertiser-message.service
 import { CampaignService } from '../services/campaign.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
-import { StripeModule } from '../stripe/stripe.module';
+import { PaymentModule } from '../services/payment.module';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -24,13 +23,9 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
-import { PaymentMethod } from '../database/entities/payment-method.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { ViewStatEntity } from '../database/entities/view-stat.entity';
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
-import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
-import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 
 @Module({
   imports: [
@@ -48,21 +43,16 @@ import { StripeConnectAccount } from '../database/entities/stripe-connect-accoun
       CampaignDeliverableEntity,
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
-      PaymentMethod,
-      CampaignBudgetTracking,
-      PaymentRecord,
       ViewStatEntity,
       SalesRecordEntity,
-      PromoterDetailsEntity,
-      StripeConnectAccount,
+      CampaignBudgetTracking, // Added back for AdvertiserStatsService
     ]),
     PromoterModule,
-    StripeModule,
+    PaymentModule, // Import the payment module instead of individual services
   ],
   controllers: [AdvertiserController],
   providers: [
     AdvertiserService,
-    AdvertiserPaymentService,
     AdvertiserCampaignService,
     AdvertiserWalletService,
     AdvertiserStatsService,

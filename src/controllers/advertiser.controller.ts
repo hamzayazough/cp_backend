@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
+import { AdvertiserPaymentService } from '../services/advertiser-payment-facade.service';
 import { PromoterService } from '../services/promoter.service';
 import {
   CampaignService,
@@ -704,7 +704,7 @@ export class AdvertiserController {
     const feasibility =
       await this.advertiserPaymentService.checkCampaignFundingFeasibility(
         req.user.uid,
-        dto.estimatedBudgetCents,
+        dto,
       );
 
     return {
