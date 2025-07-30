@@ -4,32 +4,16 @@ import { Repository } from 'typeorm';
 import {
   PromoterDashboardRequest,
   PromoterDashboardData,
-  PromoterStats,
-  PromoterActiveCampaign,
-  PromoterSuggestedCampaign,
-  PromoterTransaction,
-  PromoterMessage,
-  PromoterWallet,
-  PromoterWalletViewEarnings,
-  PromoterWalletDirectEarnings,
 } from '../interfaces/promoter-dashboard';
 import {
   ExploreCampaignRequest,
   ExploreCampaignResponse,
   CampaignUnion,
-  Advertiser,
-  BaseCampaignDetails,
-  VisibilityCampaign,
-  ConsultantCampaign,
-  SellerCampaign,
-  SalesmanCampaign,
 } from '../interfaces/explore-campaign';
 import {
   GetPromoterCampaignsRequest,
   PromoterCampaignsListResponse,
   CampaignPromoter,
-  CampaignDetailsUnion,
-  Earnings,
   CampaignWork,
 } from '../interfaces/promoter-campaigns';
 import {
@@ -40,17 +24,15 @@ import {
 } from '../interfaces/campaign-actions';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { Wallet } from '../database/entities/wallet.entity';
 import {
   PromoterCampaign,
   PromoterCampaignStatus,
 } from '../database/entities/promoter-campaign.entity';
-import { MessageThread, Message } from '../database/entities/message.entity';
 import {
   CampaignApplicationEntity,
   ApplicationStatus,
 } from '../database/entities/campaign-applications.entity';
-import { CampaignType, CampaignStatus } from '../enums/campaign-type';
+import { CampaignStatus } from '../enums/campaign-type';
 import { UserType } from 'src/enums/user-type';
 import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
@@ -62,6 +44,7 @@ import {
 } from './promoter/promoter-helper.const';
 import { PromoterDashboardService } from './promoter/promoter-dashboard.service';
 import { PromoterCampaignService } from './promoter/promoter-campaign.service';
+import { PromoterMyCampaignService } from './promoter/promoter-my-campaign.service';
 
 @Injectable()
 export class PromoterService {
@@ -70,14 +53,8 @@ export class PromoterService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignEntity)
     private campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(Wallet)
-    private walletRepository: Repository<Wallet>,
     @InjectRepository(PromoterCampaign)
     private promoterCampaignRepository: Repository<PromoterCampaign>,
-    @InjectRepository(MessageThread)
-    private messageThreadRepository: Repository<MessageThread>,
-    @InjectRepository(Message)
-    private messageRepository: Repository<Message>,
     @InjectRepository(CampaignApplicationEntity)
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     @InjectRepository(CampaignWorkEntity)
@@ -92,6 +69,7 @@ export class PromoterService {
     private readonly uniqueViewRepository: Repository<UniqueViewEntity>,
     private readonly promoterDashboardService: PromoterDashboardService,
     private readonly promoterCampaignService: PromoterCampaignService,
+    private readonly promoterMyCampaignService: PromoterMyCampaignService,
   ) {}
 
   async getDashboardData(
@@ -99,19 +77,32 @@ export class PromoterService {
     request: PromoterDashboardRequest,
   ): Promise<PromoterDashboardData> {
     const data: PromoterDashboardData = {};
+
+    // Load user with all required relations once
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+      relations: [
+        'transactions',
+        'transactions.campaign',
+        'promoterCampaigns',
+        'promoterCampaigns.campaign',
+        'promoterCampaigns.campaign.advertiser',
+        'promoterCampaigns.campaign.advertiser.advertiserDetails',
+        'uniqueViews',
+        'wallet',
+      ],
     });
+
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
-    const promoterId = promoter.id;
 
     for (const config of DASHBOARD_DATA_CONFIG) {
       if (request[config.property]) {
         switch (config.method) {
           case 'getPromoterStats': {
-            data[config.dataKey] = await this.getPromoterStats(promoterId);
+            data[config.dataKey] =
+              this.promoterDashboardService.getPromoterStatsSummary(promoter);
             break;
           }
           case 'getActiveCampaigns': {
@@ -120,10 +111,8 @@ export class PromoterService {
               config.limitProperty,
               config.defaultLimit,
             );
-            data[config.dataKey] = await this.getActiveCampaigns(
-              promoterId,
-              limit,
-            );
+            data[config.dataKey] =
+              this.promoterDashboardService.getActiveCampaigns(promoter, limit);
             break;
           }
           case 'getSuggestedCampaigns': {
@@ -132,10 +121,11 @@ export class PromoterService {
               config.limitProperty,
               config.defaultLimit,
             );
-            data[config.dataKey] = await this.getSuggestedCampaigns(
-              promoterId,
-              limit,
-            );
+            data[config.dataKey] =
+              await this.promoterDashboardService.getSuggestedCampaigns(
+                promoter,
+                limit,
+              );
             break;
           }
           case 'getRecentTransactions': {
@@ -144,10 +134,11 @@ export class PromoterService {
               config.limitProperty,
               config.defaultLimit,
             );
-            data[config.dataKey] = await this.getRecentTransactions(
-              promoterId,
-              limit,
-            );
+            data[config.dataKey] =
+              this.promoterDashboardService.getRecentTransactions(
+                promoter,
+                limit,
+              );
             break;
           }
           case 'getRecentMessages': {
@@ -156,14 +147,16 @@ export class PromoterService {
               config.limitProperty,
               config.defaultLimit,
             );
-            data[config.dataKey] = await this.getRecentMessages(
-              promoterId,
-              limit,
-            );
+            data[config.dataKey] =
+              await this.promoterDashboardService.getRecentMessages(
+                promoter,
+                limit,
+              );
             break;
           }
           case 'getWalletInfo': {
-            data[config.dataKey] = await this.getWalletInfo(promoterId);
+            data[config.dataKey] =
+              await this.promoterDashboardService.getWalletInfo(promoter);
             break;
           }
         }
@@ -173,212 +166,27 @@ export class PromoterService {
     return data;
   }
 
-  private async getPromoterStats(promoterId: string): Promise<PromoterStats> {
-    try {
-      return await this.promoterDashboardService.getPromoterStatsSummary(
-        promoterId,
-      );
-    } catch (error) {
-      if (error instanceof Error && error.message === 'Promoter not found') {
-        throw new NotFoundException('Promoter not found');
-      }
-      throw error;
-    }
-  }
-
-  private async getActiveCampaigns(
-    promoterId: string,
-    limit: number,
-  ): Promise<PromoterActiveCampaign[]> {
-    const activeCampaigns =
-      await this.promoterCampaignService.getPromoterActiveCampaigns(
-        promoterId,
-        limit,
-      );
-
-    return this.promoterCampaignService.convertToPromoterActiveCampaignDto(
-      activeCampaigns,
-    );
-  }
-
-  private async getSuggestedCampaigns(
-    promoterId: string,
-    limit: number,
-  ): Promise<PromoterSuggestedCampaign[]> {
-    const suggestedCampaigns =
-      await this.promoterCampaignService.getPromoterSuggestedCampaigns(
-        promoterId,
-        limit,
-      );
-
-    return this.promoterCampaignService.convertToPromoterSuggestedCampaignDto(
-      suggestedCampaigns,
-    );
-  }
-
-  private async getRecentTransactions(
-    promoterId: string,
-    limit: number,
-  ): Promise<PromoterTransaction[]> {
-    const userWithTransactions = await this.userRepository.findOne({
-      where: { id: promoterId },
-      relations: ['transactions', 'transactions.campaign'],
-    });
-
-    if (!userWithTransactions) {
-      return [];
-    }
-
-    // Sort transactions by creation date (newest first) and take the limit
-    const recentTransactions = (userWithTransactions.transactions || [])
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, limit);
-
-    return recentTransactions.map((transaction) => ({
-      id: transaction.id,
-      amount: transaction.amount,
-      status: transaction.status,
-      date: transaction.createdAt.toISOString(),
-      campaign: transaction.campaign?.title || 'N/A',
-      campaignId: transaction.campaignId,
-      type: transaction.type,
-      paymentMethod: transaction.paymentMethod?.toString() || 'N/A',
-      description: transaction.description,
-      estimatedPaymentDate: transaction.estimatedPaymentDate?.toISOString(),
-    }));
-  }
-
-  private async getRecentMessages(
-    promoterId: string,
-    limit: number,
-  ): Promise<PromoterMessage[]> {
-    const messages = await this.messageRepository
-      .createQueryBuilder('message')
-      .leftJoinAndSelect('message.thread', 'thread')
-      .leftJoinAndSelect('message.sender', 'sender')
-      .where('thread.promoterId = :promoterId', { promoterId })
-      .orderBy('message.createdAt', 'DESC')
-      .limit(limit)
-      .getMany();
-
-    return messages.map((message) => ({
-      id: message.id,
-      name: message.sender?.name || 'Unknown',
-      message: message.content,
-      time: message.createdAt.toISOString(),
-      avatar: message.sender?.avatarUrl,
-      isRead: message.isRead,
-      threadId: message.threadId,
-      senderType: message.senderType,
-      campaignId: message.thread?.campaignId || '',
-    }));
-  }
-
-  private async getWalletInfo(promoterId: string): Promise<PromoterWallet> {
-    let wallet = await this.walletRepository.findOne({
-      where: { userId: promoterId, userType: UserType.PROMOTER },
-    });
-
-    // Create wallet if it doesn't exist
-    if (!wallet) {
-      wallet = this.walletRepository.create({
-        userId: promoterId,
-        userType: UserType.PROMOTER,
-        currentBalance: 0,
-        pendingBalance: 0,
-        totalEarned: 0,
-        totalWithdrawn: 0,
-        minimumThreshold: 20,
-        directTotalEarned: 0,
-        directTotalPaid: 0,
-        directPendingPayments: 0,
-      });
-      await this.walletRepository.save(wallet);
-    }
-
-    const viewEarnings: PromoterWalletViewEarnings = {
-      currentBalance: wallet.currentBalance,
-      pendingBalance: wallet.pendingBalance,
-      totalEarned: wallet.totalEarned || 0,
-      totalWithdrawn: wallet.totalWithdrawn,
-      lastPayoutDate: wallet.lastPayoutDate?.toISOString(),
-      nextPayoutDate: wallet.nextPayoutDate?.toISOString(),
-      minimumThreshold: wallet.minimumThreshold || 20,
-    };
-
-    const directEarnings: PromoterWalletDirectEarnings = {
-      totalEarned: wallet.directTotalEarned || 0,
-      totalPaid: wallet.directTotalPaid || 0,
-      pendingPayments: wallet.directPendingPayments || 0,
-      lastPaymentDate: wallet.directLastPaymentDate?.toISOString(),
-    };
-
-    return {
-      viewEarnings,
-      directEarnings,
-      totalLifetimeEarnings:
-        Number(wallet.totalEarned) + Number(wallet.directTotalEarned),
-      totalAvailableBalance: wallet.currentBalance,
-    };
-  }
-
-  private getCampaignTags(campaign: CampaignEntity): string[] {
-    const tags: string[] = [];
-
-    if (campaign.type === CampaignType.VISIBILITY) {
-      tags.push('Views', 'Promotion');
-    } else if (campaign.type === CampaignType.CONSULTANT) {
-      tags.push('Consulting', 'Expert');
-    } else if (campaign.type === CampaignType.SALESMAN) {
-      tags.push('Sales', 'Commission');
-    }
-
-    return tags;
-  }
-
-  private getCampaignRequirements(campaign: CampaignEntity): string[] {
-    const requirements: string[] = [];
-
-    if (campaign.type === CampaignType.VISIBILITY) {
-      requirements.push('Active social media presence');
-    } else if (campaign.type === CampaignType.CONSULTANT) {
-      requirements.push('Relevant expertise');
-    } else if (campaign.type === CampaignType.SALESMAN) {
-      requirements.push('Sales experience');
-    }
-
-    return requirements;
-  }
-
-  private calculateEstimatedEarnings(campaign: CampaignEntity): number {
-    if (campaign.type === CampaignType.VISIBILITY && campaign.cpv) {
-      return campaign.cpv * 100; // Assuming 100 views as baseline
-    }
-    return 0;
-  }
-  private getCampaignBudget(campaign: CampaignEntity): number | undefined {
-    if (
-      campaign.type === CampaignType.CONSULTANT ||
-      campaign.type === CampaignType.SELLER
-    ) {
-      return campaign.maxBudget;
-    }
-    // For VISIBILITY and SALESMAN campaigns, calculate budget based on their specific fields
-    if (
-      campaign.type === CampaignType.VISIBILITY &&
-      campaign.cpv &&
-      campaign.maxViews
-    ) {
-      return (campaign.cpv * campaign.maxViews) / 100; // Convert per 100 views to total budget
-    }
-    return undefined;
-  }
-
   async getExploreCampaigns(
     firebaseUid: string,
     request: ExploreCampaignRequest,
   ): Promise<ExploreCampaignResponse> {
-    // Find promoter by Firebase UID
+    // Load promoter with necessary relations for explore campaigns
+    const promoter = await this.userRepository.findOne({
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+      relations: ['promoterCampaigns'],
+    });
+
+    if (!promoter) {
+      throw new NotFoundException('Promoter not found');
+    }
+
+    return this.promoterCampaignService.getExploreCampaigns(promoter, request);
+  }
+
+  async getCampaignById(
+    firebaseUid: string,
+    campaignId: string,
+  ): Promise<CampaignUnion> {
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
@@ -386,730 +194,54 @@ export class PromoterService {
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
-
-    const page = request.page || 1;
-    const limit = request.limit || 10;
-    const skip = (page - 1) * limit;
-    const searchTerm = request.searchTerm || '';
-    const sortBy = request.sortBy || 'newest';
-
-    // Get campaign IDs that the promoter has already joined
-    const joinedCampaignIds = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .select('pc.campaignId', 'campaignId')
-      .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
-      .getRawMany();
-
-    // Get campaign IDs that the promoter has already applied for
-    const appliedCampaignIds = await this.campaignApplicationRepository
-      .createQueryBuilder('ca')
-      .select('ca.campaignId', 'campaignId')
-      .where('ca.promoterId = :promoterId', { promoterId: promoter.id })
-      .getRawMany();
-
-    const joinedIds = joinedCampaignIds.map(
-      (row: { campaignId: string }) => row.campaignId,
-    );
-    const appliedIds = appliedCampaignIds.map(
-      (row: { campaignId: string }) => row.campaignId,
-    ); // Combine both arrays to exclude campaigns that the promoter has joined OR applied for
-    const excludedCampaignIds = [...new Set([...joinedIds, ...appliedIds])]; // Get private campaigns that are already taken by other promoters
-    // Private campaigns (isPublic = false) can only have one promoter, so exclude them if taken
-    // Public campaigns (isPublic = true) can have multiple promoters, so don't exclude them
-    const takenPrivateCampaignIds = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .innerJoin('pc.campaign', 'campaign')
-      .select('pc.campaignId', 'campaignId')
-      .where('campaign.isPublic = :isPublic', { isPublic: false })
-      .andWhere('pc.promoterId != :promoterId', { promoterId: promoter.id })
-      .getRawMany();
-
-    const takenPrivateIds = takenPrivateCampaignIds.map(
-      (row: { campaignId: string }) => row.campaignId,
-    );
-
-    // Combine all exclusions: already interacted with + taken private campaigns
-    const allExcludedCampaignIds = [
-      ...new Set([...excludedCampaignIds, ...takenPrivateIds]),
-    ];
-
-    // Build query for campaigns the promoter hasn't joined or applied for
-    let query = this.campaignRepository
-      .createQueryBuilder('campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('campaign.promoterCampaigns', 'promoterCampaigns')
-      .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
-
-    // Exclude campaigns the promoter has already joined, applied for, or private campaigns taken by others
-    if (allExcludedCampaignIds.length > 0) {
-      query = query.andWhere('campaign.id NOT IN (:...excludedCampaignIds)', {
-        excludedCampaignIds: allExcludedCampaignIds,
-      });
-    } // Apply search filter
-    if (searchTerm) {
-      query = query.andWhere(
-        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
-        { search: `%${searchTerm}%` },
+    const campaign =
+      await this.promoterCampaignService.getCampaignByIdWithRelations(
+        campaignId,
       );
-    }
 
-    // Apply type filter
-    if (request.typeFilter && request.typeFilter.length > 0) {
-      query = query.andWhere('campaign.type IN (:...types)', {
-        types: request.typeFilter,
-      });
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
     }
-
-    // Apply advertiser type filter
-    if (request.advertiserTypes && request.advertiserTypes.length > 0) {
-      query = query.andWhere('campaign.advertiserTypes && :advertiserTypes', {
-        advertiserTypes: request.advertiserTypes,
-      });
-    } // Apply sorting
-    switch (sortBy) {
-      case 'newest':
-        query = query.orderBy('campaign.createdAt', 'DESC');
-        break;
-      case 'deadline':
-        query = query.orderBy('campaign.deadline', 'ASC');
-        break;
-      case 'budget':
-        query = query.orderBy('campaign.budgetAllocated', 'DESC');
-        break;
-      case 'applicants':
-        // This would require a subquery to count applications
-        query = query.orderBy('campaign.createdAt', 'DESC');
-        break;
-      default:
-        query = query.orderBy('campaign.createdAt', 'DESC');
-    }
-
-    const totalCount = await query.getCount();
-    const totalPages = Math.ceil(totalCount / limit);
-    const campaigns = await query.skip(skip).take(limit).getMany(); // Transform campaigns to the required format
-    const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
-      this.transformCampaignToUnion(campaign, promoter.id),
+    return this.promoterCampaignService.transformCampaignToUnion(
+      campaign,
+      promoter.id,
     );
-
-    return {
-      campaigns: transformedCampaigns,
-      page,
-      totalPages,
-      totalCount,
-      sortBy,
-      searchTerm,
-      typeFilter: request.typeFilter || [],
-      advertiserTypes: request.advertiserTypes || [],
-    };
   }
-  private transformCampaignToUnion(
-    campaign: CampaignEntity,
-    promoterId: string,
-  ): CampaignUnion {
-    const advertiser: Advertiser = {
-      id: campaign.advertiser.id,
-      companyName: campaign.advertiser.name || 'Unknown Company',
-      profileUrl: campaign.advertiser.avatarUrl,
-      rating: campaign.advertiser.rating || 0,
-      verified: true, // You may want to add a verified field to UserEntity
-      description: campaign.advertiser.bio || '',
-      website: campaign.advertiser.websiteUrl || '',
-      advertiserTypes: campaign.advertiserTypes || [],
-    };
 
-    const baseCampaign: BaseCampaignDetails = {
-      id: campaign.id,
-      advertiser,
-      title: campaign.title,
-      type: campaign.type,
-      mediaUrl: campaign.mediaUrl,
-      status:
-        campaign.promoterCampaigns?.find((pm) => pm.promoterId === promoterId)
-          ?.status || PromoterCampaignStatus.ONGOING,
-      description: campaign.description,
-      targetAudience: campaign.targetAudience,
-      preferredPlatforms: campaign.preferredPlatforms,
-      requirements: campaign.requirements,
-      createdAt: campaign.createdAt,
-      deadline: campaign.deadline
-        ? new Date(campaign.deadline).toISOString()
-        : '',
-      startDate: campaign.startDate
-        ? new Date(campaign.startDate).toISOString()
-        : '',
-      isPublic: campaign.isPublic,
-      tags: campaign.advertiserTypes || [],
-      campaignStatus: campaign.status,
-    };
-
-    switch (campaign.type) {
-      case CampaignType.VISIBILITY:
-        return {
-          ...baseCampaign,
-          type: CampaignType.VISIBILITY,
-          maxViews: campaign.maxViews || 0,
-          currentViews: campaign.currentViews || 0,
-          cpv: campaign.cpv || 0,
-          minFollowers: campaign.minFollowers,
-        } as VisibilityCampaign;
-
-      case CampaignType.CONSULTANT:
-        return {
-          ...baseCampaign,
-          type: CampaignType.CONSULTANT,
-          meetingPlan: campaign.meetingPlan!,
-          expectedDeliverables: campaign.expectedDeliverables.map(
-            (cd) => cd.deliverable,
-          ),
-          expertiseRequired: campaign.expertiseRequired,
-          meetingCount: campaign.meetingCount || 0,
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
-        } as ConsultantCampaign;
-
-      case CampaignType.SELLER:
-        return {
-          ...baseCampaign,
-          type: CampaignType.SELLER,
-          sellerRequirements: campaign.sellerRequirements,
-          deliverables: campaign.deliverables.map((cd) => cd.deliverable),
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
-          minFollowers: campaign.minFollowers,
-          needMeeting: campaign.needMeeting || false,
-          meetingPlan: campaign.meetingPlan!,
-          meetingCount: campaign.meetingCount || 0,
-        } as SellerCampaign;
-
-      case CampaignType.SALESMAN:
-        return {
-          ...baseCampaign,
-          type: CampaignType.SALESMAN,
-          commissionPerSale: campaign.commissionPerSale || 0,
-          trackSalesVia: campaign.trackSalesVia!,
-          codePrefix: campaign.codePrefix,
-          refLink: campaign.trackingLink,
-          minFollowers: campaign.minFollowers,
-        } as SalesmanCampaign;
-      default: {
-        // This should never happen with proper TypeScript typing
-        const exhaustiveCheck: never = campaign.type;
-        throw new Error(
-          `Unsupported campaign type: ${String(exhaustiveCheck)}`,
-        );
-      }
-    }
-  }
   async getPromoterCampaigns(
     firebaseUid: string,
     request: GetPromoterCampaignsRequest,
   ): Promise<PromoterCampaignsListResponse> {
-    // Find promoter by Firebase UID
+    // Find promoter by Firebase UID with necessary relations
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+      relations: [
+        'promoterCampaigns',
+        'promoterCampaigns.campaign',
+        'promoterCampaigns.campaign.advertiser',
+        'promoterCampaigns.campaign.advertiser.advertiserDetails',
+        'promoterCampaigns.campaign.campaignDeliverables',
+        'promoterCampaigns.campaign.campaignDeliverables.promoterWork',
+        'promoterCampaigns.campaign.campaignDeliverables.promoterWork.comments',
+        'campaignApplications',
+        'campaignApplications.campaign',
+        'campaignApplications.campaign.advertiser',
+        'campaignApplications.campaign.advertiser.advertiserDetails',
+        'campaignApplications.campaign.campaignDeliverables',
+        'campaignApplications.campaign.campaignDeliverables.promoterWork',
+        'campaignApplications.campaign.campaignDeliverables.promoterWork.comments',
+      ],
     });
 
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
 
-    const page = request.page || 1;
-    const limit = request.limit || 10;
-    const skip = (page - 1) * limit;
-    const searchTerm = request.searchTerm || '';
-    const sortBy = request.sortBy || 'newest';
-    const sortOrder = request.sortOrder || 'desc';
-
-    // Get joined campaigns (from PromoterCampaign entity)
-    let joinedQuery = this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoinAndSelect('pc.campaign', 'campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
-      .leftJoinAndSelect('promoterWork.comments', 'comments')
-      .where('pc.promoterId = :promoterId', { promoterId: promoter.id });
-
-    // Get applied campaigns (from CampaignApplicationEntity)
-    let appliedQuery = this.campaignApplicationRepository
-      .createQueryBuilder('ca')
-      .leftJoinAndSelect('ca.campaign', 'campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
-      .leftJoinAndSelect('promoterWork.comments', 'comments')
-      .where('ca.promoterId = :promoterId', { promoterId: promoter.id });
-
-    // Apply status filter
-    if (request.status && request.status.length > 0) {
-      // For joined campaigns, filter by PromoterCampaign status
-      joinedQuery = joinedQuery.andWhere('pc.status IN (:...statuses)', {
-        statuses: request.status,
-      });
-
-      // For applied campaigns, only include PENDING applications when AWAITING_REVIEW is requested
-      // ACCEPTED applications should not be included as they will appear as joined campaigns
-      if (request.status.includes(PromoterCampaignStatus.AWAITING_REVIEW)) {
-        appliedQuery = appliedQuery.andWhere('ca.status = :appStatus', {
-          appStatus: ApplicationStatus.PENDING,
-        });
-      } else {
-        // If specific statuses are requested that don't apply to applications, exclude them
-        appliedQuery = appliedQuery.andWhere('1 = 0'); // This will exclude all applications
-      }
-    } else {
-      // When no status filter is applied, still exclude ACCEPTED applications to avoid duplicates
-      appliedQuery = appliedQuery.andWhere('ca.status != :acceptedStatus', {
-        acceptedStatus: ApplicationStatus.ACCEPTED,
-      });
-    }
-
-    // Apply campaign type filter to both queries
-    if (request.type && request.type.length > 0) {
-      joinedQuery = joinedQuery.andWhere('campaign.type IN (:...types)', {
-        types: request.type,
-      });
-      appliedQuery = appliedQuery.andWhere('campaign.type IN (:...types)', {
-        types: request.type,
-      });
-    }
-
-    // Apply search filter to both queries
-    if (searchTerm) {
-      const searchCondition =
-        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)';
-      const searchParams = { search: `%${searchTerm}%` };
-
-      joinedQuery = joinedQuery.andWhere(searchCondition, searchParams);
-      appliedQuery = appliedQuery.andWhere(searchCondition, searchParams);
-    }
-
-    // Execute both queries
-    const [joinedCampaigns, appliedCampaigns] = await Promise.all([
-      joinedQuery.getMany(),
-      appliedQuery.getMany(),
-    ]);
-
-    // Create typed objects for combined results
-    type CombinedCampaign =
-      | {
-          source: 'joined';
-          data: PromoterCampaign;
-          sortDate: Date;
-        }
-      | {
-          source: 'applied';
-          data: CampaignApplicationEntity & { campaign: CampaignEntity };
-          sortDate: Date;
-        };
-
-    const allCampaigns: CombinedCampaign[] = [
-      ...joinedCampaigns.map((pc) => ({
-        source: 'joined' as const,
-        data: pc,
-        sortDate: pc.joinedAt,
-      })),
-      ...appliedCampaigns.map((ca) => ({
-        source: 'applied' as const,
-        data: ca as CampaignApplicationEntity & { campaign: CampaignEntity },
-        sortDate: ca.appliedAt,
-      })),
-    ];
-
-    // Apply sorting to combined results
-    allCampaigns.sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortBy) {
-        case 'newest':
-          aValue = a.sortDate;
-          bValue = b.sortDate;
-          break;
-        case 'deadline':
-          aValue = a.data.campaign.deadline;
-          bValue = b.data.campaign.deadline;
-          break;
-        case 'earnings':
-          aValue = a.source === 'joined' ? a.data.earnings : 0;
-          bValue = b.source === 'joined' ? b.data.earnings : 0;
-          break;
-        case 'title':
-          aValue = a.data.campaign.title;
-          bValue = b.data.campaign.title;
-          break;
-        default:
-          aValue = a.sortDate;
-          bValue = b.sortDate;
-      }
-
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    // Apply pagination
-    const totalCount = allCampaigns.length;
-    const totalPages = Math.ceil(totalCount / limit);
-    const paginatedCampaigns = allCampaigns.slice(skip, skip + limit);
-
-    // Transform campaigns to the required format
-    const transformedCampaigns: CampaignPromoter[] = paginatedCampaigns.map(
-      (item) => {
-        if (item.source === 'joined') {
-          return this.transformPromoterCampaignToInterface(
-            item.data,
-            promoter.id,
-          );
-        } else {
-          return this.transformCampaignApplicationToInterface(
-            item.data,
-            promoter.id,
-          );
-        }
-      },
+    // Delegate to the specialized service (no longer async)
+    return this.promoterMyCampaignService.getPromoterCampaigns(
+      promoter,
+      request,
     );
-
-    // Calculate summary (including both joined and applied campaigns)
-    const summary =
-      await this.calculatePromoterCampaignsSummaryWithApplications(promoter.id);
-
-    return {
-      campaigns: transformedCampaigns,
-      page,
-      totalPages,
-      totalCount,
-      summary,
-    };
-  }
-
-  private async mapPromoterLinks(
-    campaign: CampaignEntity,
-  ): Promise<CampaignWork[]> {
-    // Since campaigns no longer have direct promoterWork relationships,
-    // we need to get work through deliverables
-    const deliverables = await this.deliverableRepository.find({
-      where: { campaignId: campaign.id },
-      relations: ['promoterWork', 'promoterWork.comments'],
-    });
-
-    const allWork: CampaignWork[] = [];
-
-    for (const deliverable of deliverables) {
-      for (const work of deliverable.promoterWork) {
-        allWork.push({
-          id: work.id,
-          campaignId: campaign.id, // Use the campaign ID from the parameter
-          promoterLink: work.promoterLink,
-          description: work.description,
-          createdAt: work.createdAt,
-          updatedAt: work.updatedAt,
-          comments:
-            work.comments?.map((c: CampaignWorkCommentEntity) => ({
-              id: c.id,
-              workId: c.workId,
-              commentMessage: c.commentMessage,
-              commentatorId: c.commentatorId,
-              commentatorName: c.commentatorName,
-              createdAt: c.createdAt,
-            })) ?? [],
-        });
-      }
-    }
-
-    return allWork;
-  }
-
-  // private async getDeliverablesForCampaign(
-  //   campaign: CampaignEntity,
-  // ): Promise<import('../enums/deliverable').Deliverable[]> {
-  //   const deliverables = await this.deliverableRepository.find({
-  //     where: { campaignId: campaign.id },
-  //     select: ['deliverable'],
-  //   });
-
-  //   return deliverables.map((d) => d.deliverable);
-  // }
-
-  private transformPromoterCampaignToInterface(
-    pc: PromoterCampaign,
-    promoterId: string,
-  ): CampaignPromoter {
-    const advertiser: Advertiser = {
-      id: pc.campaign.advertiser.id,
-      companyName: pc.campaign.advertiser.name || 'Unknown Company',
-      profileUrl: pc.campaign.advertiser.avatarUrl,
-      rating: pc.campaign.advertiser.rating || 0,
-      verified: true, // You may want to add a verified field to UserEntity
-      description: pc.campaign.advertiser.bio || '',
-      website: pc.campaign.advertiser.websiteUrl || '',
-      advertiserTypes: pc.campaign.advertiserTypes || [],
-    };
-
-    const earnings: Earnings = {
-      totalEarned: Number(pc.earnings),
-      viewsGenerated: pc.viewsGenerated,
-      projectedTotal: this.calculateProjectedEarnings(pc),
-    };
-
-    const baseCampaign = {
-      budgetHeld: Number(pc.campaign.budgetAllocated),
-      spentBudget: Number(pc.spentBudget),
-      targetAudience: pc.campaign.targetAudience,
-      preferredPlatforms: pc.campaign.preferredPlatforms,
-      requirements: pc.campaign.requirements,
-      createdAt: pc.campaign.createdAt,
-      deadline: pc.campaign.deadline
-        ? new Date(pc.campaign.deadline).toISOString()
-        : '',
-      startDate: pc.campaign.startDate
-        ? new Date(pc.campaign.startDate).toISOString()
-        : '',
-      isPublic: pc.campaign.isPublic,
-      discordInviteLink: pc.campaign.discordInviteLink || '',
-    };
-
-    let campaignDetails: CampaignDetailsUnion;
-
-    switch (pc.campaign.type) {
-      case CampaignType.VISIBILITY:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.VISIBILITY,
-          maxViews: pc.campaign.maxViews || 0,
-          currentViews: pc.viewsGenerated, // Use promoter's generated views
-          cpv: pc.campaign.cpv || 0,
-          minFollowers: pc.campaign.minFollowers,
-          trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${pc.campaign.id}/${promoterId}`,
-        };
-        break;
-
-      case CampaignType.CONSULTANT:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.CONSULTANT,
-          meetingPlan: pc.campaign.meetingPlan!,
-          expectedDeliverables: pc.campaign.expectedDeliverables.map((cd) => ({
-            id: cd.id,
-            campaignId: cd.campaignId,
-            deliverable: cd.deliverable,
-            isSubmitted: cd.isSubmitted,
-            isFinished: cd.isFinished,
-            createdAt: cd.createdAt,
-            updatedAt: cd.updatedAt,
-            promoterWork:
-              cd.promoterWork?.map((work) => ({
-                id: work.id,
-                deliverableId: work.deliverableId,
-                promoterLink: work.promoterLink,
-                description: work.description,
-                createdAt: work.createdAt,
-                updatedAt: work.updatedAt,
-                comments:
-                  work.comments?.map((comment) => ({
-                    id: comment.id,
-                    workId: comment.workId,
-                    commentMessage: comment.commentMessage,
-                    commentatorId: comment.commentatorId,
-                    commentatorName: comment.commentatorName,
-                    createdAt: comment.createdAt,
-                  })) || [],
-              })) || [],
-          })),
-          expertiseRequired: pc.campaign.expertiseRequired,
-          meetingCount: pc.campaign.meetingCount || 0,
-          maxBudget: pc.campaign.maxBudget || 0,
-          minBudget: pc.campaign.minBudget || 0,
-        };
-        break;
-
-      case CampaignType.SELLER:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.SELLER,
-          sellerRequirements: pc.campaign.sellerRequirements,
-          deliverables: pc.campaign.deliverables.map((cd) => ({
-            id: cd.id,
-            campaignId: cd.campaignId,
-            deliverable: cd.deliverable,
-            isSubmitted: cd.isSubmitted,
-            isFinished: cd.isFinished,
-            createdAt: cd.createdAt,
-            updatedAt: cd.updatedAt,
-            promoterWork:
-              cd.promoterWork?.map((work) => ({
-                id: work.id,
-                deliverableId: work.deliverableId,
-                promoterLink: work.promoterLink,
-                description: work.description,
-                createdAt: work.createdAt,
-                updatedAt: work.updatedAt,
-                comments:
-                  work.comments?.map((comment) => ({
-                    id: comment.id,
-                    workId: comment.workId,
-                    commentMessage: comment.commentMessage,
-                    commentatorId: comment.commentatorId,
-                    commentatorName: comment.commentatorName,
-                    createdAt: comment.createdAt,
-                  })) || [],
-              })) || [],
-          })),
-          fixedPrice: undefined, // Not in current schema
-          maxBudget: pc.campaign.maxBudget || 0,
-          minBudget: pc.campaign.minBudget || 0,
-          minFollowers: pc.campaign.minFollowers,
-          needMeeting: pc.campaign.needMeeting || false,
-          meetingPlan: pc.campaign.meetingPlan!,
-          meetingCount: pc.campaign.meetingCount || 0,
-        };
-        break;
-
-      case CampaignType.SALESMAN:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.SALESMAN,
-          commissionPerSale: pc.campaign.commissionPerSale || 0,
-          trackSalesVia: pc.campaign.trackSalesVia!,
-          codePrefix: pc.campaign.codePrefix,
-          refLink: pc.campaign.trackingLink,
-          minFollowers: pc.campaign.minFollowers,
-        };
-        break;
-      default:
-        throw new Error(
-          `Unsupported campaign type: ${String(pc.campaign.type)}`,
-        );
-    }
-    return {
-      id: pc.campaign.id,
-      title: pc.campaign.title,
-      type: pc.campaign.type,
-      mediaUrl: pc.campaign.mediaUrl,
-      status: pc.status,
-      description: pc.campaign.description,
-      advertiser,
-      campaign: campaignDetails,
-      earnings,
-      tags: pc.campaign.advertiserTypes || [],
-      meetingDone: false, // You may want to add this logic based on meeting requirements
-    };
-  }
-
-  private calculateProjectedEarnings(pc: PromoterCampaign): number {
-    // Simple projection based on current earnings and campaign progress
-    if (
-      pc.campaign.type === CampaignType.VISIBILITY &&
-      pc.campaign.maxViews &&
-      pc.campaign.cpv
-    ) {
-      const maxPossibleEarnings =
-        (pc.campaign.maxViews / 100) * pc.campaign.cpv;
-      return maxPossibleEarnings;
-    }
-
-    if (
-      pc.campaign.type === CampaignType.CONSULTANT ||
-      pc.campaign.type === CampaignType.SELLER
-    ) {
-      return pc.campaign.maxBudget || Number(pc.earnings);
-    }
-
-    return Number(pc.earnings);
-  }
-
-  private async calculatePromoterCampaignsSummary(promoterId: string) {
-    const summaryQuery = this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoin('pc.campaign', 'campaign')
-      .where('pc.promoterId = :promoterId', { promoterId });
-
-    const [totalActive, totalPending, totalCompleted] = await Promise.all([
-      summaryQuery
-        .clone()
-        .andWhere('pc.status = :status', { status: 'ONGOING' })
-        .getCount(),
-      summaryQuery
-        .clone()
-        .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
-        .getCount(),
-      summaryQuery
-        .clone()
-        .andWhere('pc.status = :status', { status: 'COMPLETED' })
-        .getCount(),
-    ]);
-    const earningsAndViews:
-      | { totalEarnings: string; totalViews: string }
-      | undefined = await summaryQuery
-      .clone()
-      .select('SUM(pc.earnings)', 'totalEarnings')
-      .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
-      .getRawOne();
-    return {
-      totalActive,
-      totalPending,
-      totalCompleted,
-      totalEarnings: parseFloat(earningsAndViews?.totalEarnings || '0'),
-      totalViews: parseInt(earningsAndViews?.totalViews || '0'),
-    };
-  }
-
-  private async calculatePromoterCampaignsSummaryWithApplications(
-    promoterId: string,
-  ) {
-    // Get counts from promoter campaigns (joined campaigns)
-    const joinedSummaryQuery = this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoin('pc.campaign', 'campaign')
-      .where('pc.promoterId = :promoterId', { promoterId });
-
-    const [totalActive, totalCompleted] = await Promise.all([
-      joinedSummaryQuery
-        .clone()
-        .andWhere('pc.status = :status', { status: 'ONGOING' })
-        .getCount(),
-      joinedSummaryQuery
-        .clone()
-        .andWhere('pc.status = :status', { status: 'COMPLETED' })
-        .getCount(),
-    ]);
-
-    // Get pending count from both promoter campaigns (AWAITING_REVIEW) and applications (PENDING/ACCEPTED)
-    const promoterPending = await joinedSummaryQuery
-      .clone()
-      .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
-      .getCount();
-
-    const applicationPending = await this.campaignApplicationRepository
-      .createQueryBuilder('ca')
-      .where('ca.promoterId = :promoterId', { promoterId })
-      .andWhere('ca.status = :status', {
-        status: ApplicationStatus.PENDING,
-      })
-      .getCount();
-
-    const totalPending = promoterPending + applicationPending;
-
-    // Get earnings and views only from joined campaigns (applications don't have earnings/views yet)
-    const earningsAndViews:
-      | { totalEarnings: string; totalViews: string }
-      | undefined = await joinedSummaryQuery
-      .clone()
-      .select('SUM(pc.earnings)', 'totalEarnings')
-      .addSelect('SUM(pc.viewsGenerated)', 'totalViews')
-      .getRawOne();
-
-    return {
-      totalActive,
-      totalPending,
-      totalCompleted,
-      totalEarnings: parseFloat(earningsAndViews?.totalEarnings || '0'),
-      totalViews: parseInt(earningsAndViews?.totalViews || '0'),
-    };
   }
 
   async sendCampaignApplication(
@@ -1118,7 +250,7 @@ export class PromoterService {
   ): Promise<SendApplicationResponse> {
     // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
 
     if (!promoter) {
@@ -1239,212 +371,6 @@ export class PromoterService {
         acceptedAt: savedContract.joinedAt.toISOString(),
       },
     };
-  }
-
-  private transformCampaignApplicationToInterface(
-    ca: CampaignApplicationEntity & { campaign: CampaignEntity },
-    promoterId: string,
-  ): CampaignPromoter {
-    const advertiser: Advertiser = {
-      id: ca.campaign.advertiser.id,
-      companyName: ca.campaign.advertiser.name || 'Unknown Company',
-      profileUrl: ca.campaign.advertiser.avatarUrl,
-      rating: ca.campaign.advertiser.rating || 0,
-      verified: true, // You may want to add a verified field to UserEntity
-      description: ca.campaign.advertiser.bio || '',
-      website: ca.campaign.advertiser.websiteUrl || '',
-      advertiserTypes: ca.campaign.advertiserTypes || [],
-    };
-
-    // For applications, earnings are zero since no work has been done yet
-    const earnings: Earnings = {
-      totalEarned: 0,
-      viewsGenerated: 0,
-      projectedTotal: this.calculateProjectedEarningsFromCampaign(ca.campaign),
-    };
-
-    const baseCampaign = {
-      budgetHeld: Number(ca.campaign.budgetAllocated) || 0,
-      spentBudget: 0, // No spending for applications
-      targetAudience: ca.campaign.targetAudience,
-      preferredPlatforms: ca.campaign.preferredPlatforms,
-      requirements: ca.campaign.requirements,
-      createdAt: ca.campaign.createdAt,
-      deadline: ca.campaign.deadline
-        ? new Date(ca.campaign.deadline).toISOString()
-        : '',
-      startDate: ca.campaign.startDate
-        ? new Date(ca.campaign.startDate).toISOString()
-        : '',
-      isPublic: ca.campaign.isPublic,
-      discordInviteLink: ca.campaign.discordInviteLink || '',
-    };
-
-    let campaignDetails: CampaignDetailsUnion;
-
-    switch (ca.campaign.type) {
-      case CampaignType.VISIBILITY:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.VISIBILITY,
-          maxViews: ca.campaign.maxViews || 0,
-          currentViews: 0, // Application stage, no views generated yet
-          cpv: ca.campaign.cpv || 0,
-          minFollowers: ca.campaign.minFollowers,
-          trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${ca.campaign.id}/${promoterId}`,
-        };
-        break;
-
-      case CampaignType.CONSULTANT:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.CONSULTANT,
-          meetingPlan: ca.campaign.meetingPlan!,
-          expectedDeliverables: ca.campaign.expectedDeliverables.map((cd) => ({
-            id: cd.id,
-            campaignId: cd.campaignId,
-            deliverable: cd.deliverable,
-            isSubmitted: cd.isSubmitted,
-            isFinished: cd.isFinished,
-            createdAt: cd.createdAt,
-            updatedAt: cd.updatedAt,
-            promoterWork:
-              cd.promoterWork?.map((work) => ({
-                id: work.id,
-                campaignId: cd.campaignId,
-                promoterLink: work.promoterLink,
-                description: work.description,
-                createdAt: work.createdAt,
-                updatedAt: work.updatedAt,
-                comments:
-                  work.comments?.map((comment) => ({
-                    id: comment.id,
-                    workId: comment.workId,
-                    commentMessage: comment.commentMessage,
-                    commentatorId: comment.commentatorId,
-                    commentatorName: comment.commentatorName,
-                    createdAt: comment.createdAt,
-                  })) || [],
-              })) || [],
-          })),
-          expertiseRequired: ca.campaign.expertiseRequired,
-          meetingCount: ca.campaign.meetingCount || 0,
-          maxBudget: ca.campaign.maxBudget || 0,
-          minBudget: ca.campaign.minBudget || 0,
-        };
-        break;
-
-      case CampaignType.SELLER:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.SELLER,
-          sellerRequirements: ca.campaign.sellerRequirements,
-          deliverables: ca.campaign.deliverables.map((cd) => ({
-            id: cd.id,
-            campaignId: cd.campaignId,
-            deliverable: cd.deliverable,
-            isSubmitted: cd.isSubmitted,
-            isFinished: cd.isFinished,
-            createdAt: cd.createdAt,
-            updatedAt: cd.updatedAt,
-            promoterWork:
-              cd.promoterWork?.map((work) => ({
-                id: work.id,
-                campaignId: cd.campaignId,
-                promoterLink: work.promoterLink,
-                description: work.description,
-                createdAt: work.createdAt,
-                updatedAt: work.updatedAt,
-                comments:
-                  work.comments?.map((comment) => ({
-                    id: comment.id,
-                    workId: comment.workId,
-                    commentMessage: comment.commentMessage,
-                    commentatorId: comment.commentatorId,
-                    commentatorName: comment.commentatorName,
-                    createdAt: comment.createdAt,
-                  })) || [],
-              })) || [],
-          })),
-          fixedPrice: undefined, // Not in current schema
-          maxBudget: ca.campaign.maxBudget || 0,
-          minBudget: ca.campaign.minBudget || 0,
-          minFollowers: ca.campaign.minFollowers,
-          needMeeting: ca.campaign.needMeeting || false,
-          meetingPlan: ca.campaign.meetingPlan!,
-          meetingCount: ca.campaign.meetingCount || 0,
-        };
-        break;
-
-      case CampaignType.SALESMAN:
-        campaignDetails = {
-          ...baseCampaign,
-          type: CampaignType.SALESMAN,
-          commissionPerSale: ca.campaign.commissionPerSale || 0,
-          trackSalesVia: ca.campaign.trackSalesVia!,
-          codePrefix: ca.campaign.codePrefix,
-          refLink: ca.campaign.trackingLink,
-          minFollowers: ca.campaign.minFollowers,
-        };
-        break;
-      default:
-        throw new Error(
-          `Unsupported campaign type: ${String(ca.campaign.type)}`,
-        );
-    }
-
-    // Map application status to promoter campaign status
-    let status: PromoterCampaignStatus;
-    switch (ca.status) {
-      case ApplicationStatus.PENDING:
-        status = PromoterCampaignStatus.AWAITING_REVIEW;
-        break;
-      case ApplicationStatus.ACCEPTED:
-        status = PromoterCampaignStatus.AWAITING_REVIEW; // Accepted but not yet started
-        break;
-      case ApplicationStatus.REJECTED:
-        status = PromoterCampaignStatus.REFUSED;
-        break;
-      default:
-        status = PromoterCampaignStatus.AWAITING_REVIEW;
-    }
-
-    return {
-      id: ca.campaign.id,
-      title: ca.campaign.title,
-      type: ca.campaign.type,
-      mediaUrl: ca.campaign.mediaUrl,
-      status: status,
-      description: ca.campaign.description,
-      advertiser,
-      campaign: campaignDetails,
-      earnings,
-      tags: ca.campaign.advertiserTypes || [],
-      meetingDone: false, // No meetings done for applications
-    };
-  }
-
-  private calculateProjectedEarningsFromCampaign(
-    campaign: CampaignEntity,
-  ): number {
-    // Simple projection based on campaign type and parameters
-    if (
-      campaign.type === CampaignType.VISIBILITY &&
-      campaign.maxViews &&
-      campaign.cpv
-    ) {
-      const maxPossibleEarnings = (campaign.maxViews / 100) * campaign.cpv;
-      return maxPossibleEarnings;
-    }
-
-    if (
-      campaign.type === CampaignType.CONSULTANT ||
-      campaign.type === CampaignType.SELLER
-    ) {
-      return campaign.maxBudget || 0;
-    }
-
-    return 0;
   }
 
   /**
@@ -2038,97 +964,41 @@ export class PromoterService {
     };
   }
 
-  async getCampaignById(
-    firebaseUid: string,
-    campaignId: string,
-  ): Promise<CampaignUnion> {
-    // Find promoter by Firebase UID
-    const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
-    });
-
-    if (!promoter) {
-      throw new NotFoundException('Promoter not found');
-    }
-
-    // Get the campaign by ID
-    const campaign = await this.campaignRepository
-      .createQueryBuilder('campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('campaign.promoterCampaigns', 'promoterCampaigns')
-      .where('campaign.id = :campaignId', { campaignId })
-      .getOne();
-
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    // Transform campaign to the required format
-    const transformedCampaign = this.transformCampaignToUnion(
-      campaign,
-      promoter.id,
-    );
-
-    return transformedCampaign;
-  }
-
   async getPromoterCampaignById(
     firebaseUid: string,
     campaignId: string,
   ): Promise<CampaignPromoter> {
-    // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
       where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
+      relations: [
+        'promoterCampaigns',
+        'promoterCampaigns.campaign',
+        'promoterCampaigns.campaign.advertiser',
+        'promoterCampaigns.campaign.advertiser.advertiserDetails',
+        'promoterCampaigns.campaign.campaignDeliverables',
+        'promoterCampaigns.campaign.campaignDeliverables.promoterWork',
+        'promoterCampaigns.campaign.campaignDeliverables.promoterWork.comments',
+        'campaignApplications',
+        'campaignApplications.campaign',
+        'campaignApplications.campaign.advertiser',
+        'campaignApplications.campaign.advertiser.advertiserDetails',
+        'campaignApplications.campaign.campaignDeliverables',
+        'campaignApplications.campaign.campaignDeliverables.promoterWork',
+        'campaignApplications.campaign.campaignDeliverables.promoterWork.comments',
+      ],
     });
 
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
 
-    // First, try to find the campaign in PromoterCampaign (joined campaigns)
-    const promoterCampaign = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoinAndSelect('pc.campaign', 'campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
-      .leftJoinAndSelect('promoterWork.comments', 'comments')
-      .where('pc.promoterId = :promoterId', { promoterId: promoter.id })
-      .andWhere('pc.campaignId = :campaignId', { campaignId })
-      .getOne();
-
-    if (promoterCampaign) {
-      return this.transformPromoterCampaignToInterface(
-        promoterCampaign,
-        promoter.id,
+    try {
+      return this.promoterMyCampaignService.getPromoterCampaignById(
+        promoter,
+        campaignId,
       );
+    } catch {
+      throw new NotFoundException('Campaign not found for this promoter');
     }
-
-    // If not found in joined campaigns, try to find in applications
-    const applicationCampaign = await this.campaignApplicationRepository
-      .createQueryBuilder('ca')
-      .leftJoinAndSelect('ca.campaign', 'campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('deliverables.promoterWork', 'promoterWork')
-      .leftJoinAndSelect('promoterWork.comments', 'comments')
-      .where('ca.promoterId = :promoterId', { promoterId: promoter.id })
-      .andWhere('ca.campaignId = :campaignId', { campaignId })
-      .getOne();
-
-    if (applicationCampaign) {
-      return this.transformCampaignApplicationToInterface(
-        applicationCampaign as CampaignApplicationEntity & {
-          campaign: CampaignEntity;
-        },
-        promoter.id,
-      );
-    }
-
-    throw new NotFoundException('Campaign not found for this promoter');
   }
 }

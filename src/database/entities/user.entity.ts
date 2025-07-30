@@ -13,6 +13,8 @@ import { PromoterDetailsEntity } from './promoter-details.entity';
 import { Transaction } from './transaction.entity';
 import { UniqueViewEntity } from './unique-view.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
+import { CampaignApplicationEntity } from './campaign-applications.entity';
+import { Wallet } from './wallet.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -138,4 +140,13 @@ export class UserEntity {
     (promoterCampaign) => promoterCampaign.promoter,
   )
   promoterCampaigns?: PromoterCampaign[];
+
+  @OneToMany(
+    () => CampaignApplicationEntity,
+    (campaignApplication) => campaignApplication.promoter,
+  )
+  campaignApplications?: CampaignApplicationEntity[];
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet?: Wallet;
 }
