@@ -36,6 +36,7 @@ export class PromoterCampaignService {
         'promoterCampaigns',
         'promoterCampaigns.campaign',
         'promoterCampaigns.campaign.advertiser',
+        'promoterCampaigns.campaign.advertiser.advertiserDetails',
       ],
     });
 
@@ -92,6 +93,7 @@ export class PromoterCampaignService {
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
+      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
 
     if (relatedCampaignIds.length > 0) {
@@ -132,7 +134,7 @@ export class PromoterCampaignService {
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
       companyName:
-        campaign.advertiser.advertiserDetails?.companyName || 'Undefined',
+        campaign.advertiser.advertiserDetails?.companyName || 'Unknown',
       profileUrl: campaign.advertiser.avatarUrl,
       rating: campaign.advertiser.rating || 0,
       verified: campaign.advertiser.advertiserDetails?.verified || false,
