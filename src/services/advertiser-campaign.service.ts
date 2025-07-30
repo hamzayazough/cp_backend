@@ -187,7 +187,7 @@ export class AdvertiserCampaignService {
           viewsGenerated: pc.viewsGenerated,
           joinedAt: pc.joinedAt,
           earnings: pc.earnings,
-          budgetAllocated: pc.budgetHeld,
+          budgetAllocated: pc.campaign.budgetAllocated,
         }));
 
         return {
@@ -310,7 +310,7 @@ export class AdvertiserCampaignService {
       viewsGenerated: pc.viewsGenerated,
       joinedAt: pc.joinedAt,
       earnings: pc.earnings,
-      budgetAllocated: pc.budgetHeld,
+      budgetAllocated: pc.campaign.budgetAllocated,
     }));
 
     return {

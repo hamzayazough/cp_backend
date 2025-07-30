@@ -173,9 +173,6 @@ export class AdvertiserService {
           status: PromoterCampaignStatus.ONGOING,
           viewsGenerated: 0,
           earnings: 0,
-          budgetHeld: 0,
-          spentBudget: 0,
-          payoutExecuted: false,
         });
         await this.promoterCampaignRepository.save(promoterCampaign);
       }

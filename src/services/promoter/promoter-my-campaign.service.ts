@@ -537,8 +537,10 @@ export class PromoterMyCampaignService {
    * Uses entity relations instead of repositories
    */
   private calculateCampaignsSummary(promoter: UserEntity) {
-    const joinedCampaigns = promoter.promoterCampaigns || [];
-    const appliedCampaigns = promoter.campaignApplications || [];
+    const joinedCampaigns =
+      (promoter.promoterCampaigns as PromoterCampaign[]) || [];
+    const appliedCampaigns =
+      (promoter.campaignApplications as CampaignApplicationEntity[]) || [];
 
     // Count joined campaigns by status
     const totalActive = joinedCampaigns.filter(

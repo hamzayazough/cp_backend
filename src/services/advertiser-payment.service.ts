@@ -1820,10 +1820,6 @@ export class AdvertiserPaymentService {
     // 11. Update promoter campaign record
     promoterCampaign.earnings =
       (promoterCampaign.earnings || 0) + netPaymentDollars;
-    promoterCampaign.spentBudget =
-      (promoterCampaign.spentBudget || 0) + amountDollars;
-    promoterCampaign.finalPayoutAmount =
-      (promoterCampaign.finalPayoutAmount || 0) + amountDollars;
     const temp = await this.promoterCampaignRepo.save(promoterCampaign);
     console.log('saved promotercampaign: ', temp);
 
