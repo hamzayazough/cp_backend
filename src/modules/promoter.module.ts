@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PromoterController } from '../controllers/promoter.controller';
 import { PromoterService } from '../services/promoter.service';
+import { PromoterDashboardService } from '../services/promoter/promoter-dashboard.service';
+import { PromoterCampaignService } from '../services/promoter/promoter-campaign.service';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
@@ -32,7 +34,11 @@ import { UniqueViewEntity } from '../database/entities/unique-view.entity';
     ]),
   ],
   controllers: [PromoterController],
-  providers: [PromoterService],
+  providers: [
+    PromoterService,
+    PromoterDashboardService,
+    PromoterCampaignService,
+  ],
   exports: [PromoterService],
 })
 export class PromoterModule {}

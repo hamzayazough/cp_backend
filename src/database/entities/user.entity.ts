@@ -5,10 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../interfaces/user';
 import { AdvertiserDetailsEntity } from './advertiser-details.entity';
 import { PromoterDetailsEntity } from './promoter-details.entity';
+import { Transaction } from './transaction.entity';
+import { UniqueViewEntity } from './unique-view.entity';
+import { PromoterCampaign } from './promoter-campaign.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -122,4 +126,16 @@ export class UserEntity {
     cascade: true,
   })
   promoterDetails?: PromoterDetailsEntity;
+
+  @OneToMany(() => Transaction, (transaction) => transaction.user)
+  transactions?: Transaction[];
+
+  @OneToMany(() => UniqueViewEntity, (uniqueView) => uniqueView.promoter)
+  uniqueViews?: UniqueViewEntity[];
+
+  @OneToMany(
+    () => PromoterCampaign,
+    (promoterCampaign) => promoterCampaign.promoter,
+  )
+  promoterCampaigns?: PromoterCampaign[];
 }

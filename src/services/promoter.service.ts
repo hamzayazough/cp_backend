@@ -40,7 +40,6 @@ import {
 } from '../interfaces/campaign-actions';
 import { UserEntity } from '../database/entities/user.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import {
   PromoterCampaign,
@@ -57,6 +56,12 @@ import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
+import {
+  DASHBOARD_DATA_CONFIG,
+  getLimitValue,
+} from './promoter/promoter-helper.const';
+import { PromoterDashboardService } from './promoter/promoter-dashboard.service';
+import { PromoterCampaignService } from './promoter/promoter-campaign.service';
 
 @Injectable()
 export class PromoterService {
@@ -65,8 +70,6 @@ export class PromoterService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignEntity)
     private campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
     @InjectRepository(PromoterCampaign)
@@ -87,6 +90,8 @@ export class PromoterService {
     private readonly deliverableRepository: Repository<CampaignDeliverableEntity>,
     @InjectRepository(UniqueViewEntity)
     private readonly uniqueViewRepository: Repository<UniqueViewEntity>,
+    private readonly promoterDashboardService: PromoterDashboardService,
+    private readonly promoterCampaignService: PromoterCampaignService,
   ) {}
 
   async getDashboardData(
@@ -94,278 +99,142 @@ export class PromoterService {
     request: PromoterDashboardRequest,
   ): Promise<PromoterDashboardData> {
     const data: PromoterDashboardData = {};
-
-    // Find promoter by Firebase UID
     const promoter = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: 'PROMOTER' },
+      where: { firebaseUid: firebaseUid, role: UserType.PROMOTER },
     });
-
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
     }
-
     const promoterId = promoter.id;
 
-    // Get actual data from database
-    if (request.includeStats) {
-      data.stats = await this.getPromoterStats(promoterId);
-    }
-
-    if (request.includeCampaigns) {
-      data.activeCampaigns = await this.getActiveCampaigns(
-        promoterId,
-        request.activeCampaignLimit || 10,
-      );
-    }
-
-    if (request.includeSuggestions) {
-      data.suggestedCampaigns = await this.getSuggestedCampaigns(
-        promoterId,
-        request.suggestedCampaignLimit || 5,
-      );
-    }
-
-    if (request.includeTransactions) {
-      data.recentTransactions = await this.getRecentTransactions(
-        promoterId,
-        request.transactionLimit || 5,
-      );
-    }
-
-    if (request.includeMessages) {
-      data.recentMessages = await this.getRecentMessages(
-        promoterId,
-        request.messageLimit || 5,
-      );
-    }
-
-    if (request.includeWallet) {
-      data.wallet = await this.getWalletInfo(promoterId);
+    for (const config of DASHBOARD_DATA_CONFIG) {
+      if (request[config.property]) {
+        switch (config.method) {
+          case 'getPromoterStats': {
+            data[config.dataKey] = await this.getPromoterStats(promoterId);
+            break;
+          }
+          case 'getActiveCampaigns': {
+            const limit = getLimitValue(
+              request,
+              config.limitProperty,
+              config.defaultLimit,
+            );
+            data[config.dataKey] = await this.getActiveCampaigns(
+              promoterId,
+              limit,
+            );
+            break;
+          }
+          case 'getSuggestedCampaigns': {
+            const limit = getLimitValue(
+              request,
+              config.limitProperty,
+              config.defaultLimit,
+            );
+            data[config.dataKey] = await this.getSuggestedCampaigns(
+              promoterId,
+              limit,
+            );
+            break;
+          }
+          case 'getRecentTransactions': {
+            const limit = getLimitValue(
+              request,
+              config.limitProperty,
+              config.defaultLimit,
+            );
+            data[config.dataKey] = await this.getRecentTransactions(
+              promoterId,
+              limit,
+            );
+            break;
+          }
+          case 'getRecentMessages': {
+            const limit = getLimitValue(
+              request,
+              config.limitProperty,
+              config.defaultLimit,
+            );
+            data[config.dataKey] = await this.getRecentMessages(
+              promoterId,
+              limit,
+            );
+            break;
+          }
+          case 'getWalletInfo': {
+            data[config.dataKey] = await this.getWalletInfo(promoterId);
+            break;
+          }
+        }
+      }
     }
 
     return data;
   }
 
   private async getPromoterStats(promoterId: string): Promise<PromoterStats> {
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const startOfYesterday = new Date(
-      yesterday.getFullYear(),
-      yesterday.getMonth(),
-      yesterday.getDate(),
-    );
-
-    const earningsThisWeek = await this.transactionRepository
-      .createQueryBuilder('transaction')
-      .select('SUM(transaction.amount)', 'total')
-      .where('transaction.userId = :promoterId', { promoterId })
-      .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
-      .andWhere('transaction.status = :status', { status: 'COMPLETED' })
-      .getRawOne();
-
-    const earningsLastWeek = await this.transactionRepository
-      .createQueryBuilder('transaction')
-      .select('SUM(transaction.amount)', 'total')
-      .where('transaction.userId = :promoterId', { promoterId })
-      .andWhere('transaction.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
-      .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
-      .andWhere('transaction.status = :status', { status: 'COMPLETED' })
-      .getRawOne();
-
-    const viewsToday = await this.uniqueViewRepository
-      .createQueryBuilder('uv')
-      .select('COUNT(*)', 'total')
-      .where('uv.promoterId = :promoterId', { promoterId })
-      .andWhere('uv.createdAt >= :startOfToday', { startOfToday })
-      .getRawOne();
-
-    const viewsYesterday = await this.uniqueViewRepository
-      .createQueryBuilder('uv')
-      .select('COUNT(*)', 'total')
-      .where('uv.promoterId = :promoterId', { promoterId })
-      .andWhere('uv.createdAt >= :startOfYesterday', { startOfYesterday })
-      .andWhere('uv.createdAt < :startOfToday', { startOfToday })
-      .getRawOne();
-
-    const salesThisWeek = await this.transactionRepository
-      .createQueryBuilder('transaction')
-      .select('COUNT(*)', 'total')
-      .where('transaction.userId = :promoterId', { promoterId })
-      .andWhere('transaction.type = :type', { type: 'SALESMAN_COMMISSION' })
-      .andWhere('transaction.createdAt >= :weekAgo', { weekAgo })
-      .andWhere('transaction.status = :status', { status: 'COMPLETED' })
-      .getRawOne();
-
-    const salesLastWeek = await this.transactionRepository
-      .createQueryBuilder('transaction')
-      .select('COUNT(*)', 'total')
-      .where('transaction.userId = :promoterId', { promoterId })
-      .andWhere('transaction.type = :type', { type: 'SALESMAN_COMMISSION' })
-      .andWhere('transaction.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
-      .andWhere('transaction.createdAt < :weekAgo', { weekAgo })
-      .andWhere('transaction.status = :status', { status: 'COMPLETED' })
-      .getRawOne();
-
-    const activeCampaigns = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .andWhere('pc.status = :status', { status: 'ONGOING' })
-      .getCount();
-
-    const pendingReviewCampaigns = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
-      .getCount();
-
-    const earningsThisWeekNum = parseFloat(
-      (earningsThisWeek as { total?: string })?.total || '0',
-    );
-    const earningsLastWeekNum = parseFloat(
-      (earningsLastWeek as { total?: string })?.total || '0',
-    );
-    const viewsTodayNum = parseInt(
-      (viewsToday as { total?: string })?.total || '0',
-    );
-    const viewsYesterdayNum = parseInt(
-      (viewsYesterday as { total?: string })?.total || '0',
-    );
-    const salesThisWeekNum = parseInt(
-      (salesThisWeek as { total?: string })?.total || '0',
-    );
-    const salesLastWeekNum = parseInt(
-      (salesLastWeek as { total?: string })?.total || '0',
-    );
-
-    return {
-      earningsThisWeek: earningsThisWeekNum,
-      earningsLastWeek: earningsLastWeekNum,
-      earningsPercentageChange:
-        earningsLastWeekNum > 0
-          ? ((earningsThisWeekNum - earningsLastWeekNum) /
-              earningsLastWeekNum) *
-            100
-          : 0,
-      viewsToday: viewsTodayNum,
-      viewsYesterday: viewsYesterdayNum,
-      viewsPercentageChange:
-        viewsYesterdayNum > 0
-          ? ((viewsTodayNum - viewsYesterdayNum) / viewsYesterdayNum) * 100
-          : 0,
-      salesThisWeek: salesThisWeekNum,
-      salesLastWeek: salesLastWeekNum,
-      salesPercentageChange:
-        salesLastWeekNum > 0
-          ? ((salesThisWeekNum - salesLastWeekNum) / salesLastWeekNum) * 100
-          : 0,
-      activeCampaigns,
-      pendingReviewCampaigns,
-    };
+    try {
+      return await this.promoterDashboardService.getPromoterStatsSummary(
+        promoterId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Promoter not found') {
+        throw new NotFoundException('Promoter not found');
+      }
+      throw error;
+    }
   }
 
   private async getActiveCampaigns(
     promoterId: string,
     limit: number,
   ): Promise<PromoterActiveCampaign[]> {
-    const promoterCampaigns = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .leftJoinAndSelect('pc.campaign', 'campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .andWhere('pc.status = :status', { status: 'ONGOING' })
-      .orderBy('pc.updatedAt', 'DESC')
-      .limit(limit)
-      .getMany();
-    return promoterCampaigns.map((pc) => ({
-      id: pc.campaign.id,
-      title: pc.campaign.title,
-      type: pc.campaign.type,
-      status: pc.status,
-      views: pc.viewsGenerated,
-      earnings: pc.earnings,
-      advertiser: pc.campaign.advertiser?.name || 'Unknown',
-      deadline: pc.campaign.deadline
-        ? new Date(pc.campaign.deadline).toISOString()
-        : undefined,
-      createdAt: pc.campaign.createdAt
-        ? new Date(pc.campaign.createdAt).toISOString()
-        : new Date().toISOString(),
-      updatedAt: pc.updatedAt
-        ? new Date(pc.updatedAt).toISOString()
-        : new Date().toISOString(),
-    }));
+    const activeCampaigns =
+      await this.promoterCampaignService.getPromoterActiveCampaigns(
+        promoterId,
+        limit,
+      );
+
+    return this.promoterCampaignService.convertToPromoterActiveCampaignDto(
+      activeCampaigns,
+    );
   }
 
   private async getSuggestedCampaigns(
     promoterId: string,
     limit: number,
   ): Promise<PromoterSuggestedCampaign[]> {
-    // First, get campaign IDs that the promoter has already joined
-    const joinedCampaignIds = await this.promoterCampaignRepository
-      .createQueryBuilder('pc')
-      .select('pc.campaignId')
-      .where('pc.promoterId = :promoterId', { promoterId })
-      .getRawMany();
+    const suggestedCampaigns =
+      await this.promoterCampaignService.getPromoterSuggestedCampaigns(
+        promoterId,
+        limit,
+      );
 
-    const joinedIds = joinedCampaignIds.map(
-      (row: { campaignId: string }) => row.campaignId,
+    return this.promoterCampaignService.convertToPromoterSuggestedCampaignDto(
+      suggestedCampaigns,
     );
-
-    // Get campaigns that are active and public, not already joined by the promoter
-    let query = this.campaignRepository
-      .createQueryBuilder('campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .where('campaign.status = :status', { status: 'ACTIVE' });
-
-    // Exclude campaigns the promoter has already joined
-    if (joinedIds.length > 0) {
-      query = query.andWhere('campaign.id NOT IN (:...joinedIds)', {
-        joinedIds,
-      });
-    }
-
-    const campaigns = await query
-      .orderBy('campaign.createdAt', 'DESC')
-      .limit(limit)
-      .getMany();
-
-    return campaigns.map((campaign) => ({
-      id: campaign.id,
-      title: campaign.title,
-      type: campaign.type,
-      cpv: campaign.cpv,
-      budget: this.getCampaignBudget(campaign),
-      advertiser: campaign.advertiser?.name || 'Unknown',
-      tags: this.getCampaignTags(campaign),
-      description: campaign.description,
-      requirements: this.getCampaignRequirements(campaign),
-      estimatedEarnings: this.calculateEstimatedEarnings(campaign),
-      applicationDeadline: campaign.deadline
-        ? new Date(campaign.deadline).toISOString()
-        : undefined,
-    }));
   }
 
   private async getRecentTransactions(
     promoterId: string,
     limit: number,
   ): Promise<PromoterTransaction[]> {
-    const transactions = await this.transactionRepository
-      .createQueryBuilder('transaction')
-      .leftJoinAndSelect('transaction.campaign', 'campaign')
-      .where('transaction.userId = :promoterId', { promoterId })
-      .orderBy('transaction.createdAt', 'DESC')
-      .limit(limit)
-      .getMany();
+    const userWithTransactions = await this.userRepository.findOne({
+      where: { id: promoterId },
+      relations: ['transactions', 'transactions.campaign'],
+    });
 
-    return transactions.map((transaction) => ({
+    if (!userWithTransactions) {
+      return [];
+    }
+
+    // Sort transactions by creation date (newest first) and take the limit
+    const recentTransactions = (userWithTransactions.transactions || [])
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+
+    return recentTransactions.map((transaction) => ({
       id: transaction.id,
       amount: transaction.amount,
       status: transaction.status,

@@ -264,7 +264,7 @@ export class CampaignEntity {
   }
 
   // Relations
-  @ManyToOne(() => UserEntity, (user) => user.id)
+  @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
 }
