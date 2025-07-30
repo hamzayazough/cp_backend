@@ -262,6 +262,16 @@ export class AdvertiserCampaignService {
       .createQueryBuilder('app')
       .leftJoinAndSelect('app.promoter', 'promoter')
       .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
+      .leftJoinAndSelect(
+        'promoterDetails.promoterLanguages',
+        'promoterLanguages',
+      )
+      .leftJoinAndSelect('promoterDetails.promoterSkills', 'promoterSkills')
+      .leftJoinAndSelect('promoterDetails.promoterWorks', 'promoterWorks')
+      .leftJoinAndSelect(
+        'promoterDetails.followerEstimates',
+        'followerEstimates',
+      )
       .where('app.campaignId = :campaignId', { campaignId: campaign.id })
       .getMany();
 
@@ -270,6 +280,16 @@ export class AdvertiserCampaignService {
       .createQueryBuilder('pc')
       .leftJoinAndSelect('pc.promoter', 'promoter')
       .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
+      .leftJoinAndSelect(
+        'promoterDetails.promoterLanguages',
+        'promoterLanguages',
+      )
+      .leftJoinAndSelect('promoterDetails.promoterSkills', 'promoterSkills')
+      .leftJoinAndSelect('promoterDetails.promoterWorks', 'promoterWorks')
+      .leftJoinAndSelect(
+        'promoterDetails.followerEstimates',
+        'followerEstimates',
+      )
       .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
       .andWhere('pc.status IN (:...statuses)', {
         statuses: ['ONGOING', 'COMPLETED'],

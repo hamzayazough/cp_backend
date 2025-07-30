@@ -20,9 +20,9 @@ export function transformUserToPromoter(user: UserEntity): Promoter {
     works: user.promoterDetails?.promoterWorks || [],
     location: user.promoterDetails?.location,
     languagesSpoken:
-      user.promoterDetails?.promoterLanguages.map((l) => l.language) || [],
+      user.promoterDetails?.promoterLanguages?.map((l) => l.language) || [],
     followersEstimate: user.promoterDetails?.followerEstimates || [],
-    skills: user.promoterDetails?.promoterSkills.map((s) => s.skill) || [],
+    skills: user.promoterDetails?.promoterSkills?.map((s) => s.skill) || [],
     verified: user.promoterDetails?.verified,
     totalSales: user.promoterDetails?.totalSales,
     numberOfCampaignDone: user.promoterDetails?.numberOfCampaignDone,
