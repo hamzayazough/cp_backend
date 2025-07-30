@@ -1,34 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CampaignEntity } from '../../database/entities/campaign.entity';
-import { Transaction } from '../../database/entities/transaction.entity';
-import { UniqueViewEntity } from '../../database/entities/unique-view.entity';
-import { SalesRecordEntity } from '../../database/entities/sales-record.entity';
 import { AdvertiserStats } from '../../interfaces/advertiser-dashboard';
-import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
-
-// Type for raw query results
-interface QueryResult {
-  total: string;
-}
+import { UserEntity } from 'src/database/entities';
+import { CampaignStatus } from 'src/enums/campaign-status';
+import { PromoterCampaignStatus } from 'src/database/entities/promoter-campaign.entity';
+import { TransactionType } from 'src/database/entities/transaction.entity';
 
 @Injectable()
 export class AdvertiserStatsService {
   constructor(
-    @InjectRepository(CampaignEntity)
-    private campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(UniqueViewEntity)
-    private uniqueViewRepository: Repository<UniqueViewEntity>,
-    @InjectRepository(SalesRecordEntity)
-    private salesRecordRepository: Repository<SalesRecordEntity>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
-    @InjectRepository(PromoterCampaign)
-    private promoterCampaignRepository: Repository<PromoterCampaign>,
+    @InjectRepository(UserEntity)
+    private userRepository: Repository<UserEntity>,
   ) {}
 
   async getAdvertiserStats(advertiserId: string): Promise<AdvertiserStats> {
+    // Load user with all needed relations
+    const advertiser = await this.userRepository.findOne({
+      where: { id: advertiserId },
+      relations: [
+        'campaigns',
+        'transactions',
+        'uniqueViews',
+        'wallet',
+        'campaigns.promoterCampaigns',
+        // Add other relations as needed
+      ],
+    });
+
+    if (!advertiser) {
+      throw new Error('Advertiser not found');
+    }
+
     // Calculate date ranges
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -45,165 +48,117 @@ export class AdvertiserStatsService {
       yesterday.getDate(),
     );
 
-    // Get spending data from transactions for specific types
     const transactionTypes = [
-      'DIRECT_PAYMENT',
-      'VIEW_EARNING',
-      'SALESMAN_COMMISSION',
-      'MONTHLY_PAYOUT',
+      TransactionType.DIRECT_PAYMENT,
+      TransactionType.VIEW_EARNING,
+      TransactionType.SALESMAN_COMMISSION,
+      TransactionType.MONTHLY_PAYOUT,
     ];
 
-    // This week
-    const spendingThisWeek = (await this.transactionRepository
-      .createQueryBuilder('txn')
-      .select('COALESCE(SUM(txn.amount), 0)', 'total')
-      .where('txn.userId = :advertiserId', { advertiserId })
-      .andWhere('txn.type IN (:...types)', { types: transactionTypes })
-      .andWhere('txn.createdAt >= :weekAgo', { weekAgo })
-      .getRawOne()) as QueryResult;
+    const filterTransactions = (start: Date, end?: Date) =>
+      (advertiser.transactions || []).filter(
+        (tx) =>
+          transactionTypes.includes(tx.type) &&
+          tx.createdAt >= start &&
+          (!end || tx.createdAt < end),
+      );
 
-    // Last week
-    const spendingLastWeek = (await this.transactionRepository
-      .createQueryBuilder('txn')
-      .select('COALESCE(SUM(txn.amount), 0)', 'total')
-      .where('txn.userId = :advertiserId', { advertiserId })
-      .andWhere('txn.type IN (:...types)', { types: transactionTypes })
-      .andWhere('txn.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
-      .andWhere('txn.createdAt < :weekAgo', { weekAgo })
-      .getRawOne()) as QueryResult;
-
-    // Get views data from unique_views table (unique views per campaign/promoter/fingerprint)
-    const viewsToday = (await this.uniqueViewRepository
-      .createQueryBuilder('uv')
-      .select('COUNT(DISTINCT uv.id)', 'total')
-      .where('uv.createdAt >= :startOfToday', { startOfToday })
-      .andWhere(
-        'uv.campaignId IN (' +
-          this.campaignRepository
-            .createQueryBuilder('c')
-            .select('c.id')
-            .where('c.advertiserId = :advertiserId', { advertiserId })
-            .getQuery() +
-          ')',
-      )
-      .setParameter('advertiserId', advertiserId)
-      .getRawOne()) as QueryResult;
-
-    const viewsYesterday = (await this.uniqueViewRepository
-      .createQueryBuilder('uv')
-      .select('COUNT(DISTINCT uv.id)', 'total')
-      .where('uv.createdAt >= :startOfYesterday', { startOfYesterday })
-      .andWhere('uv.createdAt < :startOfToday', { startOfToday })
-      .andWhere(
-        'uv.campaignId IN (' +
-          this.campaignRepository
-            .createQueryBuilder('c')
-            .select('c.id')
-            .where('c.advertiserId = :advertiserId', { advertiserId })
-            .getQuery() +
-          ')',
-      )
-      .setParameter('advertiserId', advertiserId)
-      .getRawOne()) as QueryResult;
-
-    // Get conversions data from sales_records (more accurate than transaction counting)
-    const conversionsThisWeek = (await this.salesRecordRepository
-      .createQueryBuilder('sr')
-      .innerJoin('sr.campaign', 'campaign')
-      .select('COUNT(*)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('sr.verificationStatus = :status', { status: 'VERIFIED' })
-      .andWhere('sr.createdAt >= :weekAgo', { weekAgo })
-      .getRawOne()) as QueryResult;
-
-    const conversionsLastWeek = (await this.salesRecordRepository
-      .createQueryBuilder('sr')
-      .innerJoin('sr.campaign', 'campaign')
-      .select('COUNT(*)', 'total')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('sr.verificationStatus = :status', { status: 'VERIFIED' })
-      .andWhere('sr.createdAt >= :twoWeeksAgo', { twoWeeksAgo })
-      .andWhere('sr.createdAt < :weekAgo', { weekAgo })
-      .getRawOne()) as QueryResult;
-
-    // Get campaign counts
-    const activeCampaigns = await this.campaignRepository
-      .createQueryBuilder('campaign')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('campaign.status = :status', { status: 'ACTIVE' })
-      .getCount();
-
-    // Custom logic for pending approval campaigns with promoter logic
-    const campaigns = await this.campaignRepository
-      .createQueryBuilder('campaign')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('campaign.status = :status', { status: 'ACTIVE' })
-      .getMany();
-
-    let pendingApprovalCount = 0;
-    for (const campaign of campaigns) {
-      if (campaign.canHaveMultiplePromoters) {
-        // Count all promoter_campaigns in AWAITING_REVIEW for this campaign
-        const awaitingReviewCount = await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
-          .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
-          .getCount();
-        pendingApprovalCount += awaitingReviewCount;
-      } else {
-        // Check if there is any promoter_campaign in ONGOING or COMPLETED
-        const hasActiveOrCompleted = await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
-          .andWhere('pc.status IN (:...statuses)', {
-            statuses: ['ONGOING', 'COMPLETED'],
-          })
-          .getCount();
-        if (hasActiveOrCompleted === 0) {
-          // If none, count the AWAITING_REVIEW one (if exists)
-          const awaitingReviewCount = await this.promoterCampaignRepository
-            .createQueryBuilder('pc')
-            .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
-            .andWhere('pc.status = :status', { status: 'AWAITING_REVIEW' })
-            .getCount();
-          pendingApprovalCount += awaitingReviewCount;
-        }
-      }
-    }
-    const pendingApprovalCampaigns = pendingApprovalCount;
-
-    // Calculate percentage changes with safe value extraction
-    const spendingThisWeekNum = Number(spendingThisWeek?.total || 0) / 100; // Convert cents to dollars
-    const spendingLastWeekNum = Number(spendingLastWeek?.total || 0) / 100; // Convert cents to dollars
+    const spendingThisWeekNum =
+      filterTransactions(weekAgo).reduce(
+        (sum, tx) => sum + Number(tx.amount),
+        0,
+      ) / 100;
+    const spendingLastWeekNum =
+      filterTransactions(twoWeeksAgo, weekAgo).reduce(
+        (sum, tx) => sum + Number(tx.amount),
+        0,
+      ) / 100;
     const spendingPercentageChange =
       spendingLastWeekNum > 0
         ? ((spendingThisWeekNum - spendingLastWeekNum) / spendingLastWeekNum) *
           100
         : 0;
+    const spendingTotal =
+      filterTransactions(new Date(0)).reduce(
+        (sum, tx) => sum + Number(tx.amount),
+        0,
+      ) / 100;
 
-    const viewsTodayNum = Number(viewsToday?.total || 0);
-    const viewsYesterdayNum = Number(viewsYesterday?.total || 0);
+    // Views: count by campaign_id using UniqueViewEntity repository
+    const advertiserCampaignIds = (advertiser.campaigns || []).map((c) => c.id);
+
+    const viewsTodayNum = await this.userRepository.manager
+      .getRepository('UniqueViewEntity')
+      .createQueryBuilder('uv')
+      .where('uv.campaignId IN (:...campaignIds)', {
+        campaignIds: advertiserCampaignIds,
+      })
+      .andWhere('uv.createdAt >= :startOfToday', { startOfToday })
+      .getCount();
+
+    const viewsYesterdayNum = await this.userRepository.manager
+      .getRepository('UniqueViewEntity')
+      .createQueryBuilder('uv')
+      .where('uv.campaignId IN (:...campaignIds)', {
+        campaignIds: advertiserCampaignIds,
+      })
+      .andWhere('uv.createdAt >= :startOfYesterday', { startOfYesterday })
+      .andWhere('uv.createdAt < :startOfToday', { startOfToday })
+      .getCount();
+
+    const viewsTotal = await this.userRepository.manager
+      .getRepository('UniqueViewEntity')
+      .createQueryBuilder('uv')
+      .where('uv.campaignId IN (:...campaignIds)', {
+        campaignIds: advertiserCampaignIds,
+      })
+      .getCount();
+
     const viewsPercentageChange =
       viewsYesterdayNum > 0
         ? ((viewsTodayNum - viewsYesterdayNum) / viewsYesterdayNum) * 100
         : 0;
 
-    const conversionsThisWeekNum = Number(conversionsThisWeek?.total || 0);
-    const conversionsLastWeekNum = Number(conversionsLastWeek?.total || 0);
-    const conversionsPercentageChange =
-      conversionsLastWeekNum > 0
-        ? ((conversionsThisWeekNum - conversionsLastWeekNum) /
-            conversionsLastWeekNum) *
-          100
-        : 0;
+    // TODO: Once implemented logic to track promoter sales, update this
+    const conversionsThisWeekNum = 0;
+    const conversionsLastWeekNum = 0;
+    const conversionsPercentageChange = 0;
+
+    // Active campaigns: must be ACTIVE and have at least one promoterCampaign ONGOING
+    const activeCampaigns = (advertiser.campaigns || []).filter(
+      (c) =>
+        c.status === CampaignStatus.ACTIVE &&
+        (c.promoterCampaigns || []).some(
+          (pc) => pc.status === PromoterCampaignStatus.ONGOING,
+        ),
+    ).length;
+
+    // Pending approval campaigns
+    let pendingApprovalCount = 0;
+    for (const campaign of advertiser.campaigns || []) {
+      if (campaign.status !== CampaignStatus.ACTIVE) continue;
+      if (!campaign.isPublic && !campaign.canHaveMultiplePromoters) {
+        const hasAwaitingReview = (campaign.promoterCampaigns || []).some(
+          (pc) => pc.status === PromoterCampaignStatus.AWAITING_REVIEW,
+        );
+        if (hasAwaitingReview) {
+          pendingApprovalCount += 1;
+        }
+      } else {
+        // it mean campaign is public so no need to check for pending approval
+      }
+    }
+    const pendingApprovalCampaigns = pendingApprovalCount;
 
     return {
       spendingThisWeek: spendingThisWeekNum,
       spendingLastWeek: spendingLastWeekNum,
       spendingPercentageChange,
+      spendingTotal: spendingTotal,
       viewsToday: viewsTodayNum,
       viewsYesterday: viewsYesterdayNum,
       viewsPercentageChange,
+      viewsTotal: viewsTotal,
       conversionsThisWeek: conversionsThisWeekNum,
       conversionsLastWeek: conversionsLastWeekNum,
       conversionsPercentageChange,

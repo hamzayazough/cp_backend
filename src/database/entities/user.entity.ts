@@ -15,6 +15,7 @@ import { UniqueViewEntity } from './unique-view.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
 import { CampaignApplicationEntity } from './campaign-applications.entity';
 import { Wallet } from './wallet.entity';
+import { CampaignEntity } from './campaign.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -149,4 +150,7 @@ export class UserEntity {
 
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet?: Wallet;
+
+  @OneToMany(() => CampaignEntity, (campaign) => campaign.advertiser)
+  campaigns?: CampaignEntity[];
 }

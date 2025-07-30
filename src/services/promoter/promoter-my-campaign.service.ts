@@ -124,23 +124,10 @@ export class PromoterMyCampaignService {
     request: GetPromoterCampaignsRequest,
   ): CampaignApplicationEntity[] {
     let applications = promoter.campaignApplications || [];
-
-    // Apply status filter for applications
-    if (request.status && request.status.length > 0) {
-      if (request.status.includes(PromoterCampaignStatus.AWAITING_REVIEW)) {
-        applications = applications.filter(
-          (ca) => ca.status === ApplicationStatus.PENDING,
-        );
-      } else {
-        // Exclude all applications if specific statuses that don't apply to applications are requested
-        applications = [];
-      }
-    } else {
-      // When no status filter is applied, exclude ACCEPTED applications to avoid duplicates
-      applications = applications.filter(
-        (ca) => ca.status !== ApplicationStatus.ACCEPTED,
-      );
-    }
+    // When no status filter is applied, exclude ACCEPTED applications to avoid duplicates
+    applications = applications.filter(
+      (ca) => ca.status !== ApplicationStatus.ACCEPTED,
+    );
 
     // Apply campaign type filter
     if (request.type && request.type.length > 0) {

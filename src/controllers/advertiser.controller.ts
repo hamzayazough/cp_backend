@@ -38,6 +38,7 @@ import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
 import { TransactionType } from 'src/database/entities/transaction.entity';
+import { FAILED_DASHBOARD_DATA } from 'src/constants/advertiser.constants';
 
 // Payment DTOs
 export class CompletePaymentSetupDto {
@@ -123,40 +124,7 @@ export class AdvertiserController {
           : 'Failed to retrieve dashboard data';
       return {
         success: false,
-        data: {
-          stats: {
-            spendingThisWeek: 0,
-            spendingLastWeek: 0,
-            spendingPercentageChange: 0,
-            viewsToday: 0,
-            viewsYesterday: 0,
-            viewsPercentageChange: 0,
-            conversionsThisWeek: 0,
-            conversionsLastWeek: 0,
-            conversionsPercentageChange: 0,
-            activeCampaigns: 0,
-            pendingApprovalCampaigns: 0,
-          },
-          activeCampaigns: [],
-          recentTransactions: [],
-          recentMessages: [],
-          wallet: {
-            balance: {
-              currentBalance: 0,
-              pendingCharges: 0,
-              totalSpent: 0,
-              totalDeposited: 0,
-              minimumBalance: 0,
-            },
-            campaignBudgets: {
-              totalAllocated: 0,
-              totalUsed: 0,
-              pendingPayments: 0,
-            },
-            totalLifetimeSpent: 0,
-            totalAvailableBalance: 0,
-          },
-        },
+        data: FAILED_DASHBOARD_DATA,
         message: errorMessage,
       };
     }

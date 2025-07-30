@@ -19,6 +19,7 @@ import { AdvertiserType } from 'src/enums/advertiser-type';
 import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
 import { Transaction } from './transaction.entity';
+import { CampaignApplicationEntity } from './campaign-applications.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -268,4 +269,10 @@ export class CampaignEntity {
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
+
+  @OneToMany(
+    () => CampaignApplicationEntity,
+    (application) => application.campaign,
+  )
+  campaignApplications!: CampaignApplicationEntity[];
 }

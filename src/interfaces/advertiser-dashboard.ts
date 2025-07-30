@@ -1,25 +1,33 @@
 import { CampaignType } from '../enums/campaign-type';
-import { PromoterCampaignStatus } from './promoter-campaign';
 
 export interface AdvertiserStats {
   spendingThisWeek: number;
   spendingLastWeek: number;
   spendingPercentageChange: number;
+  spendingTotal: number;
   viewsToday: number;
   viewsYesterday: number;
   viewsPercentageChange: number;
+  viewsTotal: number;
   conversionsThisWeek: number;
   conversionsLastWeek: number;
   conversionsPercentageChange: number;
   activeCampaigns: number;
   pendingApprovalCampaigns: number;
 }
+export enum ADVERTISER_CAMPAIGN_STATUS {
+  ONGOING = 'ONGOING',
+  COMPLETED = 'COMPLETED',
+  WAITING_FOR_APPLICATIONS = 'WAITING_FOR_APPLICATIONS',
+  REVIEWING_APPLICATIONS = 'REVIEWING_APPLICATIONS',
+  PENDING_PROMOTER = 'PENDING_PROMOTER',
+}
 
 export interface AdvertiserActiveCampaign {
   id: string;
   title: string;
   type: CampaignType;
-  status: PromoterCampaignStatus;
+  status: ADVERTISER_CAMPAIGN_STATUS;
   views: number;
   spent: number;
   applications: number;

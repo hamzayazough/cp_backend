@@ -6,26 +6,26 @@ import {
   PromoterCampaign,
   PromoterCampaignStatus,
 } from 'src/database/entities/promoter-campaign.entity';
-import {
-  Transaction,
-  TransactionType,
-} from 'src/database/entities/transaction.entity';
+import { TransactionType } from 'src/database/entities/transaction.entity';
 import { CampaignApplicationEntity } from 'src/database/entities/campaign-applications.entity';
 import { UserEntity } from 'src/database/entities';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
-import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
-import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   CampaignFilters,
   CampaignAdvertiser,
 } from 'src/interfaces/advertiser-campaign';
-import { AdvertiserActiveCampaign } from 'src/interfaces/advertiser-dashboard';
+import {
+  ADVERTISER_CAMPAIGN_STATUS,
+  AdvertiserActiveCampaign,
+} from 'src/interfaces/advertiser-dashboard';
 import { CampaignDeliverable } from 'src/interfaces/promoter-campaigns';
-import { CampaignStatus, CampaignType } from 'src/enums/campaign-type';
+import { CampaignType } from 'src/enums/campaign-type';
 import { transformUserToPromoter } from 'src/helpers/user-transformer.helper';
-import { TransactionStatus } from 'src/interfaces';
+import { TransactionStatus } from 'src/database/entities/transaction.entity';
+import { CampaignStatus } from 'src/enums/campaign-status';
+import { UserType } from 'src/enums/user-type';
 
 @Injectable()
 export class AdvertiserCampaignService {
@@ -34,80 +34,70 @@ export class AdvertiserCampaignService {
     private campaignRepository: Repository<CampaignEntity>,
     @InjectRepository(PromoterCampaign)
     private promoterCampaignRepository: Repository<PromoterCampaign>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
     @InjectRepository(CampaignApplicationEntity)
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
-    @InjectRepository(CampaignDeliverableEntity)
-    private deliverableRepository: Repository<CampaignDeliverableEntity>,
-    @InjectRepository(CampaignWorkEntity)
-    private workRepository: Repository<CampaignWorkEntity>,
-    @InjectRepository(CampaignWorkCommentEntity)
-    private commentRepository: Repository<CampaignWorkCommentEntity>,
   ) {}
 
   async getActiveCampaigns(
     advertiserId: string,
     limit: number,
   ): Promise<AdvertiserActiveCampaign[]> {
-    const campaigns = await this.campaignRepository
-      .createQueryBuilder('campaign')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
-      .andWhere('campaign.status IN (:...statuses)', {
-        statuses: [CampaignStatus.ACTIVE, CampaignStatus.INACTIVE],
-      })
-      .orderBy('campaign.updatedAt', 'DESC')
-      .limit(limit)
-      .getMany();
+    // Use UserEntity relations to get campaigns and related data
+    const advertiser = await this.userRepository.findOne({
+      where: { id: advertiserId },
+      relations: [
+        'campaigns',
+        'campaigns.promoterCampaigns',
+        'campaigns.promoterCampaigns.promoter',
+        'campaigns.promoterCampaigns.promoter.promoterDetails',
+        'campaigns.campaignDeliverables',
+        'campaigns.campaignApplications',
+      ],
+    });
 
-    const campaignData = await Promise.all(
-      campaigns.map(async (campaign) => {
-        const promoterCampaigns = await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
-          .getMany();
+    if (!advertiser) return [];
 
-        const totalViews = promoterCampaigns.reduce(
-          (sum, pc) => sum + pc.viewsGenerated,
-          0,
-        );
-        const totalSpent = promoterCampaigns.reduce(
-          (sum, pc) => sum + Number(pc.earnings),
-          0,
-        );
-        const applications = promoterCampaigns.length;
+    const campaigns = (advertiser.campaigns || [])
+      .filter((c) => c.status === CampaignStatus.ACTIVE)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, limit);
 
-        const conversions = await this.transactionRepository
-          .createQueryBuilder('transaction')
-          .where('transaction.campaignId = :campaignId', {
-            campaignId: campaign.id,
-          })
-          .andWhere('transaction.type = :type', {
-            type: TransactionType.SALESMAN_COMMISSION,
-          })
-          .andWhere('transaction.status = :status', {
-            status: TransactionStatus.COMPLETED,
-          })
-          .getCount();
-        return {
-          id: campaign.id,
-          title: campaign.title,
-          type: campaign.type,
-          status: this.mapCampaignStatus(campaign.status, promoterCampaigns),
-          views: totalViews,
-          spent: totalSpent,
-          applications,
-          conversions,
-          deadline: campaign.deadline
-            ? new Date(campaign.deadline).toISOString()
-            : '',
-          createdAt: campaign.createdAt.toISOString(),
-          updatedAt: campaign.updatedAt.toISOString(),
-        };
-      }),
-    );
+    const campaignData = campaigns.map((campaign) => {
+      const promoterCampaigns = campaign.promoterCampaigns || [];
+      const totalViews = promoterCampaigns.reduce(
+        (sum, pc) => sum + (pc.viewsGenerated || 0),
+        0,
+      );
+      const totalSpent = promoterCampaigns.reduce(
+        (sum, pc) => sum + Number(pc.earnings || 0),
+        0,
+      );
+      const applications = promoterCampaigns.length;
+      const conversions = (campaign.transactions || []).filter(
+        // TODO: Adjust when sales tracking is implemented
+        (tx) =>
+          tx.type === TransactionType.SALESMAN_COMMISSION &&
+          (tx.status === TransactionStatus.COMPLETED ||
+            tx.status === TransactionStatus.PENDING),
+      ).length;
+      return {
+        id: campaign.id,
+        title: campaign.title,
+        type: campaign.type,
+        status: this.mapCampaignStatus(campaign, promoterCampaigns),
+        views: totalViews,
+        spent: totalSpent,
+        applications,
+        conversions,
+        deadline: campaign.deadline
+          ? new Date(campaign.deadline).toISOString()
+          : '',
+        createdAt: campaign.createdAt.toISOString(),
+        updatedAt: campaign.updatedAt.toISOString(),
+      };
+    });
     return campaignData;
   }
 
@@ -118,106 +108,113 @@ export class AdvertiserCampaignService {
     const page = request.page || 1;
     const limit = request.limit || 10;
     const skip = (page - 1) * limit;
-    let query = this.campaignRepository
-      .createQueryBuilder('campaign')
-      .leftJoinAndSelect('campaign.advertiser', 'advertiser')
-      .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
-      .leftJoinAndSelect(
-        'advertiserDetails.advertiserTypeMappings',
-        'advertiserTypeMappings',
-      )
-      .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
-      .leftJoinAndSelect('deliverables.promoterWork', 'work')
-      .leftJoinAndSelect('work.comments', 'comments')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId });
+    // Load advertiser with all nested relations
+    const advertiser = await this.userRepository.findOne({
+      where: { id: advertiserId },
+      relations: [
+        'campaigns',
+        'campaigns.advertiser',
+        'campaigns.advertiser.advertiserDetails',
+        'campaigns.advertiser.advertiserDetails.advertiserTypeMappings',
+        'campaigns.campaignDeliverables',
+        'campaigns.campaignDeliverables.promoterWork',
+        'campaigns.campaignDeliverables.promoterWork.comments',
+        'campaigns.campaignApplications',
+        'campaigns.promoterCampaigns',
+        'campaigns.promoterCampaigns.promoter',
+        'campaigns.promoterCampaigns.promoter.promoterDetails',
+      ],
+    });
 
-    if (request.status && request.status.length > 0) {
-      query = query.andWhere('campaign.status IN (:...statuses)', {
-        statuses: request.status,
-      });
+    if (!advertiser) {
+      return {
+        campaigns: [],
+        pagination: {
+          page,
+          limit,
+          totalPages: 0,
+          totalCount: 0,
+          hasNext: false,
+          hasPrev: false,
+        },
+        summary: {
+          totalActiveCampaigns: 0,
+          totalCompletedCampaigns: 0,
+          totalSpentThisMonth: 0,
+          totalAllocatedBudget: 0,
+          totalRemainingBudget: 0,
+        },
+      };
     }
 
-    if (request.type && request.type.length > 0) {
-      query = query.andWhere('campaign.type IN (:...types)', {
-        types: request.type,
-      });
+    let campaigns = advertiser.campaigns || [];
+    // Filter by status
+    if (Array.isArray(request.status) && request.status.length > 0) {
+      campaigns = campaigns.filter((c) => request.status?.includes(c.status));
     }
-
+    // Filter by type
+    if (Array.isArray(request.type) && request.type.length > 0) {
+      campaigns = campaigns.filter((c) => request.type?.includes(c.type));
+    }
+    // Filter by search query
     if (request.searchQuery) {
-      query = query.andWhere(
-        '(campaign.title ILIKE :search OR campaign.description ILIKE :search)',
-        { search: `%${request.searchQuery}%` },
+      const search = request.searchQuery.toLowerCase();
+      campaigns = campaigns.filter(
+        (c) =>
+          c.title.toLowerCase().includes(search) ||
+          c.description.toLowerCase().includes(search),
       );
     }
-    const totalCount = await query.getCount();
+    const totalCount = campaigns.length;
     const totalPages = Math.ceil(totalCount / limit);
-    const campaigns = await query.skip(skip).take(limit).getMany();
+    campaigns = campaigns.slice(skip, skip + limit);
 
     // Transform CampaignEntity to CampaignAdvertiser with applicants and chosen promoters
-    const transformedCampaigns = await Promise.all(
-      campaigns.map(async (campaign) => {
-        // Fetch applicants from campaign_applications table
-        const applicants = await this.campaignApplicationRepository
-          .createQueryBuilder('app')
-          .leftJoinAndSelect('app.promoter', 'promoter')
-          .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
-          .where('app.campaignId = :campaignId', { campaignId: campaign.id })
-          .getMany();
-
-        // Fetch chosen promoters from promoter_campaigns table
-        const chosenPromoters = await this.promoterCampaignRepository
-          .createQueryBuilder('pc')
-          .leftJoinAndSelect('pc.promoter', 'promoter')
-          .leftJoinAndSelect('promoter.promoterDetails', 'promoterDetails')
-          .where('pc.campaignId = :campaignId', { campaignId: campaign.id })
-          .andWhere('pc.status IN (:...statuses)', {
-            statuses: ['ONGOING', 'COMPLETED'],
-          })
-          .getMany(); // Transform applicants
-        const applicantInfos = applicants.map((app) => ({
-          promoter: transformUserToPromoter(app.promoter),
-          applicationStatus: app.status,
-          applicationMessage: app.applicationMessage,
-        }));
-
-        // Transform chosen promoters
-        const chosenPromoterInfos = chosenPromoters.map((pc) => ({
-          promoter: transformUserToPromoter(pc.promoter),
-          status: pc.status,
-          viewsGenerated: pc.viewsGenerated,
-          joinedAt: pc.joinedAt,
-          earnings: pc.earnings,
-          budgetAllocated: pc.campaign.budgetAllocated,
-        }));
-
-        return {
-          id: campaign.id,
-          title: campaign.title,
-          type: campaign.type,
-          mediaUrl: campaign.mediaUrl,
-          status: campaign.status,
-          description: campaign.description,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          campaign: this.mapCampaignDetails(campaign),
-          performance: {
-            totalViewsGained:
-              campaign.type === CampaignType.VISIBILITY
-                ? campaign.currentViews || 0
-                : undefined,
-            totalSalesMade:
-              campaign.type === CampaignType.SALESMAN
-                ? campaign.currentSales || 0
-                : undefined,
-          },
-          tags:
-            campaign.advertiser?.advertiserDetails?.advertiserTypeMappings?.map(
-              (mapping) => mapping.advertiserType,
-            ) || [],
-          applicants: applicantInfos,
-          chosenPromoters: chosenPromoterInfos,
-        };
-      }),
-    ); // Calculate summary statistics
+    const transformedCampaigns = campaigns.map((campaign) => {
+      // Applicants from relation
+      const applicants = (campaign.campaignApplications || []).map((app) => ({
+        promoter: transformUserToPromoter(app.promoter),
+        applicationStatus: app.status,
+        applicationMessage: app.applicationMessage,
+      }));
+      // Chosen promoters from relation
+      const chosenPromoters = (campaign.promoterCampaigns || []).filter((pc) =>
+        ['ONGOING', 'COMPLETED'].includes(pc.status),
+      );
+      const chosenPromoterInfos = chosenPromoters.map((pc) => ({
+        promoter: transformUserToPromoter(pc.promoter),
+        status: pc.status,
+        viewsGenerated: pc.viewsGenerated,
+        joinedAt: pc.joinedAt,
+        earnings: pc.earnings,
+        budgetAllocated: pc.campaign.budgetAllocated,
+      }));
+      return {
+        id: campaign.id,
+        title: campaign.title,
+        type: campaign.type,
+        mediaUrl: campaign.mediaUrl,
+        status: campaign.status,
+        description: campaign.description,
+        campaign: this.mapCampaignDetails(campaign) as CampaignAdvertiser,
+        performance: {
+          totalViewsGained:
+            campaign.type === CampaignType.VISIBILITY
+              ? campaign.currentViews || 0
+              : undefined,
+          totalSalesMade:
+            campaign.type === CampaignType.SALESMAN
+              ? campaign.currentSales || 0
+              : undefined,
+        },
+        tags:
+          campaign.advertiser?.advertiserDetails?.advertiserTypeMappings?.map(
+            (mapping) => mapping.advertiserType,
+          ) || [],
+        applicants,
+        chosenPromoters: chosenPromoterInfos,
+      };
+    });
     const summary = await this.calculateCampaignSummary(advertiserId);
 
     return {
@@ -342,25 +339,65 @@ export class AdvertiserCampaignService {
   }
 
   private mapCampaignStatus(
-    status: CampaignStatus,
+    campaign: CampaignEntity,
     promoterCampaigns: PromoterCampaign[],
-  ): PromoterCampaignStatus {
-    if (status === CampaignStatus.INACTIVE) {
-      return PromoterCampaignStatus.COMPLETED;
+  ): ADVERTISER_CAMPAIGN_STATUS {
+    if (
+      campaign.campaignApplications &&
+      campaign.campaignApplications.length > 0
+    ) {
+      if (
+        campaign.status === CampaignStatus.INACTIVE ||
+        promoterCampaigns.some(
+          (pc) => pc.status === PromoterCampaignStatus.COMPLETED,
+        )
+      ) {
+        return ADVERTISER_CAMPAIGN_STATUS.COMPLETED;
+      }
     }
-    const awaitingReviewCampaign = promoterCampaigns.find(
-      (pc) => pc.status === PromoterCampaignStatus.AWAITING_REVIEW,
-    );
-
-    if (awaitingReviewCampaign) {
-      return PromoterCampaignStatus.AWAITING_REVIEW;
+    if (
+      promoterCampaigns.some(
+        (pc) =>
+          pc.status === PromoterCampaignStatus.ONGOING ||
+          pc.status === PromoterCampaignStatus.AWAITING_REVIEW,
+      )
+    ) {
+      return ADVERTISER_CAMPAIGN_STATUS.COMPLETED;
     }
-    return PromoterCampaignStatus.ONGOING;
+    if (
+      promoterCampaigns.some(
+        (pc) =>
+          pc.status === PromoterCampaignStatus.ONGOING ||
+          pc.status === PromoterCampaignStatus.AWAITING_REVIEW,
+      )
+    ) {
+      return ADVERTISER_CAMPAIGN_STATUS.ONGOING;
+    }
+    if (
+      campaign.campaignApplications &&
+      campaign.campaignApplications.length > 0 &&
+      promoterCampaigns.length === 0
+    ) {
+      return ADVERTISER_CAMPAIGN_STATUS.REVIEWING_APPLICATIONS;
+    }
+    return ADVERTISER_CAMPAIGN_STATUS.PENDING_PROMOTER;
   }
   private mapCampaignDetails(campaign: CampaignEntity): any {
     const baseDetails = {
-      budgetHeld: 0, // TODO: This should come from budget allocation
-      spentBudget: 0, // TODO: This should come from transactions
+      budgetHeld: campaign.budgetAllocated || 0,
+      spentBudget:
+        (campaign.transactions || [])
+          .filter(
+            (tx) =>
+              tx.userType === UserType.ADVERTISER &&
+              [
+                TransactionType.VIEW_EARNING,
+                TransactionType.SALESMAN_COMMISSION,
+                TransactionType.MONTHLY_PAYOUT,
+                TransactionType.DIRECT_PAYMENT,
+              ].includes(tx.type),
+          )
+          .reduce((total, tx) => total + tx.amount, 0) || 0,
       targetAudience: campaign.targetAudience,
       preferredPlatforms: campaign.preferredPlatforms,
       requirements: campaign.requirements,

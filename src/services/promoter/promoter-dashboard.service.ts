@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '../../database/entities/user.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import { Message } from '../../database/entities/message.entity';
 import { Wallet } from '../../database/entities/wallet.entity';
@@ -25,12 +24,11 @@ import {
 import { CampaignStatus } from '../../enums/campaign-status';
 import { UserType } from '../../enums/user-type';
 import { PromoterCampaignService } from './promoter-campaign.service';
+import { UserEntity } from 'src/database/entities';
 
 @Injectable()
 export class PromoterDashboardService {
   constructor(
-    @InjectRepository(UserEntity)
-    private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignEntity)
     private campaignRepository: Repository<CampaignEntity>,
     @InjectRepository(Message)
