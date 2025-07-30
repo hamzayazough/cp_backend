@@ -1205,6 +1205,14 @@ export class AdvertiserPaymentService {
     stripeCustomerId: string,
   ): Promise<void> {
     try {
+      // Validate stripeCustomerId before making API calls
+      if (!stripeCustomerId || stripeCustomerId.trim() === '') {
+        this.logger.warn(
+          `Skipping payment method sync for user ${userId}: No valid Stripe customer ID`,
+        );
+        return;
+      }
+
       // Get all payment methods from Stripe
       const stripePaymentMethods = await this.stripe.paymentMethods.list({
         customer: stripeCustomerId,

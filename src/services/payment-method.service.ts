@@ -1,19 +1,11 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  NotFoundException,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { STRIPE_CLIENT } from '../stripe/stripe.constants';
 import { UserEntity } from '../database/entities/user.entity';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
-import {
-  PaymentMethod,
-} from '../database/entities/payment-method.entity';
+import { PaymentMethod } from '../database/entities/payment-method.entity';
 import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
@@ -183,6 +175,11 @@ export class PaymentMethodService {
     const user = await this.findUserByFirebaseUid(firebaseUid);
     const advertiserDetails = await this.findAdvertiserDetails(user.id);
 
+    // Return empty array if no Stripe customer ID
+    if (!advertiserDetails.stripeCustomerId) {
+      return [];
+    }
+
     // Sync first to ensure latest data
     await this.syncPaymentMethodsFromStripe(
       user.id,
@@ -193,9 +190,9 @@ export class PaymentMethodService {
     const customer = await this.stripe.customers.retrieve(
       advertiserDetails.stripeCustomerId,
     );
-    
+
     if (typeof customer === 'object' && !customer.deleted) {
-      const defaultPaymentMethodId = 
+      const defaultPaymentMethodId =
         typeof customer.invoice_settings?.default_payment_method === 'string'
           ? customer.invoice_settings.default_payment_method
           : customer.invoice_settings?.default_payment_method?.id;
@@ -296,12 +293,18 @@ export class PaymentMethodService {
     const user = await this.findUserByFirebaseUid(firebaseUid);
     const advertiserDetails = await this.findAdvertiserDetails(user.id);
 
+    // Return null if no Stripe customer ID
+    if (!advertiserDetails.stripeCustomerId) {
+      return null;
+    }
+
     const customer = await this.stripe.customers.retrieve(
       advertiserDetails.stripeCustomerId,
     );
 
     if (typeof customer === 'object' && !customer.deleted) {
-      const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+      const defaultPaymentMethod =
+        customer.invoice_settings?.default_payment_method;
       return typeof defaultPaymentMethod === 'string'
         ? defaultPaymentMethod
         : defaultPaymentMethod?.id || null;
@@ -316,6 +319,14 @@ export class PaymentMethodService {
     stripeCustomerId: string,
   ): Promise<void> {
     try {
+      // Validate stripeCustomerId before making API calls
+      if (!stripeCustomerId || stripeCustomerId.trim() === '') {
+        this.logger.warn(
+          `Skipping payment method sync for user ${userId}: No valid Stripe customer ID`,
+        );
+        return;
+      }
+
       // Get all payment methods from Stripe
       const stripePaymentMethods = await this.stripe.paymentMethods.list({
         customer: stripeCustomerId,
@@ -340,9 +351,14 @@ export class PaymentMethodService {
         try {
           // Note: PaymentMethod entity creation may need adjustment based on actual entity fields
           // For now, we'll skip automatic sync and rely on manual payment method addition
-          this.logger.log(`Found unsynced payment method ${pm.id} for user ${userId}. Manual sync may be required.`);
+          this.logger.log(
+            `Found unsynced payment method ${pm.id} for user ${userId}. Manual sync may be required.`,
+          );
         } catch (saveError) {
-          this.logger.error(`Error processing payment method ${pm.id}:`, saveError);
+          this.logger.error(
+            `Error processing payment method ${pm.id}:`,
+            saveError,
+          );
         }
       }
 

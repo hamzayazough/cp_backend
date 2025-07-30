@@ -182,6 +182,13 @@ export class WalletService {
 
     // If no payment method specified, get default
     if (!paymentMethodId) {
+      // Check if Stripe customer ID exists
+      if (!advertiserDetails.stripeCustomerId) {
+        throw new BadRequestException(
+          'No Stripe customer found. Please complete payment setup first.',
+        );
+      }
+
       const customer = await this.stripe.customers.retrieve(
         advertiserDetails.stripeCustomerId,
       );
