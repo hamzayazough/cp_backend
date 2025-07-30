@@ -376,7 +376,8 @@ export class PromoterCampaignService {
   ): CampaignUnion {
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
-      companyName: campaign.advertiser.name || 'Unknown Company',
+      companyName:
+        campaign.advertiser.advertiserDetails?.companyName || 'Unknown Company',
       profileUrl: campaign.advertiser.avatarUrl,
       rating: campaign.advertiser.rating || 0,
       verified: campaign.advertiser.advertiserDetails?.verified || false,

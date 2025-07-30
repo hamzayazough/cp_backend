@@ -239,7 +239,9 @@ export class PromoterMyCampaignService {
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: pc.campaign.advertiser.id,
-      companyName: pc.campaign.advertiser.name || 'Unknown Company',
+      companyName:
+        pc.campaign.advertiser.advertiserDetails?.companyName ||
+        'Unknown Company',
       profileUrl: pc.campaign.advertiser.avatarUrl,
       rating: pc.campaign.advertiser.rating || 0,
       verified: pc.campaign.advertiser.advertiserDetails?.verified || false,
@@ -284,7 +286,9 @@ export class PromoterMyCampaignService {
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: ca.campaign.advertiser.id,
-      companyName: ca.campaign.advertiser.name || 'Unknown Company',
+      companyName:
+        ca.campaign.advertiser.advertiserDetails?.companyName ||
+        ca.campaign.advertiser.name,
       profileUrl: ca.campaign.advertiser.avatarUrl,
       rating: ca.campaign.advertiser.rating || 0,
       verified: ca.campaign.advertiser.advertiserDetails?.verified || false,
