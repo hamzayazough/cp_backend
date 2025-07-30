@@ -356,4 +356,20 @@ export const QUERY_BUILDERS = {
     relations: ['comments'],
     order: INTERACTION_DEFAULTS.WORK_SORT_ORDER,
   }),
+
+  /**
+   * Build transaction find options for promoter campaign
+   * Finds all transactions for a specific promoter in a specific campaign
+   */
+  buildPromoterCampaignTransactionOptions: (
+    promoterId: string,
+    campaignId: string,
+  ) => ({
+    where: {
+      userId: promoterId,
+      campaignId: campaignId,
+    },
+    relations: ['campaign', 'user'],
+    order: { createdAt: 'DESC' as const },
+  }),
 } as const;

@@ -17,6 +17,7 @@ import {
   Earnings,
 } from '../../interfaces/promoter-campaigns';
 import { CampaignType } from '../../enums/campaign-type';
+import { UserType } from '../../enums/user-type';
 import { Advertiser } from '../../interfaces/explore-campaign';
 
 @Injectable()
@@ -247,7 +248,10 @@ export class PromoterMyCampaignService {
       verified: pc.campaign.advertiser.advertiserDetails?.verified || false,
       description: pc.campaign.advertiser.bio || '',
       website: pc.campaign.advertiser.websiteUrl || '',
-      advertiserTypes: pc.campaign.advertiserTypes || [],
+      advertiserTypes:
+        pc.campaign.advertiser.advertiserDetails?.advertiserTypeMappings?.map(
+          (mapping) => mapping.advertiserType,
+        ) || [],
     };
 
     const earnings: Earnings = {
@@ -337,7 +341,7 @@ export class PromoterMyCampaignService {
   ): CampaignDetailsUnion {
     const baseCampaign = {
       budgetHeld: Number(campaign.budgetAllocated) || 0,
-      spentBudget: promoterCampaign ? Number(promoterCampaign.spentBudget) : 0,
+      spentBudget: this.calculateSpentBudget(campaign, promoterId),
       targetAudience: campaign.targetAudience,
       preferredPlatforms: campaign.preferredPlatforms,
       requirements: campaign.requirements,
@@ -611,6 +615,26 @@ export class PromoterMyCampaignService {
     }
 
     throw new Error('Campaign not found for this promoter');
+  }
+
+  /**
+   * Calculate spent budget by summing transaction amounts for a specific promoter and campaign
+   */
+  private calculateSpentBudget(
+    campaign: CampaignEntity,
+    promoterId: string,
+  ): number {
+    if (!campaign.transactions) {
+      return 0;
+    }
+
+    return campaign.transactions
+      .filter(
+        (transaction) =>
+          transaction.userId === promoterId &&
+          transaction.userType === UserType.PROMOTER,
+      )
+      .reduce((total, transaction) => total + Number(transaction.amount), 0);
   }
 }
 

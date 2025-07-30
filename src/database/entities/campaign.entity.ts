@@ -22,8 +22,6 @@ import { Transaction } from './transaction.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
-  @OneToMany(() => Transaction, (transaction) => transaction.campaign)
-  transactions!: Transaction[];
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -243,6 +241,9 @@ export class CampaignEntity {
     (promoterCampaign) => promoterCampaign.campaign,
   )
   promoterCampaigns!: PromoterCampaign[];
+
+  @OneToMany(() => Transaction, (transaction) => transaction.campaign)
+  transactions!: Transaction[];
 
   // Getter methods to filter deliverables based on the stored IDs
   get expectedDeliverables(): CampaignDeliverableEntity[] {

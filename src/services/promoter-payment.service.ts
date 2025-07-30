@@ -217,38 +217,17 @@ export class PromoterPaymentService {
     budgetTracking.platformFeesCollectedCents += platformFeeCents;
     const temp = await this.budgetTrackingRepo.save(budgetTracking);
     console.log('temp: ', temp);
-    // 13. Update promoter campaign record
-    promoterCampaign.earnings =
-      (promoterCampaign.earnings || 0) + netPaymentDollars;
-    promoterCampaign.spentBudget =
-      (promoterCampaign.spentBudget || 0) + amountDollars;
-    promoterCampaign.finalPayoutAmount =
-      (promoterCampaign.finalPayoutAmount || 0) + amountDollars;
+    // 13. Update promoter campaign record (keep only essential fields)
+    // Note: earnings and spentBudget are now calculated from transactions
     await this.promoterCampaignRepo.save(promoterCampaign);
 
-    // 14. Calculate total amount paid to this promoter for this campaign
-    const totalPaidToPromoter: { total: string | null } | undefined =
-      await this.transactionRepo
-        .createQueryBuilder('transaction')
-        .select('SUM(ABS(transaction.grossAmountCents))', 'total')
-        .where('transaction.userId = :advertiserId', { advertiserId: user.id })
-        .andWhere('transaction.campaignId = :campaignId', {
-          campaignId: dto.campaignId,
-        })
-        .andWhere('transaction.type = :type', {
-          type: TransactionType.DIRECT_PAYMENT,
-        })
-        .andWhere('transaction.userType = :userType', {
-          userType: UserType.ADVERTISER,
-        })
-        .andWhere('transaction.description LIKE :promoterPattern', {
-          promoterPattern: `%${promoter.name}%`,
-        })
-        .getRawOne();
-
-    const newBudgetAllocated = parseInt(
-      totalPaidToPromoter?.total || dto.amount.toString(),
+    // 14. Calculate total amount paid to this promoter for this campaign from transactions
+    const totalPaidToPromoter = await this.calculatePromoterCampaignEarnings(
+      dto.promoterId,
+      dto.campaignId,
     );
+
+    const newBudgetAllocated = Math.round(totalPaidToPromoter * 100); // Convert to cents
 
     // 15. Process actual Stripe payment to promoter
     try {
@@ -415,6 +394,99 @@ export class PromoterPaymentService {
       console.error('Error adding test funds to platform:', error);
       throw new BadRequestException(`Failed to add test funds: ${error}`);
     }
+  }
+
+  /**
+   * Calculate total earnings for a promoter in a specific campaign from transactions
+   */
+  private async calculatePromoterCampaignEarnings(
+    promoterId: string,
+    campaignId: string,
+  ): Promise<number> {
+    const result: { total: string } | undefined = await this.transactionRepo
+      .createQueryBuilder('transaction')
+      .select('COALESCE(SUM(transaction.amount), 0)', 'total')
+      .where('transaction.userId = :promoterId', { promoterId })
+      .andWhere('transaction.campaignId = :campaignId', { campaignId })
+      .andWhere('transaction.userType = :userType', {
+        userType: UserType.PROMOTER,
+      })
+      .andWhere('transaction.amount > 0') // Only positive amounts (earnings)
+      .andWhere('transaction.status = :status', {
+        status: TransactionStatus.COMPLETED,
+      })
+      .getRawOne();
+
+    return Number(result?.total || 0);
+  }
+
+  /**
+   * Calculate total spent budget for a promoter in a specific campaign from transactions
+   */
+  private async calculatePromoterCampaignSpentBudget(
+    promoterId: string,
+    campaignId: string,
+  ): Promise<number> {
+    const result: { total: string } | undefined = await this.transactionRepo
+      .createQueryBuilder('transaction')
+      .select('COALESCE(SUM(ABS(transaction.grossAmountCents)), 0)', 'total')
+      .where('transaction.userId = :promoterId', { promoterId })
+      .andWhere('transaction.campaignId = :campaignId', { campaignId })
+      .andWhere('transaction.userType = :userType', {
+        userType: UserType.PROMOTER,
+      })
+      .andWhere('transaction.status = :status', {
+        status: TransactionStatus.COMPLETED,
+      })
+      .getRawOne();
+
+    return Number(result?.total || 0) / 100; // Convert cents to dollars
+  }
+
+  /**
+   * Get comprehensive financial data for a promoter campaign based on transactions
+   */
+  async getPromoterCampaignFinancials(
+    promoterId: string,
+    campaignId: string,
+  ): Promise<{
+    totalEarnings: number;
+    totalSpentBudget: number;
+    transactionCount: number;
+    lastPaymentDate: Date | null;
+  }> {
+    const earnings = await this.calculatePromoterCampaignEarnings(
+      promoterId,
+      campaignId,
+    );
+
+    const spentBudget = await this.calculatePromoterCampaignSpentBudget(
+      promoterId,
+      campaignId,
+    );
+
+    // Get additional stats
+    const stats: { count: string; lastPayment: Date | null } | undefined =
+      await this.transactionRepo
+        .createQueryBuilder('transaction')
+        .select('COUNT(*)', 'count')
+        .addSelect('MAX(transaction.processedAt)', 'lastPayment')
+        .where('transaction.userId = :promoterId', { promoterId })
+        .andWhere('transaction.campaignId = :campaignId', { campaignId })
+        .andWhere('transaction.userType = :userType', {
+          userType: UserType.PROMOTER,
+        })
+        .andWhere('transaction.status = :status', {
+          status: TransactionStatus.COMPLETED,
+        })
+        .getRawOne();
+
+    return {
+      totalEarnings: earnings,
+      totalSpentBudget: spentBudget,
+      transactionCount: Number(stats?.count || 0),
+      lastPaymentDate: stats?.lastPayment || null,
+    };
   }
 
   private async findUserByFirebaseUid(
