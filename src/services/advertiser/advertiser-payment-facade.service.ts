@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentMethodService } from './payment-method.service';
-import { WalletService } from './wallet.service';
-import { CampaignFundingService } from './campaign-funding.service';
-import { PromoterPaymentService } from './promoter-payment.service';
+import { PaymentMethodService } from '../../stripe/services/payment-method.service';
+import { WalletService } from '../wallet.service';
+import { CampaignFundingService } from '../campaign/campaign-funding.service';
+import { PromoterPaymentService } from '../promoter/promoter-payment.service';
 import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
@@ -13,13 +13,9 @@ import {
   WithdrawFundsDto,
   CheckCampaignFundingDto,
   PayPromoterDto,
-} from '../controllers/advertiser.controller';
+} from '../../controllers/advertiser.controller';
 
 /**
- * Refactored AdvertiserPaymentService that orchestrates payment-related operations
- * by delegating to specialized services. This follows the Single Responsibility Principle
- * and makes the codebase more maintainable.
- * 
  * Responsibilities:
  * - Acts as a facade for payment operations
  * - Delegates to specialized services
@@ -39,7 +35,10 @@ export class AdvertiserPaymentService {
     return this.paymentMethodService.getPaymentSetupStatus(firebaseUid);
   }
 
-  async completePaymentSetup(firebaseUid: string, dto: CompletePaymentSetupDto) {
+  async completePaymentSetup(
+    firebaseUid: string,
+    dto: CompletePaymentSetupDto,
+  ) {
     return this.paymentMethodService.completePaymentSetup(firebaseUid, dto);
   }
 
@@ -56,11 +55,17 @@ export class AdvertiserPaymentService {
   }
 
   async removePaymentMethod(firebaseUid: string, paymentMethodId: string) {
-    return this.paymentMethodService.removePaymentMethod(firebaseUid, paymentMethodId);
+    return this.paymentMethodService.removePaymentMethod(
+      firebaseUid,
+      paymentMethodId,
+    );
   }
 
   async setDefaultPaymentMethod(firebaseUid: string, paymentMethodId: string) {
-    return this.paymentMethodService.setDefaultPaymentMethod(firebaseUid, paymentMethodId);
+    return this.paymentMethodService.setDefaultPaymentMethod(
+      firebaseUid,
+      paymentMethodId,
+    );
   }
 
   // === Wallet Management ===
@@ -102,7 +107,11 @@ export class AdvertiserPaymentService {
     campaignId: string,
     dto: FundCampaignDto,
   ) {
-    return this.campaignFundingService.fundCampaign(firebaseUid, campaignId, dto);
+    return this.campaignFundingService.fundCampaign(
+      firebaseUid,
+      campaignId,
+      dto,
+    );
   }
 
   async getCampaignFundingStatus(firebaseUid: string, campaignId: string) {

@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Wallet } from '../database/entities/wallet.entity';
+import { Wallet } from '../../database/entities/wallet.entity';
 import {
   Transaction,
   TransactionType,
-} from '../database/entities/transaction.entity';
-import { AdvertiserWallet } from '../interfaces/advertiser-dashboard';
+} from '../../database/entities/transaction.entity';
+import { AdvertiserWallet } from '../../interfaces/advertiser-dashboard';
 import { QueryResult } from 'src/types/query-result.types';
-import { UserType } from '../enums/user-type';
+import { UserType } from '../../enums/user-type';
 
 @Injectable()
 export class AdvertiserWalletService {

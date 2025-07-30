@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Transaction } from '../database/entities/transaction.entity';
-import { AdvertiserTransaction } from '../interfaces/advertiser-dashboard';
+import { Transaction } from '../../database/entities/transaction.entity';
+import { AdvertiserTransaction } from '../../interfaces/advertiser-dashboard';
 
 @Injectable()
 export class AdvertiserTransactionService {

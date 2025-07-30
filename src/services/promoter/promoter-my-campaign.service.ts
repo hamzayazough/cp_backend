@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { UserEntity } from '../../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import {
   PromoterCampaign,

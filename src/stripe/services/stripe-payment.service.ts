@@ -8,7 +8,7 @@ import { StripeTransfer } from '../../database/entities/stripe-transfer.entity';
 import { CampaignPaymentConfig } from '../../database/entities/campaign-payment-config.entity';
 import { PlatformFee } from '../../database/entities/platform-fee.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
-import { UserEntity } from '../../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
 import { StripeConnectService } from './stripe-connect.service';
 import { stripeConfig } from '../../config/stripe.config';

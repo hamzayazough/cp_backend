@@ -3,12 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { UserEntity } from '../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
-import { ViewsService } from '../services/views.service';
-import { RateLimitService } from '../services/rate-limit.service';
-import { CampaignCompletionService } from '../services/campaign-completion.service';
+import { ViewsService } from 'src/services/visibility-feature/views.service';
+import { RateLimitService } from '../services/visibility-feature/rate-limit.service';
+import { CampaignCompletionService } from '../services/campaign/campaign-completion.service';
 import { VisitController } from '../controllers/visit.controller';
 
 @Module({

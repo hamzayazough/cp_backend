@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
-import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserCampaignService } from '../services/advertiser-campaign.service';
-import { AdvertiserWalletService } from '../services/advertiser-wallet.service';
-import { AdvertiserStatsService } from '../services/advertiser-stats.service';
-import { AdvertiserTransactionService } from '../services/advertiser-transaction.service';
-import { AdvertiserMessageService } from '../services/advertiser-message.service';
-import { CampaignService } from '../services/campaign.service';
+import { AdvertiserService } from '../services/advertiser/advertiser.service';
+import { AdvertiserCampaignService } from 'src/services/advertiser/advertiser-campaign.service';
+import { AdvertiserWalletService } from 'src/services/advertiser/advertiser-wallet.service';
+import { AdvertiserStatsService } from 'src/services/advertiser/advertiser-stats.service';
+import { AdvertiserTransactionService } from 'src/services/advertiser/advertiser-transaction.service';
+import { AdvertiserMessageService } from 'src/services/advertiser/advertiser-message.service';
+import { CampaignService } from 'src/services/campaign/campaign.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
-import { PaymentModule } from '../services/payment.module';
-import { UserEntity } from '../database/entities/user.entity';
+import { PaymentModule } from './payment.module';
+import { UserEntity } from 'src/database/entities';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
@@ -26,6 +26,7 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { UniqueViewEntity } from 'src/database/entities';
+import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { UniqueViewEntity } from 'src/database/entities';
     AdvertiserStatsService,
     AdvertiserTransactionService,
     AdvertiserMessageService,
+    AdvertiserPaymentService,
     CampaignService,
     S3Service,
   ],

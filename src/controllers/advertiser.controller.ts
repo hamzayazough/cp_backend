@@ -15,14 +15,14 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserPaymentService } from '../services/advertiser-payment-facade.service';
-import { PromoterService } from '../services/promoter.service';
+import { AdvertiserService } from '../services/advertiser/advertiser.service';
+import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
+import { PromoterService } from 'src/services/promoter/promoter.service';
 import {
   CampaignService,
   CreateCampaignResponse,
   UploadFileResponse,
-} from '../services/campaign.service';
+} from 'src/services/campaign/campaign.service';
 import {
   GetAdvertiserDashboardRequest,
   GetAdvertiserDashboardResponse,

@@ -14,7 +14,7 @@ import {
   StripeAccountStatus,
   CapabilityStatus,
 } from '../../database/entities/stripe-connect-account.entity';
-import { UserEntity } from '../../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { stripeConfig } from '../../config/stripe.config';
 
 export interface CreateConnectedAccountDto {

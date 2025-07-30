@@ -7,38 +7,38 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { UserEntity } from '../database/entities/user.entity';
-import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { Wallet } from '../database/entities/wallet.entity';
+import { CampaignEntity } from 'src/database/entities/campaign.entity';
+import { UserEntity } from 'src/database/entities';
+import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
+import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
+import { Wallet } from 'src/database/entities/wallet.entity';
 import {
   Transaction,
   TransactionType,
   TransactionStatus,
   PaymentMethod,
-} from '../database/entities/transaction.entity';
-import { S3Service, S3FileType } from './s3.service';
+} from 'src/database/entities/transaction.entity';
+import { S3Service, S3FileType } from '../s3.service';
 import {
   Campaign,
   ConsultantCampaign,
   SellerCampaign,
-} from '../interfaces/campaign';
-import { CampaignType } from '../enums/campaign-type';
-import { Deliverable } from '../enums/deliverable';
-import { UserType } from '../enums/user-type';
+} from 'src/interfaces/campaign';
+import { CampaignType } from 'src/enums/campaign-type';
+import { Deliverable } from 'src/enums/deliverable';
+import { UserType } from 'src/enums/user-type';
 
 // Helpers
-import { FileValidationHelper } from '../helpers/file-validation.helper';
-import { CampaignValidationHelper } from '../helpers/campaign-validation.helper';
-import { CampaignEntityBuilder } from '../helpers/campaign-entity.builder';
-import { CampaignEntityMapper } from '../helpers/campaign-entity.mapper';
+import { FileValidationHelper } from 'src/helpers/file-validation.helper';
+import { CampaignValidationHelper } from 'src/helpers/campaign-validation.helper';
+import { CampaignEntityBuilder } from 'src/helpers/campaign-entity.builder';
+import { CampaignEntityMapper } from 'src/helpers/campaign-entity.mapper';
 
 // Constants
 import {
   CAMPAIGN_SUCCESS_MESSAGES,
   CAMPAIGN_ERROR_MESSAGES,
-} from '../constants/campaign-validation.constants';
+} from 'src/constants/campaign-validation.constants';
 
 export interface CreateCampaignResponse {
   success: boolean;

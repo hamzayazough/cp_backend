@@ -2,13 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { UniqueViewEntity } from '../database/entities/unique-view.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { CampaignStatus } from '../enums/campaign-status';
-import { CampaignCompletionService } from './campaign-completion.service';
+import { UniqueViewEntity } from 'src/database/entities/unique-view.entity';
+import { CampaignEntity } from 'src/database/entities/campaign.entity';
+import { PromoterCampaign } from 'src/database/entities/promoter-campaign.entity';
+import { PromoterDetailsEntity } from 'src/database/entities/promoter-details.entity';
+import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
+import { CampaignStatus } from 'src/enums/campaign-status';
+import { CampaignCompletionService } from '../campaign/campaign-completion.service';
 
 @Injectable()
 export class ViewsService {

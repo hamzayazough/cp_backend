@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { StripeModule } from '../stripe/stripe.module';
 
 // Entities
-import { UserEntity } from '../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
 import { PaymentMethod } from '../database/entities/payment-method.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
@@ -15,11 +15,10 @@ import { StripeConnectAccount } from '../database/entities/stripe-connect-accoun
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 
 // Services
-import { PaymentMethodService } from './payment-method.service';
-import { WalletService } from './wallet.service';
-import { CampaignFundingService } from './campaign-funding.service';
-import { PromoterPaymentService } from './promoter-payment.service';
-import { AdvertiserPaymentService } from './advertiser-payment-facade.service';
+import { PaymentMethodService } from '../stripe/services/payment-method.service';
+import { WalletService } from '../services/wallet.service';
+import { CampaignFundingService } from '../services/campaign/campaign-funding.service';
+import { PromoterPaymentService } from '../services/promoter/promoter-payment.service';
 
 @Module({
   imports: [
@@ -42,14 +41,12 @@ import { AdvertiserPaymentService } from './advertiser-payment-facade.service';
     WalletService,
     CampaignFundingService,
     PromoterPaymentService,
-    AdvertiserPaymentService,
   ],
   exports: [
     PaymentMethodService,
     WalletService,
     CampaignFundingService,
     PromoterPaymentService,
-    AdvertiserPaymentService,
   ],
 })
 export class PaymentModule {}

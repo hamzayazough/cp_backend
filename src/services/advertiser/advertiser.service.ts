@@ -1,35 +1,35 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '../database/entities/user.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { Transaction } from '../database/entities/transaction.entity';
-import { Wallet } from '../database/entities/wallet.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { MessageThread, Message } from '../database/entities/message.entity';
+import { UserEntity } from 'src/database/entities';
+import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { Transaction } from '../../database/entities/transaction.entity';
+import { Wallet } from '../../database/entities/wallet.entity';
+import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
+import { MessageThread, Message } from '../../database/entities/message.entity';
 import {
   CampaignApplicationEntity,
   ApplicationStatus,
-} from '../database/entities/campaign-applications.entity';
-import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
+} from '../../database/entities/campaign-applications.entity';
+import { PromoterCampaignStatus } from '../../database/entities/promoter-campaign.entity';
 import {
   GetAdvertiserDashboardRequest,
   AdvertiserDashboardData,
-} from '../interfaces/advertiser-dashboard';
+} from '../../interfaces/advertiser-dashboard';
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   CampaignFilters,
   CampaignAdvertiser,
-} from '../interfaces/advertiser-campaign';
+} from '../../interfaces/advertiser-campaign';
 import { AdvertiserCampaignService } from './advertiser-campaign.service';
 import { AdvertiserWalletService } from './advertiser-wallet.service';
 import { AdvertiserStatsService } from './advertiser-stats.service';
 import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
 import { UserType } from 'src/enums/user-type';
-import { ReviewCampaignApplicationResult } from '../interfaces/review-campaign-application-result';
-import { S3Service } from './s3.service';
+import { ReviewCampaignApplicationResult } from '../../interfaces/review-campaign-application-result';
+import { S3Service } from '../s3.service';
 
 @Injectable()
 export class AdvertiserService {

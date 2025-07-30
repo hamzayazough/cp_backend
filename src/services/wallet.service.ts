@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { STRIPE_CLIENT } from '../stripe/stripe.constants';
-import { UserEntity } from '../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { Wallet } from '../database/entities/wallet.entity';

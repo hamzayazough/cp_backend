@@ -8,25 +8,25 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
-import { STRIPE_CLIENT } from '../stripe/stripe.constants';
-import { UserEntity } from '../database/entities/user.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
-import { Wallet } from '../database/entities/wallet.entity';
+import { STRIPE_CLIENT } from '../../stripe/stripe.constants';
+import { UserEntity } from 'src/database/entities';
+import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { CampaignBudgetTracking } from '../../database/entities/campaign-budget-tracking.entity';
+import { StripeConnectAccount } from '../../database/entities/stripe-connect-account.entity';
+import { Wallet } from '../../database/entities/wallet.entity';
 import {
   Transaction,
   TransactionType,
   TransactionStatus,
   PaymentMethod as TxnPaymentMethod,
-} from '../database/entities/transaction.entity';
+} from '../../database/entities/transaction.entity';
 import {
   PromoterCampaign,
   PromoterCampaignStatus,
-} from '../database/entities/promoter-campaign.entity';
-import { CampaignStatus } from '../enums/campaign-status';
-import { UserType } from '../enums/user-type';
-import { PayPromoterDto } from '../controllers/advertiser.controller';
+} from '../../database/entities/promoter-campaign.entity';
+import { CampaignStatus } from '../../enums/campaign-status';
+import { UserType } from '../../enums/user-type';
+import { PayPromoterDto } from '../../controllers/advertiser.controller';
 
 export interface PayPromoterResult {
   paymentId: string;

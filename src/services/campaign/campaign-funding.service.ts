@@ -8,25 +8,25 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
-import { STRIPE_CLIENT } from '../stripe/stripe.constants';
-import { UserEntity } from '../database/entities/user.entity';
-import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { PaymentRecord } from '../database/entities/payment-record.entity';
-import { Wallet } from '../database/entities/wallet.entity';
+import { STRIPE_CLIENT } from 'src/stripe/stripe.constants';
+import { UserEntity } from 'src/database/entities';
+import { AdvertiserDetailsEntity } from 'src/database/entities/advertiser-details.entity';
+import { CampaignEntity } from 'src/database/entities/campaign.entity';
+import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
+import { PaymentRecord } from 'src/database/entities/payment-record.entity';
+import { Wallet } from 'src/database/entities/wallet.entity';
 import {
   Transaction,
   TransactionType,
   TransactionStatus,
   PaymentMethod as TxnPaymentMethod,
-} from '../database/entities/transaction.entity';
-import { UserType } from '../enums/user-type';
+} from 'src/database/entities/transaction.entity';
+import { UserType } from 'src/enums/user-type';
 import {
   FundCampaignDto,
   UpdateBudgetDto,
   CheckCampaignFundingDto,
-} from '../controllers/advertiser.controller';
+} from 'src/controllers/advertiser.controller';
 
 export interface FundingResult {
   paymentIntentId?: string;

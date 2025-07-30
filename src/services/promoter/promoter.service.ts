@@ -4,38 +4,35 @@ import { Repository } from 'typeorm';
 import {
   PromoterDashboardRequest,
   PromoterDashboardData,
-} from '../interfaces/promoter-dashboard';
+} from 'src/interfaces/promoter-dashboard';
 import {
   ExploreCampaignRequest,
   ExploreCampaignResponse,
   CampaignUnion,
-} from '../interfaces/explore-campaign';
+} from 'src/interfaces/explore-campaign';
 import {
   GetPromoterCampaignsRequest,
   PromoterCampaignsListResponse,
   CampaignPromoter,
   CampaignWork,
-} from '../interfaces/promoter-campaigns';
+} from 'src/interfaces/promoter-campaigns';
 import {
   SendApplicationRequest,
   SendApplicationResponse,
   AcceptContractRequest,
   AcceptContractResponse,
-} from '../interfaces/campaign-actions';
-import { UserEntity } from '../database/entities/user.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { CampaignApplicationEntity } from '../database/entities/campaign-applications.entity';
+} from 'src/interfaces/campaign-actions';
+import { UserEntity } from 'src/database/entities';
+import { CampaignEntity } from 'src/database/entities/campaign.entity';
+import { PromoterCampaign } from 'src/database/entities/promoter-campaign.entity';
+import { CampaignApplicationEntity } from 'src/database/entities/campaign-applications.entity';
 import { UserType } from 'src/enums/user-type';
-import { UniqueViewEntity } from '../database/entities/unique-view.entity';
-import {
-  DASHBOARD_DATA_CONFIG,
-  getLimitValue,
-} from './promoter/promoter-helper.const';
-import { PromoterDashboardService } from './promoter/promoter-dashboard.service';
-import { PromoterCampaignService } from './promoter/promoter-campaign.service';
-import { PromoterMyCampaignService } from './promoter/promoter-my-campaign.service';
-import { PromoterCampaignInteractionService } from './promoter/promoter-campaign-interaction.service';
+import { UniqueViewEntity } from 'src/database/entities';
+import { DASHBOARD_DATA_CONFIG, getLimitValue } from './promoter-helper.const';
+import { PromoterDashboardService } from './promoter-dashboard.service';
+import { PromoterCampaignService } from './promoter-campaign.service';
+import { PromoterMyCampaignService } from './promoter-my-campaign.service';
+import { PromoterCampaignInteractionService } from './promoter-campaign-interaction.service';
 
 @Injectable()
 export class PromoterService {

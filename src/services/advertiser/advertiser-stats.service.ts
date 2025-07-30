@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { Transaction } from '../database/entities/transaction.entity';
-import { UniqueViewEntity } from '../database/entities/unique-view.entity';
-import { SalesRecordEntity } from '../database/entities/sales-record.entity';
-import { AdvertiserStats } from '../interfaces/advertiser-dashboard';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { Transaction } from '../../database/entities/transaction.entity';
+import { UniqueViewEntity } from '../../database/entities/unique-view.entity';
+import { SalesRecordEntity } from '../../database/entities/sales-record.entity';
+import { AdvertiserStats } from '../../interfaces/advertiser-dashboard';
+import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
 
 // Type for raw query results
 interface QueryResult {

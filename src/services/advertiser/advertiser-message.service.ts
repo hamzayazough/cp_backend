@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MessageThread, Message } from '../database/entities/message.entity';
-import { AdvertiserMessage } from '../interfaces/advertiser-dashboard';
+import { MessageThread, Message } from '../../database/entities/message.entity';
+import { AdvertiserMessage } from '../../interfaces/advertiser-dashboard';
 
 @Injectable()
 export class AdvertiserMessageService {

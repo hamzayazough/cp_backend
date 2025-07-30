@@ -1,30 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CampaignEntity } from '../database/entities/campaign.entity';
+import { CampaignEntity } from 'src/database/entities';
 import {
   PromoterCampaign,
   PromoterCampaignStatus,
-} from '../database/entities/promoter-campaign.entity';
+} from 'src/database/entities/promoter-campaign.entity';
 import {
   Transaction,
   TransactionType,
-} from '../database/entities/transaction.entity';
+} from 'src/database/entities/transaction.entity';
 import { CampaignApplicationEntity } from 'src/database/entities/campaign-applications.entity';
-import { UserEntity } from '../database/entities/user.entity';
-import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
-import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
-import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
+import { UserEntity } from 'src/database/entities';
+import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
+import { CampaignWorkEntity } from 'src/database/entities/campaign-work.entity';
+import { CampaignWorkCommentEntity } from 'src/database/entities/campaign-work-comment.entity';
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
   CampaignFilters,
   CampaignAdvertiser,
-} from '../interfaces/advertiser-campaign';
-import { AdvertiserActiveCampaign } from '../interfaces/advertiser-dashboard';
-import { CampaignDeliverable } from '../interfaces/promoter-campaigns';
-import { CampaignStatus, CampaignType } from '../enums/campaign-type';
-import { transformUserToPromoter } from '../helpers/user-transformer.helper';
+} from 'src/interfaces/advertiser-campaign';
+import { AdvertiserActiveCampaign } from 'src/interfaces/advertiser-dashboard';
+import { CampaignDeliverable } from 'src/interfaces/promoter-campaigns';
+import { CampaignStatus, CampaignType } from 'src/enums/campaign-type';
+import { transformUserToPromoter } from 'src/helpers/user-transformer.helper';
 import { TransactionStatus } from 'src/interfaces';
 
 @Injectable()

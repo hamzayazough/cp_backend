@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PromoterController } from '../controllers/promoter.controller';
-import { PromoterService } from '../services/promoter.service';
+import { PromoterService } from 'src/services/promoter/promoter.service';
 import { PromoterDashboardService } from '../services/promoter/promoter-dashboard.service';
 import { PromoterCampaignService } from '../services/promoter/promoter-campaign.service';
 import { PromoterMyCampaignService } from '../services/promoter/promoter-my-campaign.service';
 import { PromoterCampaignInteractionService } from '../services/promoter/promoter-campaign-interaction.service';
-import { UserEntity } from '../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';

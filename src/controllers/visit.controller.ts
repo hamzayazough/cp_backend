@@ -8,7 +8,7 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
-import { ViewsService } from '../services/views.service';
+import { ViewsService } from 'src/services/visibility-feature/views.service';
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 

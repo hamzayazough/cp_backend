@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Repository, In } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
-import { UserEntity } from '../database/entities/user.entity';
-import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
-import { CampaignStatus } from '../enums/campaign-status';
-import { CampaignType } from '../enums/campaign-type';
-import { PromoterCampaignStatus } from '../interfaces/promoter-campaign';
+import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
+import { UserEntity } from 'src/database/entities';
+import { PromoterDetailsEntity } from '../../database/entities/promoter-details.entity';
+import { CampaignStatus } from '../../enums/campaign-status';
+import { CampaignType } from '../../enums/campaign-type';
+import { PromoterCampaignStatus } from '../../interfaces/promoter-campaign';
 
 @Injectable()
 export class CampaignCompletionService {

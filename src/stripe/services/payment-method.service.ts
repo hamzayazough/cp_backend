@@ -2,14 +2,14 @@ import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
-import { STRIPE_CLIENT } from '../stripe/stripe.constants';
-import { UserEntity } from '../database/entities/user.entity';
-import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
-import { PaymentMethod } from '../database/entities/payment-method.entity';
+import { STRIPE_CLIENT } from '../stripe.constants';
+import { UserEntity } from 'src/database/entities';
+import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
+import { PaymentMethod } from '../../database/entities/payment-method.entity';
 import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
-} from '../controllers/advertiser.controller';
+} from '../../controllers/advertiser.controller';
 
 export interface PaymentSetupStatus {
   hasStripeCustomer: boolean;
