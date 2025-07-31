@@ -176,7 +176,7 @@ export class PromoterPaymentService {
       amount: netPaymentDollars,
       grossAmountCents: dto.amount,
       platformFeeCents: platformFeeCents,
-      status: TransactionStatus.PENDING,
+      status: TransactionStatus.COMPLETED,
       description: `Payment from advertiser ${user.name} for campaign ${campaign.title}`,
       paymentMethod: TxnPaymentMethod.BANK_TRANSFER,
     });
@@ -215,21 +215,9 @@ export class PromoterPaymentService {
     // 12. Update campaign budget tracking
     budgetTracking.spentBudgetCents += dto.amount;
     budgetTracking.platformFeesCollectedCents += platformFeeCents;
-    const temp = await this.budgetTrackingRepo.save(budgetTracking);
-    console.log('temp: ', temp);
-    // 13. Update promoter campaign record (keep only essential fields)
-    // Note: earnings and spentBudget are now calculated from transactions
-    await this.promoterCampaignRepo.save(promoterCampaign);
+    await this.budgetTrackingRepo.save(budgetTracking);
 
-    // 14. Calculate total amount paid to this promoter for this campaign from transactions
-    const totalPaidToPromoter = await this.calculatePromoterCampaignEarnings(
-      dto.promoterId,
-      dto.campaignId,
-    );
-
-    const newBudgetAllocated = Math.round(totalPaidToPromoter * 100); // Convert to cents
-
-    // 15. Process actual Stripe payment to promoter
+    // 13. Process actual Stripe payment to promoter
     try {
       const stripeTransferResult = await this.processPromoterPayment(
         promoter,
@@ -243,6 +231,15 @@ export class PromoterPaymentService {
       savedPromoterTransaction.status = TransactionStatus.COMPLETED;
       savedPromoterTransaction.processedAt = new Date();
       await this.transactionRepo.save(savedPromoterTransaction);
+
+      // 14. Now calculate and update promoter campaign earnings (after transaction is completed)
+      const totalPaidToPromoter = await this.calculatePromoterCampaignEarnings(
+        dto.promoterId,
+        dto.campaignId,
+      );
+      console.log('totoal paid to promoter:', totalPaidToPromoter);
+      promoterCampaign.earnings = totalPaidToPromoter;
+      await this.promoterCampaignRepo.save(promoterCampaign);
 
       this.logger.log(
         `Stripe transfer successful: ${stripeTransferResult.transferId} for promoter ${dto.promoterId}`,
@@ -258,7 +255,16 @@ export class PromoterPaymentService {
 
       savedPromoterTransaction.description += ` (Stripe transfer failed: ${errorMessage})`;
       await this.transactionRepo.save(savedPromoterTransaction);
+
+      // Don't update promoter campaign earnings if payment failed
     }
+
+    // Calculate final earnings for return value (this will be correct regardless of Stripe success/failure)
+    const finalEarnings = await this.calculatePromoterCampaignEarnings(
+      dto.promoterId,
+      dto.campaignId,
+    );
+    const newBudgetAllocated = Math.round(finalEarnings * 100); // Convert to cents
 
     this.logger.log(
       `Promoter payment processed: Advertiser ${user.id} paid $${amountDollars} to promoter ${dto.promoterId} for campaign ${dto.campaignId}. ` +
