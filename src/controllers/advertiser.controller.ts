@@ -15,14 +15,14 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
-import { PromoterService } from '../services/promoter.service';
+import { AdvertiserService } from '../services/advertiser/advertiser.service';
+import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
+import { PromoterService } from 'src/services/promoter/promoter.service';
 import {
   CampaignService,
   CreateCampaignResponse,
   UploadFileResponse,
-} from '../services/campaign.service';
+} from 'src/services/campaign/campaign.service';
 import {
   GetAdvertiserDashboardRequest,
   GetAdvertiserDashboardResponse,
@@ -30,7 +30,6 @@ import {
 import {
   AdvertiserCampaignListRequest,
   AdvertiserCampaignListResponse,
-  AdvertiserDashboardSummary,
   CampaignAdvertiser,
 } from '../interfaces/advertiser-campaign';
 import { Campaign } from '../interfaces/campaign';
@@ -38,6 +37,9 @@ import { CampaignWork } from '../interfaces/promoter-campaigns';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
+import { TransactionType } from 'src/database/entities/transaction.entity';
+import { FAILED_DASHBOARD_DATA } from 'src/constants/advertiser.constants';
+import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
 
 // Payment DTOs
 export class CompletePaymentSetupDto {
@@ -69,25 +71,23 @@ export class UpdateBudgetDto {
 export class TransactionQueryDto {
   page?: number = 1;
   limit?: number = 10;
-  // Updated to support both legacy and new transaction types for backward compatibility
-  type?:
-    | 'DEPOSIT' // Legacy: maps to WALLET_DEPOSIT
-    | 'WITHDRAWAL' // Maps to WITHDRAWAL
-    | 'CAMPAIGN_FUNDING' // Maps to CAMPAIGN_FUNDING
-    | 'REFUND' // Legacy: searches for refund descriptions
-    // New unified transaction types
-    | 'WALLET_DEPOSIT'
-    | 'VIEW_EARNING'
-    | 'CONSULTANT_PAYMENT'
-    | 'SALESMAN_COMMISSION'
-    | 'MONTHLY_PAYOUT'
-    | 'DIRECT_PAYMENT'
-    | 'PLATFORM_FEE';
+  type?: TransactionType;
 }
 
 export class WithdrawFundsDto {
   amount: number; // Amount in cents
   bankAccountId?: string; // Optional: specific bank account to withdraw to
+  description?: string;
+}
+
+export class CheckCampaignFundingDto {
+  estimatedBudgetCents: number; // in cents
+}
+
+export class PayPromoterDto {
+  campaignId: string;
+  promoterId: string;
+  amount: number; // in cents
   description?: string;
 }
 
@@ -125,40 +125,7 @@ export class AdvertiserController {
           : 'Failed to retrieve dashboard data';
       return {
         success: false,
-        data: {
-          stats: {
-            spendingThisWeek: 0,
-            spendingLastWeek: 0,
-            spendingPercentageChange: 0,
-            viewsToday: 0,
-            viewsYesterday: 0,
-            viewsPercentageChange: 0,
-            conversionsThisWeek: 0,
-            conversionsLastWeek: 0,
-            conversionsPercentageChange: 0,
-            activeCampaigns: 0,
-            pendingApprovalCampaigns: 0,
-          },
-          activeCampaigns: [],
-          recentTransactions: [],
-          recentMessages: [],
-          wallet: {
-            balance: {
-              currentBalance: 0,
-              pendingCharges: 0,
-              totalSpent: 0,
-              totalDeposited: 0,
-              minimumBalance: 0,
-            },
-            campaignBudgets: {
-              totalAllocated: 0,
-              totalUsed: 0,
-              pendingPayments: 0,
-            },
-            totalLifetimeSpent: 0,
-            totalAvailableBalance: 0,
-          },
-        },
+        data: FAILED_DASHBOARD_DATA,
         message: errorMessage,
       };
     }
@@ -217,31 +184,6 @@ export class AdvertiserController {
     }
   }
 
-  @Get('dashboard/summary')
-  async getDashboardSummary(@Request() req: { user: FirebaseUser }): Promise<{
-    success: boolean;
-    data: AdvertiserDashboardSummary;
-    message?: string;
-  }> {
-    try {
-      const firebaseUid = req.user.uid;
-      const data =
-        await this.advertiserService.getDashboardSummary(firebaseUid);
-
-      return {
-        success: true,
-        data,
-        message: 'Dashboard summary retrieved successfully',
-      };
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error
-          ? error.message
-          : 'Failed to retrieve dashboard summary',
-      );
-    }
-  }
-
   @Get('campaigns/filters')
   getCampaignFilters(): {
     success: boolean;
@@ -269,7 +211,9 @@ export class AdvertiserController {
     @Param('campaignId') campaignId: string,
     @Param('applicationId') applicationId: string, // Can be either application ID or promoter ID
     @Body()
-    reviewData: { action: 'ACCEPTED' | 'REJECTED' },
+    reviewData: {
+      action: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED;
+    },
     @Request() req: { user: FirebaseUser },
   ): Promise<{
     success: boolean;
@@ -541,7 +485,6 @@ export class AdvertiserController {
     if (dto.amount <= 0) {
       throw new BadRequestException('Amount must be greater than 0');
     }
-
     const result = await this.advertiserPaymentService.addFunds(
       req.user.uid,
       dto,
@@ -704,6 +647,62 @@ export class AdvertiserController {
       success: true,
       data: result,
       message: 'Campaign budget updated successfully',
+    };
+  }
+
+  @Post('campaigns/funding-check')
+  @HttpCode(HttpStatus.OK)
+  async checkCampaignFundingFeasibility(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: CheckCampaignFundingDto,
+  ) {
+    if (!dto.estimatedBudgetCents || dto.estimatedBudgetCents <= 0) {
+      throw new BadRequestException('Estimated budget must be greater than 0');
+    }
+
+    const feasibility =
+      await this.advertiserPaymentService.checkCampaignFundingFeasibility(
+        req.user.uid,
+        dto,
+      );
+
+    return {
+      success: true,
+      data: feasibility,
+      message: feasibility.canAfford
+        ? 'Sufficient funds available for campaign'
+        : `Additional funding of $${feasibility.shortfallAmount.toFixed(2)} required`,
+    };
+  }
+
+  @Post('campaigns/pay-promoter')
+  @HttpCode(HttpStatus.OK)
+  async payPromoter(
+    @Request() req: { user: FirebaseUser },
+    @Body() dto: PayPromoterDto,
+  ) {
+    if (!dto.campaignId || !dto.promoterId) {
+      throw new BadRequestException('Campaign ID and Promoter ID are required');
+    }
+
+    if (!dto.amount || dto.amount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than 0');
+    }
+
+    // Minimum payment of $1.00
+    if (dto.amount < 100) {
+      throw new BadRequestException('Minimum payment amount is $1.00');
+    }
+
+    const result = await this.advertiserPaymentService.payPromoter(
+      req.user.uid,
+      dto,
+    );
+
+    return {
+      success: true,
+      data: result,
+      message: `Payment of $${(dto.amount / 100).toFixed(2)} processed successfully`,
     };
   }
 }

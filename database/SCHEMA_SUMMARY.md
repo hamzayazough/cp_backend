@@ -32,7 +32,6 @@ This document provides a comprehensive overview of the CrowdProp database schema
 - `campaigns` - Campaign definitions with type-specific fields
 - `campaign_applications` - Promoter applications for consultant/seller campaigns
 - `promoter_campaigns` - Active campaign participation tracking
-- `view_stats` - Daily view tracking for visibility campaigns
 - `sales_records` - Sales tracking for salesman campaigns
 
 ### 3. Financial Core Tables (The Heart of the System)
@@ -140,15 +139,6 @@ This document provides a comprehensive overview of the CrowdProp database schema
 - `views_generated` - For visibility campaigns
 - `earnings` - Total earnings from this campaign
 - `payout_executed` - Payment status tracking
-
-### `view_stats`
-
-**Purpose**: Daily view tracking for visibility campaigns
-**When to use**:
-
-- Recording daily view counts per promoter
-- Calculating monthly payouts for visibility campaigns
-- Analytics and performance reporting
 
 **Key Fields**:
 
@@ -306,7 +296,7 @@ const netAmount = grossAmount - platformFee; // $8.00
 await transactions.create({
   user_id: promoterId,
   user_type: 'PROMOTER',
-  type: 'CONSULTANT_PAYMENT',
+  type: TransactionType.DIRECT_PAYMENT,
   campaign_id: campaignId,
   gross_amount_cents: grossAmount,
   platform_fee_cents: platformFee,
@@ -441,7 +431,7 @@ await campaignBudgetTracking.save(campaignBudget);
 - **Use `campaigns`** for campaign management
 - **Use `campaign_budget_tracking`** for budget allocation
 - **Use `promoter_campaigns`** for participation tracking
-- **Use `view_stats`** or `sales_records`\*\* for performance tracking
+- **Use `sales_records`** for performance tracking
 
 ### For Promoter Service
 

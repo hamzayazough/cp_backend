@@ -16,7 +16,7 @@ import * as entities from './entities';
         database: configService.get('DATABASE_NAME'),
         entities: Object.values(entities),
         synchronize: false, // Set to false for production, use migrations instead
-        logging: process.env.NODE_ENV === 'development',
+        logging: false,
       }),
       inject: [ConfigService],
     }),

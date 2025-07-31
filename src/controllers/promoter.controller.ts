@@ -8,7 +8,7 @@ import {
   Delete,
   Get,
 } from '@nestjs/common';
-import { PromoterService } from '../services/promoter.service';
+import { PromoterService } from 'src/services/promoter/promoter.service';
 import {
   PromoterDashboardRequest,
   PromoterDashboardResponse,

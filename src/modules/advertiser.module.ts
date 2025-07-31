@@ -1,19 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdvertiserController } from '../controllers/advertiser.controller';
-import { AdvertiserService } from '../services/advertiser.service';
-import { AdvertiserPaymentService } from '../services/advertiser-payment.service';
-import { AdvertiserDashboardService } from '../services/advertiser-dashboard.service';
-import { AdvertiserCampaignService } from '../services/advertiser-campaign.service';
-import { AdvertiserWalletService } from '../services/advertiser-wallet.service';
-import { AdvertiserStatsService } from '../services/advertiser-stats.service';
-import { AdvertiserTransactionService } from '../services/advertiser-transaction.service';
-import { AdvertiserMessageService } from '../services/advertiser-message.service';
-import { CampaignService } from '../services/campaign.service';
+import { AdvertiserService } from '../services/advertiser/advertiser.service';
+import { AdvertiserCampaignService } from 'src/services/advertiser/advertiser-campaign.service';
+import { AdvertiserWalletService } from 'src/services/advertiser/advertiser-wallet.service';
+import { AdvertiserStatsService } from 'src/services/advertiser/advertiser-stats.service';
+import { AdvertiserTransactionService } from 'src/services/advertiser/advertiser-transaction.service';
+import { AdvertiserMessageService } from 'src/services/advertiser/advertiser-message.service';
+import { CampaignService } from 'src/services/campaign/campaign.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
-import { StripeModule } from '../stripe/stripe.module';
-import { UserEntity } from '../database/entities/user.entity';
+import { PaymentModule } from './payment.module';
+import { UserEntity } from 'src/database/entities';
 import { CampaignEntity } from '../database/entities/campaign.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
@@ -25,9 +23,10 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
-import { PaymentMethod } from '../database/entities/payment-method.entity';
+import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
-import { PaymentRecord } from '../database/entities/payment-record.entity';
+import { UniqueViewEntity } from 'src/database/entities';
+import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 
 @Module({
   imports: [
@@ -45,23 +44,22 @@ import { PaymentRecord } from '../database/entities/payment-record.entity';
       CampaignDeliverableEntity,
       CampaignWorkEntity,
       CampaignWorkCommentEntity,
-      PaymentMethod,
-      CampaignBudgetTracking,
-      PaymentRecord,
+      SalesRecordEntity,
+      CampaignBudgetTracking, // Added back for AdvertiserStatsService
+      UniqueViewEntity,
     ]),
     PromoterModule,
-    StripeModule,
+    PaymentModule, // Import the payment module instead of individual services
   ],
   controllers: [AdvertiserController],
   providers: [
     AdvertiserService,
-    AdvertiserPaymentService,
-    AdvertiserDashboardService,
     AdvertiserCampaignService,
     AdvertiserWalletService,
     AdvertiserStatsService,
     AdvertiserTransactionService,
     AdvertiserMessageService,
+    AdvertiserPaymentService,
     CampaignService,
     S3Service,
   ],

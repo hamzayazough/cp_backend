@@ -1,4 +1,7 @@
 import { CampaignType } from '../enums/campaign-type';
+import { CampaignStatus } from '../enums/campaign-status';
+import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
+import { Advertiser } from './explore-campaign';
 
 export interface PromoterDashboardRequest {
   includeStats?: boolean;
@@ -30,28 +33,46 @@ export interface PromoterStats {
 export interface PromoterActiveCampaign {
   id: string;
   title: string;
+  mediaUrl?: string; // URL to the S3 campaign media (image/video)
   type: CampaignType;
-  status: string;
+  status: PromoterCampaignStatus;
   views: number;
   earnings: number;
-  advertiser: string;
-  deadline?: string;
+  advertiser: Advertiser;
+  deadline: string;
   createdAt: string;
   updatedAt: string;
+  isPublic: boolean;
+  requirements?: string[];
+  minBudget?: number; //if consultant or seller type
+  maxBudget?: number; //if consultant or seller type
+  meetingPlan?: string; //if consultant or seller type
+  meetingCount?: number; //if consultant or seller type
+  meetingDone?: boolean; // if consultant or seller type
+  cpv?: number; //if visibility type
+  maxViews?: number; //if visibility type
+  commissionPerSale?: number; //if salesman type
 }
 
 export interface PromoterSuggestedCampaign {
   id: string;
   title: string;
+  mediaUrl?: string; // URL to the S3 campaign media (image/video)
   type: CampaignType;
-  cpv?: number;
-  budget?: number;
-  advertiser: string;
-  tags: string[];
-  description: string;
-  requirements: string[];
-  estimatedEarnings: number;
-  applicationDeadline?: string;
+  status: CampaignStatus;
+  advertiser: Advertiser;
+  deadline: string;
+  createdAt: string;
+  updatedAt: string;
+  isPublic: boolean;
+  requirements?: string[];
+  minBudget?: number; //if consultant or seller type
+  maxBudget?: number; //if consultant or seller type
+  meetingPlan?: string; //if consultant or seller type
+  meetingCount?: number; //if consultant or seller type
+  cpv?: number; //if visibility type
+  maxViews?: number; //if visibility type
+  commissionPerSale?: number; //if salesman type
 }
 
 export interface PromoterTransaction {

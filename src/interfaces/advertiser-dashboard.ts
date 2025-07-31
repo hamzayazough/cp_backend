@@ -4,21 +4,30 @@ export interface AdvertiserStats {
   spendingThisWeek: number;
   spendingLastWeek: number;
   spendingPercentageChange: number;
+  spendingTotal: number;
   viewsToday: number;
   viewsYesterday: number;
   viewsPercentageChange: number;
+  viewsTotal: number;
   conversionsThisWeek: number;
   conversionsLastWeek: number;
   conversionsPercentageChange: number;
   activeCampaigns: number;
   pendingApprovalCampaigns: number;
 }
+export enum AdvertiserCampaignStatus {
+  ONGOING = 'ONGOING',
+  COMPLETED = 'COMPLETED',
+  WAITING_FOR_APPLICATIONS = 'WAITING_FOR_APPLICATIONS',
+  REVIEWING_APPLICATIONS = 'REVIEWING_APPLICATIONS',
+  PENDING_PROMOTER = 'PENDING_PROMOTER',
+}
 
 export interface AdvertiserActiveCampaign {
   id: string;
   title: string;
   type: CampaignType;
-  status: 'ONGOING' | 'AWAITING_PROMOTER' | 'COMPLETED' | 'PAUSED';
+  status: AdvertiserCampaignStatus;
   views: number;
   spent: number;
   applications: number;

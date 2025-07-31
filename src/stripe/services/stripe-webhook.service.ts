@@ -115,21 +115,21 @@ export class StripeWebhookService {
 
         // Payout Events
         case 'payout.created':
-          await this.handlePayoutCreated(event);
+          this.handlePayoutCreated(event);
           break;
         case 'payout.failed':
-          await this.handlePayoutFailed(event);
+          this.handlePayoutFailed(event);
           break;
         case 'payout.paid':
-          await this.handlePayoutPaid(event);
+          this.handlePayoutPaid(event);
           break;
 
         // Person Events (for business accounts)
         case 'person.created':
-          await this.handlePersonCreated(event);
+          this.handlePersonCreated(event);
           break;
         case 'person.updated':
-          await this.handlePersonUpdated(event);
+          this.handlePersonUpdated(event);
           break;
 
         default:
@@ -140,10 +140,7 @@ export class StripeWebhookService {
       this.logger.log(`Successfully processed webhook event: ${event.id}`);
     } catch (error: any) {
       this.logger.error(`Error processing webhook event ${event.id}:`, error);
-      await this.markEventProcessed(
-        event.id,
-        error?.message || 'Unknown error',
-      );
+      await this.markEventProcessed(event.id, error || 'Unknown error');
       throw error;
     }
   }
@@ -262,24 +259,36 @@ export class StripeWebhookService {
 
   private handlePayoutCreated(event: Stripe.Event): void {
     const payout = event.data.object as Stripe.Payout;
+    const destinationId =
+      typeof payout.destination === 'string'
+        ? payout.destination
+        : payout.destination?.id || 'unknown';
     this.logger.log(
-      `Payout created: ${payout.id} for account: ${String(payout.destination)}`,
+      `Payout created: ${payout.id} for account: ${destinationId}`,
     );
     // Additional payout tracking logic can be added here
   }
 
   private handlePayoutFailed(event: Stripe.Event): void {
     const payout = event.data.object as Stripe.Payout;
+    const destinationId =
+      typeof payout.destination === 'string'
+        ? payout.destination
+        : payout.destination?.id || 'unknown';
     this.logger.warn(
-      `Payout failed: ${payout.id} for account: ${String(payout.destination)}`,
+      `Payout failed: ${payout.id} for account: ${destinationId}`,
     );
     // Additional error handling logic can be added here
   }
 
   private handlePayoutPaid(event: Stripe.Event): void {
     const payout = event.data.object as Stripe.Payout;
+    const destinationId =
+      typeof payout.destination === 'string'
+        ? payout.destination
+        : payout.destination?.id || 'unknown';
     this.logger.log(
-      `Payout completed: ${payout.id} for account: ${String(payout.destination)}`,
+      `Payout completed: ${payout.id} for account: ${destinationId}`,
     );
     // Additional completion tracking logic can be added here
   }

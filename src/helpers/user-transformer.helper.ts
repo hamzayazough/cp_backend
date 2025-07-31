@@ -17,11 +17,12 @@ export function transformUserToPromoter(user: UserEntity): Promoter {
     youtubeUrl: user.youtubeUrl,
     twitterUrl: user.twitterUrl,
     websiteUrl: user.websiteUrl,
-    works: [], // Would need to fetch from promoter works
+    works: user.promoterDetails?.promoterWorks || [],
     location: user.promoterDetails?.location,
-    languagesSpoken: [], // Would need to fetch from promoter languages
-    followersEstimate: [], // Would need to fetch from follower estimates
-    skills: [], // Would need to fetch from promoter skills
+    languagesSpoken:
+      user.promoterDetails?.promoterLanguages?.map((l) => l.language) || [],
+    followersEstimate: user.promoterDetails?.followerEstimates || [],
+    skills: user.promoterDetails?.promoterSkills?.map((s) => s.skill) || [],
     verified: user.promoterDetails?.verified,
     totalSales: user.promoterDetails?.totalSales,
     numberOfCampaignDone: user.promoterDetails?.numberOfCampaignDone,

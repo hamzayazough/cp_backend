@@ -5,10 +5,17 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
 } from 'typeorm';
 import { UserRole } from '../../interfaces/user';
 import { AdvertiserDetailsEntity } from './advertiser-details.entity';
 import { PromoterDetailsEntity } from './promoter-details.entity';
+import { Transaction } from './transaction.entity';
+import { UniqueViewEntity } from './unique-view.entity';
+import { PromoterCampaign } from './promoter-campaign.entity';
+import { CampaignApplicationEntity } from './campaign-applications.entity';
+import { Wallet } from './wallet.entity';
+import { CampaignEntity } from './campaign.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -112,6 +119,14 @@ export class UserEntity {
   })
   numberOfConsultantCampaignDone?: number;
 
+  @Column({
+    name: 'used_currency',
+    type: 'varchar',
+    length: 10,
+    default: 'CAD',
+  })
+  usedCurrency: 'CAD' | 'USD';
+
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
     cascade: true,
@@ -122,4 +137,28 @@ export class UserEntity {
     cascade: true,
   })
   promoterDetails?: PromoterDetailsEntity;
+
+  @OneToMany(() => Transaction, (transaction) => transaction.user)
+  transactions?: Transaction[];
+
+  @OneToMany(() => UniqueViewEntity, (uniqueView) => uniqueView.promoter)
+  uniqueViews?: UniqueViewEntity[];
+
+  @OneToMany(
+    () => PromoterCampaign,
+    (promoterCampaign) => promoterCampaign.promoter,
+  )
+  promoterCampaigns?: PromoterCampaign[];
+
+  @OneToMany(
+    () => CampaignApplicationEntity,
+    (campaignApplication) => campaignApplication.promoter,
+  )
+  campaignApplications?: CampaignApplicationEntity[];
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet?: Wallet;
+
+  @OneToMany(() => CampaignEntity, (campaign) => campaign.advertiser)
+  campaigns?: CampaignEntity[];
 }

@@ -1,0 +1,36 @@
+export const FAILED_DASHBOARD_DATA = {
+  stats: {
+    spendingThisWeek: 0,
+    spendingLastWeek: 0,
+    spendingPercentageChange: 0,
+    spendingTotal: 0,
+    viewsToday: 0,
+    viewsYesterday: 0,
+    viewsPercentageChange: 0,
+    viewsTotal: 0,
+    conversionsThisWeek: 0,
+    conversionsLastWeek: 0,
+    conversionsPercentageChange: 0,
+    activeCampaigns: 0,
+    pendingApprovalCampaigns: 0,
+  },
+  activeCampaigns: [],
+  recentTransactions: [],
+  recentMessages: [],
+  wallet: {
+    balance: {
+      currentBalance: 0,
+      pendingCharges: 0,
+      totalSpent: 0,
+      totalDeposited: 0,
+      minimumBalance: 0,
+    },
+    campaignBudgets: {
+      totalAllocated: 0,
+      totalUsed: 0,
+      pendingPayments: 0,
+    },
+    totalLifetimeSpent: 0,
+    totalAvailableBalance: 0,
+  },
+};

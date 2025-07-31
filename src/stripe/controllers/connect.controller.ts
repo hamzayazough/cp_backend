@@ -19,6 +19,7 @@ import { User } from '../../auth/user.decorator';
 import { FirebaseUser } from '../../interfaces/firebase-user.interface';
 import { BusinessType } from '../../database/entities/stripe-enums';
 import { StripeConnectAccount } from 'src/database/entities';
+import { UserService } from 'src/services/user.service';
 
 // DTOs
 export class CreateAccountDto {
@@ -30,32 +31,14 @@ export class CreateAccountDto {
   lastName?: string;
 }
 
-// DEPRECATED DTO for business profile creation
-
-//  export class CreateBusinessProfileDto {
-//   businessName: string;
-//   businessType?: string; // 'llc', 'corporation', 'partnership', 'sole_proprietorship'
-//   taxId?: string;
-//   businessAddressLine1?: string;
-//   businessAddressLine2?: string;
-//   businessCity?: string;
-//   businessState?: string;
-//   businessPostalCode?: string;
-//   businessCountry?: string;
-//   businessPhone?: string;
-//   businessWebsite?: string;
-//   representativeFirstName?: string;
-//   representativeLastName?: string;
-//   representativeEmail?: string;
-//   representativeDob?: string;
-//   representativePhone?: string;
-// }
-
 @Controller('connect')
 export class ConnectController {
   private readonly logger = new Logger(ConnectController.name);
 
-  constructor(private readonly stripeConnectService: StripeConnectService) {}
+  constructor(
+    private readonly stripeConnectService: StripeConnectService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * Map string business type to enum
@@ -99,6 +82,8 @@ export class ConnectController {
 
       this.logger.log(`Creating Stripe Connect account for user ${user.uid}`);
 
+      const userEntity = await this.userService.getUserByFirebaseUid(user.uid);
+
       // Check if user already has an account first
       const existingAccount = await this.stripeConnectService.getAccountStatus(
         user.uid,
@@ -133,6 +118,7 @@ export class ConnectController {
         businessName: createAccountDto.businessName,
         firstName: createAccountDto.firstName,
         lastName: createAccountDto.lastName,
+        currency: userEntity.usedCurrency || 'USD',
       };
 
       const account =
@@ -435,66 +421,6 @@ export class ConnectController {
     }
   }
 
-  // /** DEPRECATED SINCE WE ARE GONNA USE STRIPE-HOSTED ONBOARDING
-
-  // -------------------------------------------------------------------------------------
-  //  * Create business profile for business accounts
-  //  */
-  // @Post('business-profile')
-  // async createBusinessProfile(
-  //   @User() user: FirebaseUser,
-  //   @Body() businessProfileDto: CreateBusinessProfileDto,
-  // ) {
-  //   try {
-  //     this.logger.log(`Creating business profile for user ${user.uid}`);
-
-  //     const businessProfile =
-  //       await this.stripeConnectService.createBusinessProfile(user.uid, {
-  //         businessName: businessProfileDto.businessName,
-  //         businessType: this.mapBusinessType(businessProfileDto.businessType),
-  //         taxId: businessProfileDto.taxId,
-  //         businessAddressLine1: businessProfileDto.businessAddressLine1,
-  //         businessAddressLine2: businessProfileDto.businessAddressLine2,
-  //         businessCity: businessProfileDto.businessCity,
-  //         businessState: businessProfileDto.businessState,
-  //         businessPostalCode: businessProfileDto.businessPostalCode,
-  //         businessCountry: businessProfileDto.businessCountry,
-  //         businessPhone: businessProfileDto.businessPhone,
-  //         businessWebsite: businessProfileDto.businessWebsite,
-  //         representativeFirstName: businessProfileDto.representativeFirstName,
-  //         representativeLastName: businessProfileDto.representativeLastName,
-  //         representativeEmail: businessProfileDto.representativeEmail,
-  //         representativeDob: businessProfileDto.representativeDob
-  //           ? new Date(businessProfileDto.representativeDob)
-  //           : undefined,
-  //         representativePhone: businessProfileDto.representativePhone,
-  //       });
-
-  //     return {
-  //       success: true,
-  //       data: {
-  //         id: businessProfile.id,
-  //         businessName: businessProfile.businessName,
-  //         businessType: businessProfile.businessType,
-  //         verificationStatus: businessProfile.verificationStatus,
-  //         createdAt: businessProfile.createdAt,
-  //       },
-  //       message: 'Business profile created successfully',
-  //     };
-  //   } catch (error) {
-  //     this.logger.error(
-  //       `Failed to create business profile for user ${user.uid}:`,
-  //       error,
-  //     );
-
-  //     throw new HttpException(
-  //       'Failed to create business profile',
-  //       HttpStatus.INTERNAL_SERVER_ERROR,
-  //     );
-  //   }
-  // }
-  // -------------------------------------------------------------------------------
-
   /**
    * OAuth callback endpoint for Stripe Connect onboarding completion
    * This handles the redirect from Stripe after onboarding is completed or cancelled
@@ -510,7 +436,6 @@ export class ConnectController {
     @Res() res?: Response,
   ) {
     try {
-      console.log('HEHEHEHEHEHEHE');
       this.logger.log('Received Stripe Connect callback', {
         code: code ? 'present' : 'missing',
         state,
@@ -535,7 +460,7 @@ export class ConnectController {
         });
 
         // Redirect to frontend with error
-        const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=${encodeURIComponent(error)}`;
+        const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=${encodeURIComponent(error)}`;
         return res.redirect(frontendUrl);
       }
 
@@ -556,10 +481,10 @@ export class ConnectController {
             // Mark as onboarded in our database
             await this.stripeConnectService.markAccountAsOnboarded(accountId);
 
-            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success&account=${accountId}`;
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success&account=${accountId}`;
             return res.redirect(frontendUrl);
           } else {
-            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=incomplete&account=${accountId}`;
+            const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=incomplete&account=${accountId}`;
             return res.redirect(frontendUrl);
           }
         } catch (verifyError) {
@@ -568,7 +493,7 @@ export class ConnectController {
             verifyError,
           );
 
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=verification_failed`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=verification_failed`;
           return res.redirect(frontendUrl);
         }
       }
@@ -593,12 +518,12 @@ export class ConnectController {
           );
 
           // Redirect to frontend with success
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success&account=${oauthResult.stripeAccountId}`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success&account=${oauthResult.stripeAccountId}`;
           return res.redirect(frontendUrl);
         } catch (exchangeError) {
           this.logger.error('Failed to exchange OAuth code', exchangeError);
 
-          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=exchange_failed`;
+          const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=exchange_failed`;
           return res.redirect(frontendUrl);
         }
       }
@@ -630,10 +555,10 @@ export class ConnectController {
                 stateData.accountId!,
               );
 
-              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=success`;
+              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=success`;
               return res.redirect(frontendUrl);
             } else {
-              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=incomplete`;
+              const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=incomplete`;
               return res.redirect(frontendUrl);
             }
           }
@@ -643,12 +568,12 @@ export class ConnectController {
       }
 
       // Fallback - redirect to dashboard
-      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=unknown`;
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=unknown`;
       return res.redirect(frontendUrl);
     } catch (error) {
       this.logger.error('OAuth callback handler failed', error);
 
-      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3001'}/dashboard?onboarded=error&error=callback_failed`;
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/dashboard?onboarded=error&error=callback_failed`;
       if (res) {
         return res.redirect(frontendUrl);
       }

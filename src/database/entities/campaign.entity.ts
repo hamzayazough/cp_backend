@@ -18,6 +18,8 @@ import { SocialPlatform } from '../../enums/social-platform';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
+import { Transaction } from './transaction.entity';
+import { CampaignApplicationEntity } from './campaign-applications.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -222,6 +224,16 @@ export class CampaignEntity {
   @Column({ name: 'discord_invite_link', type: 'text', nullable: true })
   discordInviteLink?: string;
 
+  @Column({
+    name: 'can_have_multiple_promoters',
+    type: 'boolean',
+    default: false,
+  })
+  canHaveMultiplePromoters?: boolean;
+
+  @Column({ name: 'currency', type: 'varchar', length: 10, default: 'USD' })
+  currency: 'USD' | 'CAD'; // USD or CAD
+
   @OneToMany(
     () => CampaignDeliverableEntity,
     (deliverable) => deliverable.campaign,
@@ -233,6 +245,9 @@ export class CampaignEntity {
     (promoterCampaign) => promoterCampaign.campaign,
   )
   promoterCampaigns!: PromoterCampaign[];
+
+  @OneToMany(() => Transaction, (transaction) => transaction.campaign)
+  transactions!: Transaction[];
 
   // Getter methods to filter deliverables based on the stored IDs
   get expectedDeliverables(): CampaignDeliverableEntity[] {
@@ -254,7 +269,13 @@ export class CampaignEntity {
   }
 
   // Relations
-  @ManyToOne(() => UserEntity, (user) => user.id)
+  @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
+
+  @OneToMany(
+    () => CampaignApplicationEntity,
+    (application) => application.campaign,
+  )
+  campaignApplications!: CampaignApplicationEntity[];
 }

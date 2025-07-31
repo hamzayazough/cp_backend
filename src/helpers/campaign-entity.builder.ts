@@ -9,6 +9,7 @@ import {
 import { CampaignStatus } from '../enums/campaign-status';
 import { CampaignType } from '../enums/campaign-type';
 import { SalesTrackingMethod } from 'src/enums/sales-tracking-method';
+import { UserEntity } from 'src/database/entities';
 
 export class CampaignEntityBuilder {
   /**
@@ -21,12 +22,12 @@ export class CampaignEntityBuilder {
     > & {
       mediaUrl?: string;
     },
-    userId: string,
+    user: UserEntity,
   ): CampaignEntity {
     const campaign = new CampaignEntity();
 
     // Set common fields
-    this.setCommonFields(campaign, campaignData, userId);
+    this.setCommonFields(campaign, campaignData, user);
 
     // Set type-specific fields
     this.setTypeSpecificFields(campaign, campaignData);
@@ -45,9 +46,9 @@ export class CampaignEntityBuilder {
     > & {
       mediaUrl?: string;
     },
-    userId: string,
+    user: UserEntity,
   ): void {
-    campaign.advertiserId = userId;
+    campaign.advertiserId = user.id;
     campaign.title = campaignData.title;
     campaign.description = campaignData.description;
     campaign.type = campaignData.type;
@@ -71,10 +72,11 @@ export class CampaignEntityBuilder {
     ) {
       campaign.status = CampaignStatus.ACTIVE;
     } else {
-      campaign.status = CampaignStatus.PAUSED;
+      campaign.status = CampaignStatus.INACTIVE;
     }
     campaign.createdAt = new Date();
     campaign.updatedAt = new Date();
+    campaign.currency = user.usedCurrency || 'USD';
 
     //TODO: generate discord invite link for this campaign
   }
@@ -130,11 +132,11 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.cpv = data.cpv;
     campaign.maxViews = data.maxViews;
-    // Store the advertiser's destination URL - this is where users will be redirected after tracking
     campaign.trackingLink = data.trackingLink;
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
-    campaign.budgetAllocated = (data.cpv * (data.maxViews || 1000)) / 100; // TODO: change that
+    campaign.budgetAllocated = (data.cpv * (data.maxViews || 10000)) / 100;
+    campaign.canHaveMultiplePromoters = data.isPublic;
   }
 
   /**

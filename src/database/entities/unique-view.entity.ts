@@ -5,7 +5,10 @@ import {
   CreateDateColumn,
   Index,
   Unique,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { UserEntity } from './user.entity';
 
 @Entity('unique_views')
 @Unique(['campaignId', 'promoterId', 'fingerprint'])
@@ -33,4 +36,9 @@ export class UniqueViewEntity {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  // Relations
+  @ManyToOne(() => UserEntity, (user) => user.uniqueViews)
+  @JoinColumn({ name: 'promoter_id' })
+  promoter: UserEntity;
 }

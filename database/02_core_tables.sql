@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
       -- Financial
     stripe_account_id VARCHAR(255),
     wallet_balance DECIMAL(10,2) DEFAULT 0.00 CHECK (wallet_balance >= 0),
+    used_currency VARCHAR(10) DEFAULT 'USD', -- Default currency for payments
     
     -- Campaign Statistics
     number_of_visibility_campaign_done INTEGER DEFAULT 0 CHECK (number_of_visibility_campaign_done >= 0),

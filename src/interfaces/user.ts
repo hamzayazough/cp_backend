@@ -35,6 +35,7 @@ export interface User {
   // Role-specific fields
   advertiserDetails?: AdvertiserDetails;
   promoterDetails?: PromoterDetails;
+  usedCurrency?: 'USD' | 'CAD'; // Currency used by the user
 }
 
 // Advertiser-specific data
@@ -79,7 +80,7 @@ export interface CreateUserDto {
   youtubeUrl: string;
   twitterUrl: string;
   websiteUrl: string;
-
+  usedCurrency: 'USD' | 'CAD';
   advertiserDetails?: AdvertiserDetailsDto;
 
   promoterDetails?: PromoterDetailsDto;

@@ -1,57 +1,52 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-
-// Services
-// import { PaymentServiceImpl } from '../services/payment-orchestrator.service'; // TODO: Disabled
-// import { PaymentProcessingService } from '../services/payment-processing.service'; // TODO: Disabled
-// import { AccountingService } from '../services/accounting.service'; // TODO: Disabled
-import { StripeIntegrationService } from '../services/stripe-integration.service';
+import { StripeModule } from '../stripe/stripe.module';
 
 // Entities
-import { CampaignEntity } from '../database/entities/campaign.entity';
-import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import { UserEntity } from 'src/database/entities';
+import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
+import { PaymentMethod } from '../database/entities/payment-method.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
-import { Transaction } from '../database/entities/transaction.entity';
 import { Wallet } from '../database/entities/wallet.entity';
-import { PromoterBalance as PromoterBalanceEntity } from '../database/entities/promoter-balance.entity';
-import { UserEntity } from '../database/entities/user.entity';
+import { Transaction } from '../database/entities/transaction.entity';
+import { CampaignEntity } from '../database/entities/campaign.entity';
+import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
+import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
+import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 
-/**
- * Payment Module - organizes all payment-related services
- */
+// Services
+import { PaymentMethodService } from '../stripe/services/payment-method.service';
+import { WalletService } from '../services/wallet.service';
+import { CampaignFundingService } from '../services/campaign/campaign-funding.service';
+import { PromoterPaymentService } from '../services/promoter/promoter-payment.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      CampaignEntity,
-      PromoterCampaign,
-      PaymentRecord,
-      Transaction,
-      Wallet,
-      PromoterBalanceEntity,
       UserEntity,
+      AdvertiserDetailsEntity,
+      PaymentMethod,
+      PaymentRecord,
+      Wallet,
+      Transaction,
+      CampaignEntity,
+      CampaignBudgetTracking,
+      StripeConnectAccount,
+      PromoterCampaign,
     ]),
+    StripeModule,
   ],
   providers: [
-    // Core payment services
-    // PaymentProcessingService, // TODO: Disabled until refactored to use PaymentRecord
-    // AccountingService, // TODO: Disabled until refactored to use PaymentRecord
-    StripeIntegrationService,
-
-    // Main orchestrator service
-    // {
-    //   provide: 'PaymentService',
-    //   useClass: PaymentServiceImpl,
-    // },
-
-    // Also provide as PaymentServiceImpl for direct injection
-    // PaymentServiceImpl, // TODO: Disabled until refactored to use PaymentRecord
+    PaymentMethodService,
+    WalletService,
+    CampaignFundingService,
+    PromoterPaymentService,
   ],
   exports: [
-    // 'PaymentService', // TODO: Disabled until refactored to use PaymentRecord
-    // PaymentServiceImpl, // TODO: Disabled until refactored to use PaymentRecord
-    // PaymentProcessingService, // TODO: Disabled until refactored to use PaymentRecord
-    // AccountingService, // TODO: Disabled until refactored to use PaymentRecord
-    StripeIntegrationService,
+    PaymentMethodService,
+    WalletService,
+    CampaignFundingService,
+    PromoterPaymentService,
   ],
 })
 export class PaymentModule {}
