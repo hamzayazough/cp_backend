@@ -39,6 +39,7 @@ import { CampaignType, CampaignStatus } from '../enums/campaign-type';
 import { ReviewCampaignApplicationResult } from 'src/interfaces/review-campaign-application-result';
 import { TransactionType } from 'src/database/entities/transaction.entity';
 import { FAILED_DASHBOARD_DATA } from 'src/constants/advertiser.constants';
+import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
 
 // Payment DTOs
 export class CompletePaymentSetupDto {
@@ -210,7 +211,9 @@ export class AdvertiserController {
     @Param('campaignId') campaignId: string,
     @Param('applicationId') applicationId: string, // Can be either application ID or promoter ID
     @Body()
-    reviewData: { action: 'ACCEPTED' | 'REJECTED' },
+    reviewData: {
+      action: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED;
+    },
     @Request() req: { user: FirebaseUser },
   ): Promise<{
     success: boolean;

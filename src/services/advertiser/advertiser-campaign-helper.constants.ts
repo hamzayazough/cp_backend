@@ -22,7 +22,11 @@ import {
   AdvertiserSalesmanCampaignDetails,
   PromoterApplicationInfo,
 } from 'src/interfaces/advertiser-campaign';
-import { CampaignApplicationEntity } from 'src/database/entities';
+import {
+  CampaignApplicationEntity,
+  ApplicationStatus,
+} from 'src/database/entities/campaign-applications.entity';
+import { UserEntity } from '../../database/entities/user.entity';
 /**
  * Constants for advertiser campaign operations
  */
@@ -515,4 +519,124 @@ export const DATE_UTILITIES = {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0);
   },
+} as const;
+
+/**
+ * Campaign management utilities for advertiser operations
+ */
+export const CAMPAIGN_MANAGEMENT_UTILITIES = {
+  /**
+   * Extract S3 key from URL
+   */
+  extractS3KeyFromUrl: (url: string): string => {
+    // Remove the base S3 URL to get just the key
+    const urlParts = url.split('/');
+    return urlParts.slice(3).join('/'); // Remove protocol, domain, and bucket
+  },
+} as const;
+
+/**
+ * Entity builders for campaign management operations
+ */
+export const CAMPAIGN_MANAGEMENT_BUILDERS = {
+  /**
+   * Build promoter campaign entity for accepted application
+   */
+  buildPromoterCampaignFromApplication: (
+    promoterId: string,
+    campaignId: string,
+  ): Partial<PromoterCampaign> => ({
+    promoterId,
+    campaignId,
+    status: PromoterCampaignStatus.ONGOING,
+    viewsGenerated: 0,
+    earnings: 0,
+  }),
+
+  /**
+   * Build application review result
+   */
+  buildApplicationReviewResult: (
+    applicationId: string,
+    status: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED,
+    campaignId: string,
+    promoterId: string,
+  ) => ({
+    applicationId,
+    status,
+    campaignId,
+    promoterId,
+  }),
+
+  /**
+   * Build campaign deletion success response
+   */
+  buildCampaignDeletionResponse: (success: boolean, message: string) => ({
+    success,
+    message,
+  }),
+} as const;
+
+/**
+ * Validation utilities for campaign management
+ */
+export const CAMPAIGN_MANAGEMENT_VALIDATORS = {
+  /**
+   * Validate advertiser exists
+   */
+  validateAdvertiserExists: (advertiser: UserEntity | null): UserEntity => {
+    if (!advertiser) {
+      throw new Error('Advertiser not found');
+    }
+    return advertiser;
+  },
+
+  /**
+   * Validate campaign ownership
+   */
+  validateCampaignOwnership: (
+    campaign: CampaignEntity | null,
+    advertiserId: string,
+  ): CampaignEntity => {
+    if (!campaign || campaign.advertiserId !== advertiserId) {
+      throw new Error('Campaign not found or access denied');
+    }
+    return campaign;
+  },
+
+  /**
+   * Validate application exists
+   */
+  validateApplicationExists: (
+    application: CampaignApplicationEntity | null,
+  ): CampaignApplicationEntity => {
+    if (!application) {
+      throw new Error('Application not found');
+    }
+    return application;
+  },
+
+  /**
+   * Validate campaign can be deleted
+   */
+  validateCampaignCanBeDeleted: (promoterCampaignCount: number): void => {
+    if (promoterCampaignCount > 0) {
+      throw new Error(
+        'Cannot delete campaign: there are promoters associated with this campaign.',
+      );
+    }
+  },
+} as const;
+
+/**
+ * Error messages for campaign management operations
+ */
+export const CAMPAIGN_MANAGEMENT_MESSAGES = {
+  ADVERTISER_NOT_FOUND: 'Advertiser not found',
+  CAMPAIGN_NOT_FOUND: 'Campaign not found or access denied',
+  APPLICATION_NOT_FOUND: 'Application not found',
+  CAMPAIGN_DELETION_SUCCESS: 'Campaign deleted successfully',
+  CAMPAIGN_HAS_PROMOTERS:
+    'Cannot delete campaign: there are promoters associated with this campaign.',
+  S3_DELETION_ERROR: 'Error deleting campaign media from S3:',
 } as const;

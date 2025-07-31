@@ -2,16 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from 'src/database/entities';
-import { CampaignEntity } from '../../database/entities/campaign.entity';
-import { Transaction } from '../../database/entities/transaction.entity';
-import { Wallet } from '../../database/entities/wallet.entity';
 import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
-import { MessageThread, Message } from '../../database/entities/message.entity';
 import {
   CampaignApplicationEntity,
   ApplicationStatus,
 } from '../../database/entities/campaign-applications.entity';
-import { PromoterCampaignStatus } from '../../database/entities/promoter-campaign.entity';
 import {
   GetAdvertiserDashboardRequest,
   AdvertiserDashboardData,
@@ -27,65 +22,62 @@ import { AdvertiserWalletService } from './advertiser-wallet.service';
 import { AdvertiserStatsService } from './advertiser-stats.service';
 import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
-import { UserType } from 'src/enums/user-type';
 import { ReviewCampaignApplicationResult } from '../../interfaces/review-campaign-application-result';
 import { S3Service } from '../s3.service';
+import { CAMPAIGN_MANAGEMENT_BUILDERS } from './advertiser-campaign-helper.constants';
+import {
+  ADVERTISER_RELATIONS,
+  ADVERTISER_SERVICE_MESSAGES,
+  ADVERTISER_SERVICE_VALIDATORS,
+  ADVERTISER_SERVICE_UTILS,
+  ADVERTISER_SERVICE_TRANSFORMERS,
+  ADVERTISER_SERVICE_BUILDERS,
+} from './advertiser-service-helper.constants';
 
 @Injectable()
 export class AdvertiserService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
-    @InjectRepository(CampaignEntity)
-    private campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
-    @InjectRepository(Wallet)
-    private walletRepository: Repository<Wallet>,
     @InjectRepository(PromoterCampaign)
     private promoterCampaignRepository: Repository<PromoterCampaign>,
-    @InjectRepository(MessageThread)
-    private messageThreadRepository: Repository<MessageThread>,
-    @InjectRepository(Message)
-    private messageRepository: Repository<Message>,
-    @InjectRepository(CampaignApplicationEntity)
-    private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     private campaignService: AdvertiserCampaignService,
     private walletService: AdvertiserWalletService,
     private statsService: AdvertiserStatsService,
     private transactionService: AdvertiserTransactionService,
     private messageService: AdvertiserMessageService,
-    private readonly s3Service: S3Service, // <-- Inject S3Service
+    private readonly s3Service: S3Service,
   ) {}
 
   async getDashboardData(
     firebaseUid: string,
     request: GetAdvertiserDashboardRequest,
   ): Promise<AdvertiserDashboardData> {
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
-    });
+    const advertiser = await this.userRepository.findOne(
+      ADVERTISER_SERVICE_TRANSFORMERS.createAdvertiserLookupWithRelations(
+        firebaseUid,
+        ADVERTISER_RELATIONS.DASHBOARD,
+      ),
+    );
 
-    if (!advertiser) {
-      throw new Error('Advertiser not found');
-    }
+    const validatedAdvertiser =
+      ADVERTISER_SERVICE_VALIDATORS.validateAdvertiserExists(advertiser);
 
-    const advertiserId = advertiser.id;
     const data: AdvertiserDashboardData = {
-      stats: await this.statsService.getAdvertiserStats(advertiserId),
+      stats: await this.statsService.getAdvertiserStats(validatedAdvertiser.id),
       activeCampaigns: await this.campaignService.getActiveCampaigns(
-        advertiserId,
+        validatedAdvertiser.id,
         request.activeCampaignLimit || 10,
       ),
       recentTransactions: await this.transactionService.getRecentTransactions(
-        advertiserId,
+        validatedAdvertiser.id,
         request.transactionLimit || 10,
       ),
       recentMessages: await this.messageService.getRecentMessages(
-        advertiserId,
+        validatedAdvertiser.id,
         request.messageLimit || 10,
       ),
-      wallet: await this.walletService.getWalletInfo(advertiserId),
+      wallet: await this.walletService.getWalletInfo(validatedAdvertiser.id),
     };
 
     return data;
@@ -95,15 +87,17 @@ export class AdvertiserService {
     firebaseUid: string,
     request: AdvertiserCampaignListRequest,
   ): Promise<AdvertiserCampaignListResponse> {
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
-    });
+    const advertiser = await this.userRepository.findOne(
+      ADVERTISER_SERVICE_TRANSFORMERS.createAdvertiserLookup(firebaseUid),
+    );
 
-    if (!advertiser) {
-      throw new Error('Advertiser not found');
-    }
+    const validatedAdvertiser =
+      ADVERTISER_SERVICE_VALIDATORS.validateAdvertiserExists(advertiser);
 
-    return this.campaignService.getCampaignsList(advertiser.id, request);
+    return this.campaignService.getCampaignsList(
+      validatedAdvertiser.id,
+      request,
+    );
   }
 
   getCampaignFilters(): CampaignFilters {
@@ -114,134 +108,191 @@ export class AdvertiserService {
     firebaseUid: string,
     campaignId: string,
     applicationId: string,
-    status: 'ACCEPTED' | 'REJECTED',
+    status: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED,
   ): Promise<ReviewCampaignApplicationResult> {
-    // Find advertiser by Firebase UID
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
-    });
+    // Get advertiser with campaigns and applications
+    const advertiser = await this.userRepository.findOne(
+      ADVERTISER_SERVICE_TRANSFORMERS.createAdvertiserLookupWithRelations(
+        firebaseUid,
+        ADVERTISER_RELATIONS.CAMPAIGN_MANAGEMENT,
+      ),
+    );
+    const validatedAdvertiser =
+      ADVERTISER_SERVICE_VALIDATORS.validateAdvertiserExists(advertiser);
 
-    if (!advertiser) {
-      throw new Error('Advertiser not found');
-    }
+    // Find campaign within advertiser's campaigns
+    const campaign = ADVERTISER_SERVICE_UTILS.findCampaignById(
+      validatedAdvertiser,
+      campaignId,
+    );
+    const validatedCampaign =
+      ADVERTISER_SERVICE_VALIDATORS.validateCampaignExists(campaign);
 
-    // Verify that the campaign belongs to this advertiser
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId, advertiserId: advertiser.id },
-    });
-
-    if (!campaign) {
-      throw new Error('Campaign not found or access denied');
-    } // Find the application - try by application ID first, then by promoter ID
-    let application = await this.campaignApplicationRepository.findOne({
-      where: { id: applicationId, campaignId: campaignId },
-      relations: ['promoter'],
-    });
-
-    // If not found by application ID, try to find by promoter ID
-    if (!application) {
-      application = await this.campaignApplicationRepository.findOne({
-        where: { promoterId: applicationId, campaignId: campaignId },
-        relations: ['promoter'],
-      });
-    }
-
-    if (!application) {
-      throw new Error('Application not found');
-    }
+    // Find application within campaign's applications
+    const application = ADVERTISER_SERVICE_UTILS.findApplicationInCampaign(
+      validatedCampaign,
+      applicationId,
+    );
+    const validatedApplication =
+      ADVERTISER_SERVICE_VALIDATORS.validateApplicationExists(application);
 
     // Update application status
-    application.status =
-      status === 'ACCEPTED'
-        ? ApplicationStatus.ACCEPTED
-        : ApplicationStatus.REJECTED;
-    await this.campaignApplicationRepository.save(application);
-    // If accepted, create a PromoterCampaign record
-    if (status === 'ACCEPTED') {
-      const existingPromoterCampaign =
-        await this.promoterCampaignRepository.findOne({
-          where: {
-            promoterId: application.promoterId,
-            campaignId: campaignId,
-          },
-        });
+    await this.updateApplicationStatus(validatedApplication, status);
 
-      if (!existingPromoterCampaign) {
-        const promoterCampaign = this.promoterCampaignRepository.create({
-          promoterId: application.promoterId,
-          campaignId: campaignId,
-          status: PromoterCampaignStatus.ONGOING,
-          viewsGenerated: 0,
-          earnings: 0,
-        });
-        await this.promoterCampaignRepository.save(promoterCampaign);
-      }
+    // Create promoter campaign if accepted
+    // Note: updateApplicationStatus automatically deletes other pending applications when accepting
+    if (status === ApplicationStatus.ACCEPTED) {
+      await this.createPromoterCampaignIfNotExists(
+        validatedApplication.promoterId,
+        campaignId,
+      );
     }
 
-    return {
-      applicationId: application.id,
-      status: application.status,
-      campaignId: campaignId,
-      promoterId: application.promoterId,
-    };
+    return CAMPAIGN_MANAGEMENT_BUILDERS.buildApplicationReviewResult(
+      validatedApplication.id,
+      status,
+      campaignId,
+      validatedApplication.promoterId,
+    );
   }
 
   async deleteCampaign(
     firebaseUid: string,
     campaignId: string,
   ): Promise<{ success: boolean; message: string }> {
-    // Find advertiser by Firebase UID
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
-    });
-    if (!advertiser) {
-      return { success: false, message: 'Advertiser not found' };
-    }
-    // Verify campaign belongs to this advertiser
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId, advertiserId: advertiser.id },
-    });
-    if (!campaign) {
-      return { success: false, message: 'Campaign not found or access denied' };
-    }
-    // Check for any associated PromoterCampaigns
-    const promoterCampaignCount = await this.promoterCampaignRepository.count({
-      where: { campaignId },
-    });
-    if (promoterCampaignCount > 0) {
-      return {
-        success: false,
-        message:
-          'Cannot delete campaign: there are promoters associated with this campaign.',
-      };
-    }
-    // Delete media from S3 if exists
-    if (campaign.mediaUrl) {
-      try {
-        const key = this.s3Service.extractKeyFromUrl(campaign.mediaUrl);
-        await this.s3Service.deleteObject(key);
-      } catch (err) {
-        // Log error but continue with campaign deletion
-        console.error('Error deleting campaign media from S3:', err);
+    try {
+      // Get advertiser with campaigns and applications
+      const advertiser = await this.userRepository.findOne(
+        ADVERTISER_SERVICE_TRANSFORMERS.createAdvertiserLookupWithRelations(
+          firebaseUid,
+          ADVERTISER_RELATIONS.CAMPAIGN_MANAGEMENT,
+        ),
+      );
+      const validatedAdvertiser =
+        ADVERTISER_SERVICE_VALIDATORS.validateAdvertiserExists(advertiser);
+
+      // Find campaign within advertiser's campaigns
+      const campaign = ADVERTISER_SERVICE_UTILS.findCampaignById(
+        validatedAdvertiser,
+        campaignId,
+      );
+      const validatedCampaign =
+        ADVERTISER_SERVICE_VALIDATORS.validateCampaignExists(campaign);
+
+      // Check if campaign can be deleted (no accepted applications)
+      const acceptedApplicationCount =
+        ADVERTISER_SERVICE_UTILS.countPromoterCampaignsFromApplications(
+          validatedCampaign,
+        );
+      ADVERTISER_SERVICE_VALIDATORS.validateCampaignCanBeDeleted(
+        acceptedApplicationCount,
+      );
+
+      // Delete media from S3 if exists
+      if (validatedCampaign.mediaUrl) {
+        await this.deleteCampaignMediaFromS3(validatedCampaign.mediaUrl);
       }
+
+      // Delete campaign using userRepository to maintain entity relationships
+      await this.userRepository.manager.transaction(async (manager) => {
+        await manager.delete('campaigns', campaignId);
+      });
+
+      return ADVERTISER_SERVICE_BUILDERS.buildCampaignDeletionResponse(
+        true,
+        ADVERTISER_SERVICE_MESSAGES.CAMPAIGN_DELETION_SUCCESS,
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : ADVERTISER_SERVICE_MESSAGES.CAMPAIGN_NOT_FOUND;
+      return ADVERTISER_SERVICE_BUILDERS.buildCampaignDeletionResponse(
+        false,
+        errorMessage,
+      );
     }
-    // Delete campaign
-    await this.campaignRepository.delete(campaignId);
-    return { success: true, message: 'Campaign deleted successfully' };
   }
 
   async getCampaignById(
     firebaseUid: string,
     campaignId: string,
   ): Promise<CampaignAdvertiser> {
-    const advertiser = await this.userRepository.findOne({
-      where: { firebaseUid: firebaseUid, role: UserType.ADVERTISER },
+    const advertiser = await this.userRepository.findOne(
+      ADVERTISER_SERVICE_TRANSFORMERS.createAdvertiserLookup(firebaseUid),
+    );
+
+    const validatedAdvertiser =
+      ADVERTISER_SERVICE_VALIDATORS.validateAdvertiserExists(advertiser);
+
+    return this.campaignService.getCampaignById(
+      validatedAdvertiser.id,
+      campaignId,
+    );
+  }
+
+  /**
+   * Helper method to update application status using entity manager
+   */
+  private async updateApplicationStatus(
+    application: CampaignApplicationEntity,
+    status: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED,
+  ): Promise<void> {
+    await this.userRepository.manager.transaction(async (manager) => {
+      // Update the current application status
+      application.status = status;
+      await manager.save(application);
+
+      // If accepted, delete all other pending applications for this campaign
+      if (status === ApplicationStatus.ACCEPTED) {
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from('campaign_applications')
+          .where('campaign_id = :campaignId', {
+            campaignId: application.campaignId,
+          })
+          .andWhere('status = :status', { status: ApplicationStatus.PENDING })
+          .execute();
+      }
     });
+  }
 
-    if (!advertiser) {
-      throw new Error('Advertiser not found');
+  /**
+   * Helper method to create promoter campaign if it doesn't exist
+   */
+  private async createPromoterCampaignIfNotExists(
+    promoterId: string,
+    campaignId: string,
+  ): Promise<void> {
+    const existingPromoterCampaign =
+      await this.promoterCampaignRepository.findOne({
+        where: {
+          promoterId: promoterId,
+          campaignId: campaignId,
+        },
+      });
+
+    if (!existingPromoterCampaign) {
+      const promoterCampaign =
+        CAMPAIGN_MANAGEMENT_BUILDERS.buildPromoterCampaignFromApplication(
+          promoterId,
+          campaignId,
+        );
+      await this.promoterCampaignRepository.save(promoterCampaign);
     }
+  }
 
-    return this.campaignService.getCampaignById(advertiser.id, campaignId);
+  /**
+   * Helper method to delete campaign media from S3
+   */
+  private async deleteCampaignMediaFromS3(mediaUrl: string): Promise<void> {
+    try {
+      const key = this.s3Service.extractKeyFromUrl(mediaUrl);
+      await this.s3Service.deleteObject(key);
+    } catch (err) {
+      // Log error but continue with campaign deletion
+      console.error(ADVERTISER_SERVICE_MESSAGES.S3_DELETION_ERROR, err);
+    }
   }
 }
