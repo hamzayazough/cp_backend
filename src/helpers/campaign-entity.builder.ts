@@ -130,11 +130,10 @@ export class CampaignEntityBuilder {
   ): void {
     campaign.cpv = data.cpv;
     campaign.maxViews = data.maxViews;
-    // Store the advertiser's destination URL - this is where users will be redirected after tracking
     campaign.trackingLink = data.trackingLink;
     campaign.minFollowers = data.minFollowers;
     campaign.currentViews = 0;
-    campaign.budgetAllocated = (data.cpv * (data.maxViews || 10000)) / 100; // TODO: change that
+    campaign.budgetAllocated = (data.cpv * (data.maxViews || 10000)) / 100;
     campaign.canHaveMultiplePromoters = data.isPublic;
   }
 
