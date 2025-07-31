@@ -308,15 +308,17 @@ export class CampaignFundingService {
     paymentMethodId: string,
   ): Promise<FundingResult> {
     const advertiserDetails = await this.findAdvertiserDetails(user.id);
+    const transferGroup = `campaign_${campaignId}`;
 
     // Create payment intent
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount,
-      currency: 'usd',
+      currency: user.usedCurrency.toLowerCase(),
       customer: advertiserDetails.stripeCustomerId,
       payment_method: paymentMethodId,
       confirmation_method: 'automatic',
       confirm: true,
+      transfer_group: transferGroup,
       return_url: `${process.env.FRONTEND_URL}/payment-success`,
       description: `Campaign funding for campaign ${campaignId}`,
       metadata: {
@@ -333,7 +335,7 @@ export class CampaignFundingService {
       campaignId,
       userId: user.id,
       amountCents: amount,
-      currency: 'USD',
+      currency: user.usedCurrency,
       paymentType: 'CAMPAIGN_FUNDING',
       status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
       description: `Campaign funding for campaign ${campaignId}`,

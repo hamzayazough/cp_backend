@@ -24,6 +24,8 @@ import {
   SalesmanCampaign,
 } from '../../interfaces/explore-campaign';
 import { CampaignStatus, CampaignType } from '../../enums/campaign-type';
+import { getCachedFxRate } from '../../helpers/currency.helper';
+import { AmountAfterApplicationFee } from 'src/constants/application-fees';
 
 @Injectable()
 export class PromoterCampaignService {
@@ -37,6 +39,33 @@ export class PromoterCampaignService {
     @InjectRepository(CampaignApplicationEntity)
     private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
   ) {}
+
+  /**
+   * Convert amount from campaign currency to promoter currency
+   * @param amount Amount in campaign currency
+   * @param campaignCurrency Campaign's currency (USD or CAD)
+   * @param promoterCurrency Promoter's currency (USD or CAD)
+   * @returns Amount converted to promoter's currency
+   */
+  private convertCurrencyAmount(
+    amount: number,
+    campaignCurrency: string,
+    promoterCurrency: 'USD' | 'CAD',
+  ): number {
+    if (campaignCurrency === promoterCurrency) {
+      return Number(amount.toFixed(2));
+    }
+
+    const fxRate = getCachedFxRate(
+      campaignCurrency as 'USD' | 'CAD',
+      promoterCurrency,
+    );
+    return Number(
+      AmountAfterApplicationFee(Number((amount * fxRate).toFixed(2))).toFixed(
+        2,
+      ),
+    );
+  }
 
   /**
    * Get promoter's active campaigns using UserEntity relations
@@ -71,10 +100,14 @@ export class PromoterCampaignService {
    * Convert PromoterCampaign entities to PromoterActiveCampaign DTOs
    */
   convertToPromoterActiveCampaignDto(
+    userCurrency: 'USD' | 'CAD',
     promoterCampaigns: PromoterCampaign[],
   ): PromoterActiveCampaign[] {
     return promoterCampaigns.map((pc) => {
-      const baseCampaign = this.createBaseCampaignDto(pc.campaign);
+      const baseCampaign = this.createBaseCampaignDto(
+        userCurrency,
+        pc.campaign,
+      );
 
       return {
         ...baseCampaign,
@@ -127,10 +160,14 @@ export class PromoterCampaignService {
    * Convert CampaignEntity to PromoterSuggestedCampaign DTOs
    */
   convertToPromoterSuggestedCampaignDto(
+    promoterCurrency: 'USD' | 'CAD',
     campaigns: CampaignEntity[],
   ): PromoterSuggestedCampaign[] {
     return campaigns.map((campaign) => {
-      const baseCampaign = this.createBaseCampaignDto(campaign);
+      const baseCampaign = this.createBaseCampaignDto(
+        promoterCurrency,
+        campaign,
+      );
 
       return {
         ...baseCampaign,
@@ -145,7 +182,10 @@ export class PromoterCampaignService {
   /**
    * Common method to create base campaign DTO from CampaignEntity
    */
-  private createBaseCampaignDto(campaign: CampaignEntity) {
+  private createBaseCampaignDto(
+    promoterCurrency: 'USD' | 'CAD',
+    campaign: CampaignEntity,
+  ) {
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
       companyName:
@@ -177,25 +217,49 @@ export class PromoterCampaignService {
     // Add type-specific fields
     switch (campaign.type) {
       case CampaignType.CONSULTANT:
-      case CampaignType.SELLER:
+      case CampaignType.SELLER: {
+        // Convert budget amounts from campaign currency to promoter currency
+        const campaignCurrency = campaign.currency || 'USD';
+        const minBudgetConverted = this.convertCurrencyAmount(
+          campaign.minBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+        const maxBudgetConverted = this.convertCurrencyAmount(
+          campaign.maxBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
-          minBudget: campaign.minBudget,
-          maxBudget: campaign.maxBudget,
+          minBudget: minBudgetConverted,
+          maxBudget: maxBudgetConverted,
           meetingPlan: campaign.meetingPlan,
           meetingCount: campaign.meetingCount,
         };
-      case CampaignType.VISIBILITY:
+      }
+      case CampaignType.VISIBILITY: {
+        // Convert CPV from campaign currency to promoter currency
+        const visibilityCampaignCurrency = campaign.currency || 'USD';
+        const cpvConverted = this.convertCurrencyAmount(
+          campaign.cpv || 0,
+          visibilityCampaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
-          cpv: campaign.cpv,
+          cpv: cpvConverted,
           maxViews: campaign.maxViews,
         };
-      case CampaignType.SALESMAN:
+      }
+      case CampaignType.SALESMAN: {
         return {
           ...baseCampaign,
-          commissionPerSale: campaign.commissionPerSale,
+          commissionPerSale: campaign.commissionPerSale || 0,
         };
+      }
       default:
         return baseCampaign;
     }
@@ -238,7 +302,11 @@ export class PromoterCampaignService {
 
     // Transform campaigns to the required format
     const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
-      this.transformCampaignToUnion(campaign, promoter.id),
+      this.transformCampaignToUnion(
+        campaign,
+        promoter.id,
+        promoter.usedCurrency || 'USD',
+      ),
     );
 
     return {
@@ -373,6 +441,7 @@ export class PromoterCampaignService {
   transformCampaignToUnion(
     campaign: CampaignEntity,
     promoterId: string,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): CampaignUnion {
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
@@ -412,17 +481,39 @@ export class PromoterCampaignService {
     };
 
     switch (campaign.type) {
-      case CampaignType.VISIBILITY:
+      case CampaignType.VISIBILITY: {
+        // Convert CPV from campaign currency to promoter currency
+        const campaignCurrency = campaign.currency || 'USD';
+        const cpvConverted = this.convertCurrencyAmount(
+          campaign.cpv || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
           type: CampaignType.VISIBILITY,
           maxViews: campaign.maxViews || 0,
           currentViews: campaign.currentViews || 0,
-          cpv: campaign.cpv || 0,
+          cpv: cpvConverted,
           minFollowers: campaign.minFollowers,
         } as VisibilityCampaign;
+      }
 
-      case CampaignType.CONSULTANT:
+      case CampaignType.CONSULTANT: {
+        // Convert budget amounts from campaign currency to promoter currency
+        const campaignCurrency = campaign.currency || 'USD';
+        const minBudgetConverted = this.convertCurrencyAmount(
+          campaign.minBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+        const maxBudgetConverted = this.convertCurrencyAmount(
+          campaign.maxBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
           type: CampaignType.CONSULTANT,
@@ -432,34 +523,58 @@ export class PromoterCampaignService {
           ),
           expertiseRequired: campaign.expertiseRequired,
           meetingCount: campaign.meetingCount || 0,
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
+          maxBudget: maxBudgetConverted,
+          minBudget: minBudgetConverted,
         } as ConsultantCampaign;
+      }
 
-      case CampaignType.SELLER:
+      case CampaignType.SELLER: {
+        // Convert budget amounts from campaign currency to promoter currency
+        const campaignCurrency = campaign.currency || 'USD';
+        const minBudgetConverted = this.convertCurrencyAmount(
+          campaign.minBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+        const maxBudgetConverted = this.convertCurrencyAmount(
+          campaign.maxBudget || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
           type: CampaignType.SELLER,
           sellerRequirements: campaign.sellerRequirements,
           deliverables: campaign.deliverables.map((cd) => cd.deliverable),
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
+          maxBudget: maxBudgetConverted,
+          minBudget: minBudgetConverted,
           minFollowers: campaign.minFollowers,
           needMeeting: campaign.needMeeting || false,
           meetingPlan: campaign.meetingPlan!,
           meetingCount: campaign.meetingCount || 0,
         } as SellerCampaign;
+      }
 
-      case CampaignType.SALESMAN:
+      case CampaignType.SALESMAN: {
+        // Convert commission from campaign currency to promoter currency
+        const campaignCurrency = campaign.currency || 'USD';
+        const commissionConverted = this.convertCurrencyAmount(
+          campaign.commissionPerSale || 0,
+          campaignCurrency,
+          promoterCurrency,
+        );
+
         return {
           ...baseCampaign,
           type: CampaignType.SALESMAN,
-          commissionPerSale: campaign.commissionPerSale || 0,
+          commissionPerSale: commissionConverted,
           trackSalesVia: campaign.trackSalesVia!,
           codePrefix: campaign.codePrefix,
           refLink: campaign.trackingLink,
           minFollowers: campaign.minFollowers,
         } as SalesmanCampaign;
+      }
       default: {
         // This should never happen
         const exhaustiveCheck: never = campaign.type;

@@ -19,6 +19,7 @@ import { User } from '../../auth/user.decorator';
 import { FirebaseUser } from '../../interfaces/firebase-user.interface';
 import { BusinessType } from '../../database/entities/stripe-enums';
 import { StripeConnectAccount } from 'src/database/entities';
+import { UserService } from 'src/services/user.service';
 
 // DTOs
 export class CreateAccountDto {
@@ -34,7 +35,10 @@ export class CreateAccountDto {
 export class ConnectController {
   private readonly logger = new Logger(ConnectController.name);
 
-  constructor(private readonly stripeConnectService: StripeConnectService) {}
+  constructor(
+    private readonly stripeConnectService: StripeConnectService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * Map string business type to enum
@@ -78,6 +82,8 @@ export class ConnectController {
 
       this.logger.log(`Creating Stripe Connect account for user ${user.uid}`);
 
+      const userEntity = await this.userService.getUserByFirebaseUid(user.uid);
+
       // Check if user already has an account first
       const existingAccount = await this.stripeConnectService.getAccountStatus(
         user.uid,
@@ -112,6 +118,7 @@ export class ConnectController {
         businessName: createAccountDto.businessName,
         firstName: createAccountDto.firstName,
         lastName: createAccountDto.lastName,
+        currency: userEntity.usedCurrency || 'USD',
       };
 
       const account =
@@ -429,7 +436,6 @@ export class ConnectController {
     @Res() res?: Response,
   ) {
     try {
-      console.log('HEHEHEHEHEHEHE');
       this.logger.log('Received Stripe Connect callback', {
         code: code ? 'present' : 'missing',
         state,

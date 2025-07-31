@@ -47,7 +47,7 @@ export class AdvertiserCampaignService {
       return [];
     }
 
-    const campaigns = (advertiser.campaigns as CampaignEntity[])
+    const campaigns = advertiser.campaigns
       .filter((c) => c.status === CampaignStatus.ACTIVE)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .slice(0, limit);
@@ -103,7 +103,7 @@ export class AdvertiserCampaignService {
     }
 
     // Apply filters using helper validators
-    let campaigns = advertiser.campaigns as CampaignEntity[];
+    let campaigns = advertiser.campaigns;
     campaigns = CAMPAIGN_VALIDATORS.filterByStatus(campaigns, request.status);
     campaigns = CAMPAIGN_VALIDATORS.filterByType(campaigns, request.type);
     campaigns = CAMPAIGN_VALIDATORS.filterBySearch(
@@ -172,9 +172,7 @@ export class AdvertiserCampaignService {
       throw new Error('Advertiser not found');
     }
 
-    const campaign = (advertiser.campaigns as CampaignEntity[]).find(
-      (c) => c.id === campaignId,
-    );
+    const campaign = advertiser.campaigns.find((c) => c.id === campaignId);
 
     if (!campaign) {
       throw new Error('Campaign not found');
@@ -257,7 +255,7 @@ export class AdvertiserCampaignService {
       };
     }
 
-    const campaigns = advertiser.campaigns as CampaignEntity[];
+    const campaigns = advertiser.campaigns;
 
     // Calculate summary metrics using campaigns
     const totalActiveCampaigns = campaigns.filter(

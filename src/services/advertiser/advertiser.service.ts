@@ -70,7 +70,7 @@ export class AdvertiserService {
         request.activeCampaignLimit || 10,
       ),
       recentTransactions: await this.transactionService.getRecentTransactions(
-        validatedAdvertiser.id,
+        validatedAdvertiser,
         request.transactionLimit || 10,
       ),
       recentMessages: await this.messageService.getRecentMessages(

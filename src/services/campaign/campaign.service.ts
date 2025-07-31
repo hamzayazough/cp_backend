@@ -129,7 +129,7 @@ export class CampaignService {
       // Build campaign entity using helper
       const campaign = CampaignEntityBuilder.buildCampaignEntity(
         campaignData,
-        validatedUser.id,
+        validatedUser,
       );
 
       // Handle budget allocation if required

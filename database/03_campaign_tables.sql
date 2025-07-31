@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
     can_have_multiple_promoters BOOLEAN DEFAULT FALSE,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    currency VARCHAR(10) DEFAULT 'USD', -- Currency for the campaign budget
 );
 
 -- Campaign applications (for CONSULTANT and SELLER campaigns)

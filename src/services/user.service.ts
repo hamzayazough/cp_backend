@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '../database/entities/user.entity';
+import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../database/entities/advertiser-details.entity';
 import { AdvertiserWorkEntity } from '../database/entities/advertiser-work.entity';
 import { PromoterDetailsEntity } from '../database/entities/promoter-details.entity';
@@ -14,7 +14,12 @@ import { PromoterLanguageEntity } from '../database/entities/promoter-language.e
 import { PromoterSkillEntity } from '../database/entities/promoter-skill.entity';
 import { FollowerEstimateEntity } from '../database/entities/follower-estimate.entity';
 import { PromoterWorkEntity } from '../database/entities/promoter-work.entity';
-import { CreateUserDto, User } from '../interfaces/user';
+import {
+  AdvertiserDetailsDto,
+  CreateUserDto,
+  PromoterDetailsDto,
+  User,
+} from '../interfaces/user';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { Language } from 'src/enums/language';
@@ -182,6 +187,7 @@ export class UserService {
     existingUser.twitterUrl = createUserDto.twitterUrl;
     existingUser.websiteUrl = createUserDto.websiteUrl;
     existingUser.isSetupDone = false;
+    existingUser.usedCurrency = createUserDto.usedCurrency || 'USD';
     const savedUser = await this.userRepository.save(existingUser);
 
     // Handle advertiser details
@@ -380,23 +386,21 @@ export class UserService {
 
   private async updateAdvertiserDetails(
     advertiserDetailsId: string,
-    advertiserData: any,
+    advertiserData: AdvertiserDetailsDto,
   ): Promise<void> {
     if (!advertiserData) {
       throw new Error('Advertiser data is required');
     }
 
     // Update basic advertiser details only if provided
-    const updateFields: any = {};
+    const updateFields: Partial<AdvertiserDetailsEntity> = {};
     if (advertiserData.companyName) {
       updateFields.companyName = advertiserData.companyName;
     }
     if (advertiserData.companyWebsite) {
       updateFields.companyWebsite = advertiserData.companyWebsite;
     }
-    if (advertiserData.verified !== undefined) {
-      updateFields.verified = advertiserData.verified;
-    }
+    updateFields.verified = true; // TODO: change when we get more users
 
     if (Object.keys(updateFields).length > 0) {
       await this.advertiserDetailsRepository.update(
@@ -432,29 +436,22 @@ export class UserService {
 
   private async updatePromoterDetails(
     promoterDetailsId: string,
-    promoterData: any,
+    promoterData: PromoterDetailsDto,
   ): Promise<void> {
     if (!promoterData) {
       throw new Error('Promoter data is required');
     }
 
     // Update promoter details fields only if provided
-    const updateFields: any = {};
+    const updateFields: Partial<PromoterDetailsEntity> = {};
     if (promoterData.location !== undefined) {
       updateFields.location = promoterData.location;
     }
-    if (promoterData.verified !== undefined) {
-      updateFields.verified = promoterData.verified;
-    }
-    if (promoterData.totalSales !== undefined) {
-      updateFields.totalSales = promoterData.totalSales;
-    }
-    if (promoterData.numberOfCampaignDone !== undefined) {
-      updateFields.numberOfCampaignDone = promoterData.numberOfCampaignDone;
-    }
-    if (promoterData.totalViewsGenerated !== undefined) {
-      updateFields.totalViewsGenerated = promoterData.totalViewsGenerated;
-    }
+    updateFields.verified = true; // TODO: change when we get more users
+
+    updateFields.totalSales = 0;
+    updateFields.numberOfCampaignDone = 0;
+    updateFields.totalViewsGenerated = 0;
 
     if (Object.keys(updateFields).length > 0) {
       await this.promoterDetailsRepository.update(
@@ -579,6 +576,7 @@ export class UserService {
       walletBalance: userEntity.walletBalance
         ? parseFloat(userEntity.walletBalance.toString())
         : 0,
+      usedCurrency: userEntity.usedCurrency || 'USD',
     };
 
     if (userEntity.advertiserDetails) {

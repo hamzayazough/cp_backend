@@ -307,7 +307,6 @@ export const CAMPAIGN_TRANSFORMERS = {
         ADVERTISER_CAMPAIGN_CONSTANTS.ACTIVE_PROMOTER_STATUSES as readonly PromoterCampaignStatus[]
       ).includes(pc.status),
     );
-    console.log('earning:', activePromoters);
     return activePromoters.map((pc) => ({
       promoter: transformUserToPromoter(pc.promoter),
       status: pc.status,

@@ -14,6 +14,7 @@ import {
   CheckCampaignFundingDto,
   PayPromoterDto,
 } from '../../controllers/advertiser.controller';
+import { PaymentRecord } from 'src/database/entities';
 
 /**
  * Responsibilities:
@@ -89,10 +90,11 @@ export class AdvertiserPaymentService {
     return this.walletService.getTransactions(firebaseUid, query);
   }
 
+  //TODO: maybe remove this method if not needed
   async processSuccessfulDeposit(
     userId: string,
     netAmountCents: number,
-    paymentRecord: any,
+    paymentRecord: PaymentRecord,
   ) {
     return this.walletService.processSuccessfulDeposit(
       userId,
@@ -146,9 +148,5 @@ export class AdvertiserPaymentService {
   // === Promoter Payments ===
   async payPromoter(firebaseUid: string, dto: PayPromoterDto) {
     return this.promoterPaymentService.payPromoter(firebaseUid, dto);
-  }
-
-  async addTestFundsToPlatform(amountCents: number) {
-    return this.promoterPaymentService.addTestFundsToPlatform(amountCents);
   }
 }

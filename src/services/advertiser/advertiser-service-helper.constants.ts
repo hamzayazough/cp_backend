@@ -91,7 +91,7 @@ export const ADVERTISER_SERVICE_UTILS = {
     advertiser: UserEntity,
     campaignId: string,
   ): CampaignEntity | null => {
-    const campaigns = advertiser.campaigns as CampaignEntity[] | undefined;
+    const campaigns = advertiser.campaigns;
     if (!campaigns || campaigns.length === 0) return null;
     return campaigns.find((campaign) => campaign.id === campaignId) || null;
   },

@@ -119,6 +119,14 @@ export class UserEntity {
   })
   numberOfConsultantCampaignDone?: number;
 
+  @Column({
+    name: 'used_currency',
+    type: 'varchar',
+    length: 10,
+    default: 'CAD',
+  })
+  usedCurrency: 'CAD' | 'USD';
+
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
     cascade: true,

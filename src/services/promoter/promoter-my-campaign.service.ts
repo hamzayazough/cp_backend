@@ -19,6 +19,8 @@ import {
 import { CampaignType } from '../../enums/campaign-type';
 import { UserType } from '../../enums/user-type';
 import { Advertiser } from '../../interfaces/explore-campaign';
+import { getCachedFxRate } from '../../helpers/currency.helper';
+import { AmountAfterApplicationFee } from 'src/constants/application-fees';
 
 @Injectable()
 export class PromoterMyCampaignService {
@@ -56,15 +58,18 @@ export class PromoterMyCampaignService {
     // Transform campaigns to the required format
     const transformedCampaigns: CampaignPromoter[] = paginatedCampaigns.map(
       (item) => {
+        const promoterCurrency = promoter.usedCurrency || 'USD';
         if (item.source === 'joined') {
           return this.transformPromoterCampaignToInterface(
             item.data,
             promoter.id,
+            promoterCurrency,
           );
         } else {
           return this.transformCampaignApplicationToInterface(
             item.data,
             promoter.id,
+            promoterCurrency,
           );
         }
       },
@@ -224,6 +229,7 @@ export class PromoterMyCampaignService {
   private transformPromoterCampaignToInterface(
     pc: PromoterCampaign,
     promoterId: string,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: pc.campaign.advertiser.id,
@@ -244,13 +250,14 @@ export class PromoterMyCampaignService {
     const earnings: Earnings = {
       totalEarned: Number(pc.earnings),
       viewsGenerated: pc.viewsGenerated,
-      projectedTotal: this.calculateProjectedEarnings(pc),
+      projectedTotal: this.calculateProjectedEarnings(pc, promoterCurrency),
     };
 
     const campaignDetails = this.createCampaignDetails(
       pc.campaign,
       pc,
       promoterId,
+      promoterCurrency,
     );
 
     return {
@@ -274,6 +281,7 @@ export class PromoterMyCampaignService {
   private transformCampaignApplicationToInterface(
     ca: CampaignApplicationEntity & { campaign: CampaignEntity },
     promoterId: string,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): CampaignPromoter {
     const advertiser: Advertiser = {
       id: ca.campaign.advertiser.id,
@@ -291,13 +299,17 @@ export class PromoterMyCampaignService {
     const earnings: Earnings = {
       totalEarned: 0,
       viewsGenerated: 0,
-      projectedTotal: this.calculateProjectedEarningsFromCampaign(ca.campaign),
+      projectedTotal: this.calculateProjectedEarningsFromCampaign(
+        ca.campaign,
+        promoterCurrency,
+      ),
     };
 
     const campaignDetails = this.createCampaignDetails(
       ca.campaign,
       null,
       promoterId,
+      promoterCurrency,
     );
 
     // Map application status to promoter campaign status
@@ -325,10 +337,28 @@ export class PromoterMyCampaignService {
     campaign: CampaignEntity,
     promoterCampaign: PromoterCampaign | null,
     promoterId: string,
+    promoterCurrency: 'USD' | 'CAD',
   ): CampaignDetailsUnion {
+    // Convert campaign currency amounts to promoter currency
+    const campaignCurrency = campaign.currency || 'USD';
+    const convertAmount = (amount: number) => {
+      if (campaignCurrency === promoterCurrency) {
+        return Number(amount.toFixed(2));
+      }
+      return Number(
+        AmountAfterApplicationFee(
+          Number(amount * getCachedFxRate(campaignCurrency, promoterCurrency)),
+        ).toFixed(2),
+      );
+    };
+
     const baseCampaign = {
-      budgetHeld: Number(campaign.budgetAllocated) || 0,
-      spentBudget: this.calculateSpentBudget(campaign, promoterId),
+      budgetHeld: convertAmount(Number(campaign.budgetAllocated) || 0),
+      spentBudget: this.calculateSpentBudget(
+        campaign,
+        promoterId,
+        promoterCurrency,
+      ),
       targetAudience: campaign.targetAudience,
       preferredPlatforms: campaign.preferredPlatforms,
       requirements: campaign.requirements,
@@ -350,7 +380,7 @@ export class PromoterMyCampaignService {
           type: CampaignType.VISIBILITY,
           maxViews: campaign.maxViews || 0,
           currentViews: promoterCampaign ? promoterCampaign.viewsGenerated : 0,
-          cpv: campaign.cpv || 0,
+          cpv: convertAmount(campaign.cpv || 0),
           minFollowers: campaign.minFollowers,
           trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${campaign.id}/${promoterId}`,
         };
@@ -390,8 +420,8 @@ export class PromoterMyCampaignService {
             })) || [],
           expertiseRequired: campaign.expertiseRequired,
           meetingCount: campaign.meetingCount || 0,
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
+          maxBudget: convertAmount(campaign.maxBudget || 0),
+          minBudget: convertAmount(campaign.minBudget || 0),
         };
 
       case CampaignType.SELLER:
@@ -428,8 +458,8 @@ export class PromoterMyCampaignService {
                 })) || [],
             })) || [],
           fixedPrice: undefined,
-          maxBudget: campaign.maxBudget || 0,
-          minBudget: campaign.minBudget || 0,
+          maxBudget: convertAmount(campaign.maxBudget || 0),
+          minBudget: convertAmount(campaign.minBudget || 0),
           minFollowers: campaign.minFollowers,
           needMeeting: campaign.needMeeting || false,
           meetingPlan: campaign.meetingPlan!,
@@ -455,7 +485,22 @@ export class PromoterMyCampaignService {
   /**
    * Calculate projected earnings for a PromoterCampaign
    */
-  private calculateProjectedEarnings(pc: PromoterCampaign): number {
+  private calculateProjectedEarnings(
+    pc: PromoterCampaign,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
+  ): number {
+    const campaignCurrency = pc.campaign.currency || 'USD';
+    const convertAmount = (amount: number) => {
+      if (campaignCurrency === promoterCurrency) {
+        return amount;
+      }
+      return Number(
+        (amount * getCachedFxRate(campaignCurrency, promoterCurrency)).toFixed(
+          2,
+        ),
+      );
+    };
+
     if (
       pc.campaign.type === CampaignType.VISIBILITY &&
       pc.campaign.maxViews &&
@@ -463,14 +508,14 @@ export class PromoterMyCampaignService {
     ) {
       const maxPossibleEarnings =
         (pc.campaign.maxViews / 100) * pc.campaign.cpv;
-      return maxPossibleEarnings;
+      return convertAmount(maxPossibleEarnings);
     }
 
     if (
       pc.campaign.type === CampaignType.CONSULTANT ||
       pc.campaign.type === CampaignType.SELLER
     ) {
-      return pc.campaign.maxBudget || Number(pc.earnings);
+      return convertAmount(pc.campaign.maxBudget || Number(pc.earnings));
     }
 
     return Number(pc.earnings);
@@ -481,21 +526,34 @@ export class PromoterMyCampaignService {
    */
   private calculateProjectedEarningsFromCampaign(
     campaign: CampaignEntity,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): number {
+    const campaignCurrency = campaign.currency || 'USD';
+    const convertAmount = (amount: number) => {
+      if (campaignCurrency === promoterCurrency) {
+        return amount;
+      }
+      return Number(
+        (amount * getCachedFxRate(campaignCurrency, promoterCurrency)).toFixed(
+          2,
+        ),
+      );
+    };
+
     if (
       campaign.type === CampaignType.VISIBILITY &&
       campaign.maxViews &&
       campaign.cpv
     ) {
       const maxPossibleEarnings = (campaign.maxViews / 100) * campaign.cpv;
-      return maxPossibleEarnings;
+      return convertAmount(maxPossibleEarnings);
     }
 
     if (
       campaign.type === CampaignType.CONSULTANT ||
       campaign.type === CampaignType.SELLER
     ) {
-      return campaign.maxBudget || 0;
+      return convertAmount(campaign.maxBudget || 0);
     }
 
     return 0;
@@ -575,6 +633,8 @@ export class PromoterMyCampaignService {
     promoter: UserEntity,
     campaignId: string,
   ): CampaignPromoter {
+    const promoterCurrency = promoter.usedCurrency || 'USD';
+
     // First, try to find in joined campaigns
     const joinedCampaign = (promoter.promoterCampaigns || []).find(
       (pc) => pc.campaign.id === campaignId,
@@ -584,6 +644,7 @@ export class PromoterMyCampaignService {
       return this.transformPromoterCampaignToInterface(
         joinedCampaign,
         promoter.id,
+        promoterCurrency,
       );
     }
 
@@ -598,6 +659,7 @@ export class PromoterMyCampaignService {
           campaign: CampaignEntity;
         },
         promoter.id,
+        promoterCurrency,
       );
     }
 
@@ -606,10 +668,12 @@ export class PromoterMyCampaignService {
 
   /**
    * Calculate spent budget by summing transaction amounts for a specific promoter and campaign
+   * Converts amounts to promoter's currency using the currency helper
    */
   private calculateSpentBudget(
     campaign: CampaignEntity,
     promoterId: string,
+    promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): number {
     if (!campaign.transactions) {
       return 0;
@@ -621,7 +685,37 @@ export class PromoterMyCampaignService {
           transaction.userId === promoterId &&
           transaction.userType === UserType.PROMOTER,
       )
-      .reduce((total, transaction) => total + Number(transaction.amount), 0);
+      .reduce((total, transaction) => {
+        // Check if transaction has paymentRecord with currency info
+        let convertedAmount = Number(transaction.amount);
+
+        if (transaction.paymentRecord && transaction.paymentRecord.currency) {
+          const transactionCurrency = transaction.paymentRecord.currency as
+            | 'USD'
+            | 'CAD';
+          if (transactionCurrency !== promoterCurrency) {
+            convertedAmount = Number(
+              (
+                convertedAmount *
+                getCachedFxRate(transactionCurrency, promoterCurrency)
+              ).toFixed(2),
+            );
+          }
+        } else {
+          // Assume transaction is in campaign currency if no paymentRecord
+          const campaignCurrency = campaign.currency || 'USD';
+          if (campaignCurrency !== promoterCurrency) {
+            convertedAmount = Number(
+              (
+                convertedAmount *
+                getCachedFxRate(campaignCurrency, promoterCurrency)
+              ).toFixed(2),
+            );
+          }
+        }
+
+        return total + convertedAmount;
+      }, 0);
   }
 }
 

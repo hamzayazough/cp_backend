@@ -10,7 +10,6 @@ import { CampaignEntity } from '../../database/entities/campaign.entity';
 import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
 import { StripeConnectService } from './stripe-connect.service';
-import { stripeConfig } from '../../config/stripe.config';
 
 export interface CreatePaymentIntentDto {
   campaignId: string;
@@ -63,7 +62,6 @@ export interface PaymentIntentResponse {
 @Injectable()
 export class StripePaymentService {
   private readonly logger = new Logger(StripePaymentService.name);
-  private readonly config = stripeConfig();
 
   constructor(
     @Inject(STRIPE_CLIENT) private readonly stripe: Stripe,

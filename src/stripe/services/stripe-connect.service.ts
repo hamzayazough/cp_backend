@@ -25,6 +25,7 @@ export interface CreateConnectedAccountDto {
   businessName?: string;
   firstName?: string;
   lastName?: string;
+  currency?: 'CAD' | 'USD';
 }
 
 export interface OnboardingLinkResponse {
@@ -106,7 +107,7 @@ export class StripeConnectService {
         userId: dto.userId,
         stripeAccountId: stripeAccount.id,
         country: dto.country,
-        defaultCurrency: this.config.currency,
+        defaultCurrency: dto.currency || 'USD',
         status: StripeAccountStatus.PENDING,
         accountType: 'express',
         businessType: dto.isBusiness ? 'company' : 'individual',

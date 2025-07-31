@@ -231,6 +231,9 @@ export class CampaignEntity {
   })
   canHaveMultiplePromoters?: boolean;
 
+  @Column({ name: 'currency', type: 'varchar', length: 10, default: 'USD' })
+  currency: 'USD' | 'CAD'; // USD or CAD
+
   @OneToMany(
     () => CampaignDeliverableEntity,
     (deliverable) => deliverable.campaign,

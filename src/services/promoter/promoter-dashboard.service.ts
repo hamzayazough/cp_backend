@@ -232,6 +232,7 @@ export class PromoterDashboardService {
       .slice(0, limit);
 
     return this.promoterCampaignService.convertToPromoterActiveCampaignDto(
+      promoter.usedCurrency,
       activeCampaigns,
     );
   }
@@ -264,6 +265,7 @@ export class PromoterDashboardService {
       .getMany();
 
     return this.promoterCampaignService.convertToPromoterSuggestedCampaignDto(
+      promoter.usedCurrency,
       suggestedCampaigns,
     );
   }

@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transaction } from '../../database/entities/transaction.entity';
 import { AdvertiserTransaction } from '../../interfaces/advertiser-dashboard';
+import { UserEntity } from 'src/database/entities';
+import { getTransactionAmountInUserCurrency } from 'src/helpers/currency.helper';
 
 @Injectable()
 export class AdvertiserTransactionService {
@@ -12,21 +14,27 @@ export class AdvertiserTransactionService {
   ) {}
 
   async getRecentTransactions(
-    advertiserId: string,
+    advertiser: UserEntity,
     limit: number,
   ): Promise<AdvertiserTransaction[]> {
+    const advertiserCurrency = advertiser.usedCurrency || 'USD';
     const transactions = await this.transactionRepository
       .createQueryBuilder('transaction')
       .leftJoinAndSelect('transaction.campaign', 'campaign')
       .leftJoinAndSelect('transaction.promoter', 'promoter')
-      .where('campaign.advertiserId = :advertiserId', { advertiserId })
+      .where('campaign.advertiserId = :advertiserId', {
+        advertiserId: advertiser.id,
+      })
       .orderBy('transaction.createdAt', 'DESC')
       .limit(limit)
       .getMany();
 
     return transactions.map((transaction) => ({
       id: transaction.id,
-      amount: transaction.amount,
+      amount: getTransactionAmountInUserCurrency(
+        advertiserCurrency,
+        transaction,
+      ),
       status: transaction.status as
         | 'COMPLETED'
         | 'PENDING'

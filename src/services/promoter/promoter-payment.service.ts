@@ -27,6 +27,7 @@ import {
 import { CampaignStatus } from '../../enums/campaign-status';
 import { UserType } from '../../enums/user-type';
 import { PayPromoterDto } from '../../controllers/advertiser.controller';
+import { getCachedFxRate } from '../../helpers/currency.helper';
 
 export interface PayPromoterResult {
   paymentId: string;
@@ -136,7 +137,7 @@ export class PromoterPaymentService {
       );
     }
 
-    // 6. Calculate platform fee (20%) and net payment
+    // 6. Calculate platform fee (20%) and net payment with currency conversion
     const platformFeeCents = Math.round(dto.amount * 0.2);
     const netPaymentCents = dto.amount - platformFeeCents;
     const netPaymentDollars = netPaymentCents / 100;
@@ -149,13 +150,28 @@ export class PromoterPaymentService {
       throw new NotFoundException('Promoter not found');
     }
 
+    // 8. Convert payment amount to promoter's currency if different
+    const advertiserCurrency = user.usedCurrency || 'USD';
+    const promoterCurrency = promoter.usedCurrency || 'USD';
+
+    let convertedNetPaymentDollars = netPaymentDollars;
+    if (advertiserCurrency !== promoterCurrency) {
+      const fxRate = getCachedFxRate(advertiserCurrency, promoterCurrency);
+      convertedNetPaymentDollars = Number(
+        (netPaymentDollars * fxRate).toFixed(2),
+      );
+      this.logger.log(
+        `Currency conversion: ${netPaymentDollars} ${advertiserCurrency} = ${convertedNetPaymentDollars} ${promoterCurrency} (rate: ${fxRate})`,
+      );
+    }
+
     // 8. Create transaction record for advertiser (deduction)
     const advertiserTransaction = this.transactionRepo.create({
       userId: user.id,
       userType: UserType.ADVERTISER,
       campaignId: dto.campaignId,
       type: TransactionType.DIRECT_PAYMENT,
-      amount: -amountDollars,
+      amount: -amountDollars, // Always in advertiser's currency
       grossAmountCents: dto.amount,
       platformFeeCents: platformFeeCents,
       status: TransactionStatus.COMPLETED,
@@ -167,17 +183,21 @@ export class PromoterPaymentService {
       advertiserTransaction,
     );
 
-    // 9. Create transaction record for promoter (earning)
+    // 9. Create transaction record for promoter (earning) - in promoter's currency
     const promoterTransaction = this.transactionRepo.create({
       userId: dto.promoterId,
       userType: UserType.PROMOTER,
       campaignId: dto.campaignId,
       type: TransactionType.DIRECT_PAYMENT,
-      amount: netPaymentDollars,
+      amount: convertedNetPaymentDollars, // In promoter's currency
       grossAmountCents: dto.amount,
       platformFeeCents: platformFeeCents,
       status: TransactionStatus.COMPLETED,
-      description: `Payment from advertiser ${user.name} for campaign ${campaign.title}`,
+      description: `Payment from advertiser ${user.name} for campaign ${campaign.title}${
+        advertiserCurrency !== promoterCurrency
+          ? ` (converted from ${netPaymentDollars} ${advertiserCurrency})`
+          : ''
+      }`,
       paymentMethod: TxnPaymentMethod.BANK_TRANSFER,
     });
 
@@ -207,9 +227,9 @@ export class PromoterPaymentService {
       });
     }
 
-    promoterWallet.currentBalance += netPaymentDollars;
+    promoterWallet.currentBalance += convertedNetPaymentDollars;
     promoterWallet.totalEarned =
-      (promoterWallet.totalEarned || 0) + netPaymentDollars;
+      (promoterWallet.totalEarned || 0) + convertedNetPaymentDollars;
     await this.walletRepo.save(promoterWallet);
 
     // 12. Update campaign budget tracking
@@ -220,9 +240,11 @@ export class PromoterPaymentService {
     // 13. Process actual Stripe payment to promoter
     try {
       const stripeTransferResult = await this.processPromoterPayment(
+        user,
         promoter,
-        netPaymentCents,
+        Math.round(convertedNetPaymentDollars * 100), // Convert to cents in promoter's currency
         `Payment from campaign: ${campaign.title}`,
+        dto.campaignId,
       );
 
       // Update promoter transaction with Stripe transfer info
@@ -267,8 +289,11 @@ export class PromoterPaymentService {
     const newBudgetAllocated = Math.round(finalEarnings * 100); // Convert to cents
 
     this.logger.log(
-      `Promoter payment processed: Advertiser ${user.id} paid $${amountDollars} to promoter ${dto.promoterId} for campaign ${dto.campaignId}. ` +
-        `Platform fee: $${(platformFeeCents / 100).toFixed(2)}, Net to promoter: $${netPaymentDollars.toFixed(2)}`,
+      `Promoter payment processed: Advertiser ${user.id} paid $${amountDollars} ${advertiserCurrency} to promoter ${dto.promoterId} for campaign ${dto.campaignId}. ` +
+        `Platform fee: $${(platformFeeCents / 100).toFixed(2)} ${advertiserCurrency}, Net to promoter: $${convertedNetPaymentDollars.toFixed(2)} ${promoterCurrency}` +
+        (advertiserCurrency !== promoterCurrency
+          ? ` (converted from $${netPaymentDollars.toFixed(2)} ${advertiserCurrency})`
+          : ''),
     );
 
     return {
@@ -281,13 +306,15 @@ export class PromoterPaymentService {
    * Process payment to promoter via Stripe Connect
    */
   private async processPromoterPayment(
+    user: UserEntity,
     promoter: UserEntity,
     amountCents: number,
     description: string,
+    campaignId: string,
   ): Promise<{ transferId: string; status: string }> {
     try {
       this.logger.log(
-        `Processing Stripe Connect transfer: $${amountCents / 100} USD to promoter ${promoter.name} (${promoter.id})`,
+        `Processing Stripe Connect transfer: $${amountCents / 100} ${user.usedCurrency || 'USD'} to promoter ${promoter.name} (${promoter.id})`,
       );
 
       // Get promoter's Stripe Connect account ID
@@ -318,8 +345,9 @@ export class PromoterPaymentService {
       // Create Stripe transfer
       const transfer = await this.stripe.transfers.create({
         amount: amountCents,
-        currency: 'usd',
+        currency: promoter.usedCurrency.toLowerCase() || 'usd',
         destination: stripeConnectAccount.stripeAccountId,
+        transfer_group: `campaign_${campaignId}`,
         description: description,
         metadata: {
           promoterId: promoter.id,
@@ -359,46 +387,6 @@ export class PromoterPaymentService {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown transfer error';
       throw new Error(`Payment transfer failed: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Add test funds to platform Stripe account balance (TEST MODE ONLY)
-   */
-  async addTestFundsToPlatform(amountCents: number) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new BadRequestException(
-        'Test funds can only be added in test mode',
-      );
-    }
-
-    try {
-      console.log(`Adding ${amountCents} cents to platform test balance...`);
-
-      const topup = await this.stripe.topups.create({
-        amount: amountCents,
-        currency: 'usd',
-        description: 'Test funds for Connect transfers',
-        statement_descriptor: 'Test funds',
-      });
-
-      console.log('Topup created:', topup.id, 'Status:', topup.status);
-
-      const balance = await this.stripe.balance.retrieve();
-      console.log(
-        'Platform balance after topup:',
-        JSON.stringify(balance, null, 2),
-      );
-
-      return {
-        topupId: topup.id,
-        status: topup.status,
-        amount: topup.amount,
-        balance: balance.available,
-      };
-    } catch (error) {
-      console.error('Error adding test funds to platform:', error);
-      throw new BadRequestException(`Failed to add test funds: ${error}`);
     }
   }
 

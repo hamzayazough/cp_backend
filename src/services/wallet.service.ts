@@ -220,7 +220,7 @@ export class WalletService {
     // Create payment intent with the gross amount (including fees)
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: grossAmountCents,
-      currency: 'usd',
+      currency: user.usedCurrency.toLowerCase(),
       customer: advertiserDetails.stripeCustomerId,
       payment_method: paymentMethodId,
       confirmation_method: 'automatic',
@@ -247,7 +247,7 @@ export class WalletService {
         stripePaymentIntentId: paymentIntent.id,
         userId: user.id,
         amountCents: netAmountCents,
-        currency: 'USD',
+        currency: user.usedCurrency,
         paymentType: 'WALLET_FUNDING',
         status: paymentIntent.status === 'succeeded' ? 'completed' : 'pending',
         description: dto.description || 'Add funds to wallet',
