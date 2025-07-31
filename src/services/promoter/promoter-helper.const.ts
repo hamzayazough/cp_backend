@@ -91,7 +91,6 @@ export const PROMOTER_INTERACTION_CONSTANTS = {
     ONGOING: PromoterCampaignStatus.ONGOING,
     AWAITING_REVIEW: PromoterCampaignStatus.AWAITING_REVIEW,
     COMPLETED: PromoterCampaignStatus.COMPLETED,
-    REFUSED: PromoterCampaignStatus.REFUSED,
   },
   APPLICATION_STATUS: {
     PENDING: ApplicationStatus.PENDING,
@@ -182,8 +181,6 @@ export const CAMPAIGN_STATUS_VALIDATORS = {
         return INTERACTION_ERROR_MESSAGES.APPLICATION_PENDING;
       case PromoterCampaignStatus.COMPLETED:
         return INTERACTION_ERROR_MESSAGES.CAMPAIGN_COMPLETED;
-      case PromoterCampaignStatus.REFUSED:
-        return INTERACTION_ERROR_MESSAGES.APPLICATION_REFUSED;
       default:
         return INTERACTION_ERROR_MESSAGES.ALREADY_APPLIED;
     }

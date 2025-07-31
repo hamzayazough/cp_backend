@@ -17,10 +17,8 @@ export { PromoterCampaign } from './promoter-campaign.entity';
 export { CampaignApplicationEntity } from './campaign-applications.entity';
 export { UniqueViewEntity } from './unique-view.entity';
 export { Message, MessageThread } from './message.entity';
-export { PromoterBalance } from './promoter-balance.entity';
 
 // Financial entities
-export { PaymentTransaction } from './payment-transaction.entity';
 export { StripeConnectAccount } from './stripe-connect-account.entity';
 export { PaymentMethod } from './payment-method.entity';
 export { CampaignBudgetTracking } from './campaign-budget-tracking.entity';
@@ -31,5 +29,4 @@ export { PaymentRecord } from './payment-record.entity';
 export { StripePaymentIntent } from './stripe-payment-intent.entity';
 export { StripeTransfer } from './stripe-transfer.entity';
 export { CampaignPaymentConfig } from './campaign-payment-config.entity';
-export { PlatformFee } from './platform-fee.entity';
 export { StripeWebhookEvent } from './stripe-webhook-event.entity';

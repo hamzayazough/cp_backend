@@ -11,6 +11,7 @@ import { AdvertiserType } from 'src/enums/advertiser-type';
 import { PromoterCampaignStatus } from './promoter-campaign';
 import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
 import { CampaignDeliverable } from './promoter-campaigns';
+import { AdvertiserCampaignStatus } from './advertiser-dashboard';
 
 export enum AdvertiserCampaignSortField {
   CREATED_AT = 'createdAt',
@@ -123,7 +124,7 @@ export interface CampaignAdvertiser {
   title: string;
   type: CampaignType;
   mediaUrl?: string; // URL to the S3 campaign media (image/video)
-  status: CampaignStatus;
+  status: AdvertiserCampaignStatus;
   description: string; // from Campaign
   campaign: AdvertiserCampaignDetailsUnion;
   performance: CampaignPerformance; // money earned by the promoter for now by this campaign

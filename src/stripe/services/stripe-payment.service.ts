@@ -6,7 +6,6 @@ import { STRIPE_CLIENT } from '../stripe.constants';
 import { StripePaymentIntent } from '../../database/entities/stripe-payment-intent.entity';
 import { StripeTransfer } from '../../database/entities/stripe-transfer.entity';
 import { CampaignPaymentConfig } from '../../database/entities/campaign-payment-config.entity';
-import { PlatformFee } from '../../database/entities/platform-fee.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
@@ -74,8 +73,6 @@ export class StripePaymentService {
     private readonly transferRepo: Repository<StripeTransfer>,
     @InjectRepository(CampaignPaymentConfig)
     private readonly campaignConfigRepo: Repository<CampaignPaymentConfig>,
-    @InjectRepository(PlatformFee)
-    private readonly platformFeeRepo: Repository<PlatformFee>,
     @InjectRepository(CampaignEntity)
     private readonly campaignRepo: Repository<CampaignEntity>,
     @InjectRepository(UserEntity)

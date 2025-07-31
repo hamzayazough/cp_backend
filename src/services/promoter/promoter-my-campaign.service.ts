@@ -512,8 +512,6 @@ export class PromoterMyCampaignService {
         return PromoterCampaignStatus.AWAITING_REVIEW;
       case ApplicationStatus.ACCEPTED:
         return PromoterCampaignStatus.AWAITING_REVIEW;
-      case ApplicationStatus.REJECTED:
-        return PromoterCampaignStatus.REFUSED;
       default:
         return PromoterCampaignStatus.AWAITING_REVIEW;
     }

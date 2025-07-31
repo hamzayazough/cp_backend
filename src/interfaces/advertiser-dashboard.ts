@@ -15,7 +15,7 @@ export interface AdvertiserStats {
   activeCampaigns: number;
   pendingApprovalCampaigns: number;
 }
-export enum ADVERTISER_CAMPAIGN_STATUS {
+export enum AdvertiserCampaignStatus {
   ONGOING = 'ONGOING',
   COMPLETED = 'COMPLETED',
   WAITING_FOR_APPLICATIONS = 'WAITING_FOR_APPLICATIONS',
@@ -27,7 +27,7 @@ export interface AdvertiserActiveCampaign {
   id: string;
   title: string;
   type: CampaignType;
-  status: ADVERTISER_CAMPAIGN_STATUS;
+  status: AdvertiserCampaignStatus;
   views: number;
   spent: number;
   applications: number;
