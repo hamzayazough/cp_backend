@@ -12,6 +12,139 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+-- Function to calculate and update campaign earnings for a promoter
+CREATE OR REPLACE FUNCTION calculate_campaign_earnings(
+    p_promoter_id UUID,
+    p_campaign_id UUID
+) RETURNS VOID AS $$
+DECLARE
+    v_total_views INTEGER := 0;
+    v_cpv_cents INTEGER := 0;
+    v_gross_earnings_cents INTEGER := 0;
+    v_platform_fee_cents INTEGER := 0;
+    v_net_earnings_cents INTEGER := 0;
+    v_qualifies_for_payout BOOLEAN := FALSE;
+BEGIN
+    -- Get campaign CPV
+    SELECT ROUND(cpv * 100) INTO v_cpv_cents
+    FROM campaigns
+    WHERE id = p_campaign_id AND type = 'VISIBILITY';
+    
+    IF v_cpv_cents IS NULL THEN
+        RAISE EXCEPTION 'Campaign not found or not a VISIBILITY campaign: %', p_campaign_id;
+    END IF;
+    
+    -- Calculate total views for this promoter in this campaign
+    SELECT COUNT(*)
+    INTO v_total_views
+    FROM unique_views uv
+    WHERE uv.promoter_id = p_promoter_id
+        AND uv.campaign_id = p_campaign_id;
+    
+    -- Calculate earnings (CPV is per 100 views, so divide by 100)
+    v_gross_earnings_cents := (v_total_views * v_cpv_cents) / 100;
+    
+    -- Calculate platform fee (20%)
+    v_platform_fee_cents := ROUND(v_gross_earnings_cents * 0.20);
+    v_net_earnings_cents := v_gross_earnings_cents - v_platform_fee_cents;
+    
+    -- Check if qualifies for payout (minimum $5 = 500 cents)
+    v_qualifies_for_payout := v_net_earnings_cents >= 500;
+    
+    -- Insert or update campaign earnings tracking
+    INSERT INTO campaign_earnings_tracking (
+        promoter_id, campaign_id, views_generated, cpv_cents,
+        gross_earnings_cents, platform_fee_cents, net_earnings_cents,
+        qualifies_for_payout
+    ) VALUES (
+        p_promoter_id, p_campaign_id, v_total_views, v_cpv_cents,
+        v_gross_earnings_cents, v_platform_fee_cents, v_net_earnings_cents,
+        v_qualifies_for_payout
+    )
+    ON CONFLICT (promoter_id, campaign_id)
+    DO UPDATE SET
+        views_generated = EXCLUDED.views_generated,
+        gross_earnings_cents = EXCLUDED.gross_earnings_cents,
+        platform_fee_cents = EXCLUDED.platform_fee_cents,
+        net_earnings_cents = EXCLUDED.net_earnings_cents,
+        qualifies_for_payout = EXCLUDED.qualifies_for_payout,
+        updated_at = CURRENT_TIMESTAMP;
+        
+    -- Update view tracking for detailed breakdown
+    INSERT INTO campaign_view_tracking (campaign_earnings_id, unique_view_id, view_earnings_cents)
+    SELECT 
+        cet.id,
+        uv.id,
+        v_cpv_cents / 100 -- earnings per view
+    FROM campaign_earnings_tracking cet
+    CROSS JOIN unique_views uv
+    WHERE cet.promoter_id = p_promoter_id 
+        AND cet.campaign_id = p_campaign_id
+        AND uv.promoter_id = p_promoter_id
+        AND uv.campaign_id = p_campaign_id
+        AND NOT EXISTS (
+            SELECT 1 FROM campaign_view_tracking cvt 
+            WHERE cvt.campaign_earnings_id = cet.id 
+                AND cvt.unique_view_id = uv.id
+        );
+
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to process campaign payout (mark as paid)
+CREATE OR REPLACE FUNCTION process_campaign_payout(
+    p_campaign_earnings_id UUID,
+    p_payout_amount_cents INTEGER,
+    p_transaction_id UUID,
+    p_stripe_transfer_id VARCHAR(255)
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE campaign_earnings_tracking
+    SET 
+        payout_executed = TRUE,
+        payout_amount_cents = p_payout_amount_cents,
+        payout_date = CURRENT_TIMESTAMP,
+        payout_transaction_id = p_transaction_id,
+        stripe_transfer_id = p_stripe_transfer_id,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_campaign_earnings_id
+        AND payout_executed = FALSE
+        AND qualifies_for_payout = TRUE;
+        
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Campaign earnings not found or not eligible for payout: %', p_campaign_earnings_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to get eligible campaigns for payout for a specific promoter
+CREATE OR REPLACE FUNCTION get_eligible_campaign_payouts(p_promoter_id UUID)
+RETURNS TABLE (
+    earnings_id UUID,
+    campaign_id UUID,
+    campaign_title VARCHAR(255),
+    views_generated INTEGER,
+    net_earnings_cents INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        cet.id,
+        cet.campaign_id,
+        c.title,
+        cet.views_generated,
+        cet.net_earnings_cents,
+        cet.created_at
+    FROM campaign_earnings_tracking cet
+    INNER JOIN campaigns c ON c.id = cet.campaign_id
+    WHERE cet.promoter_id = p_promoter_id
+        AND cet.qualifies_for_payout = TRUE
+        AND cet.payout_executed = FALSE
+    ORDER BY cet.created_at ASC;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ========================================
 -- TRIGGERS FOR CORE TABLES
 -- ========================================
@@ -114,4 +247,18 @@ CREATE TRIGGER update_messages_updated_at
 DROP TRIGGER IF EXISTS update_chat_summaries_updated_at ON chat_summaries;
 CREATE TRIGGER update_chat_summaries_updated_at 
     BEFORE UPDATE ON chat_summaries 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ========================================
+-- TRIGGERS FOR CAMPAIGN PAYOUT TRACKING TABLES
+-- ========================================
+
+DROP TRIGGER IF EXISTS update_campaign_earnings_tracking_updated_at ON campaign_earnings_tracking;
+CREATE TRIGGER update_campaign_earnings_tracking_updated_at 
+    BEFORE UPDATE ON campaign_earnings_tracking 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_campaign_payout_batches_updated_at ON campaign_payout_batches;
+CREATE TRIGGER update_campaign_payout_batches_updated_at 
+    BEFORE UPDATE ON campaign_payout_batches 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

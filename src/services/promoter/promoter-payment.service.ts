@@ -240,7 +240,6 @@ export class PromoterPaymentService {
     // 13. Process actual Stripe payment to promoter
     try {
       const stripeTransferResult = await this.processPromoterPayment(
-        user,
         promoter,
         Math.round(convertedNetPaymentDollars * 100), // Convert to cents in promoter's currency
         `Payment from campaign: ${campaign.title}`,
@@ -305,8 +304,7 @@ export class PromoterPaymentService {
   /**
    * Process payment to promoter via Stripe Connect
    */
-  private async processPromoterPayment(
-    user: UserEntity,
+  async processPromoterPayment(
     promoter: UserEntity,
     amountCents: number,
     description: string,
@@ -314,7 +312,7 @@ export class PromoterPaymentService {
   ): Promise<{ transferId: string; status: string }> {
     try {
       this.logger.log(
-        `Processing Stripe Connect transfer: $${amountCents / 100} ${user.usedCurrency || 'USD'} to promoter ${promoter.name} (${promoter.id})`,
+        `Processing Stripe Connect transfer: $${amountCents / 100} ${promoter.usedCurrency || 'USD'} to promoter ${promoter.name} (${promoter.id})`,
       );
 
       // Get promoter's Stripe Connect account ID

@@ -16,6 +16,7 @@ import { PromoterCampaign } from './promoter-campaign.entity';
 import { CampaignApplicationEntity } from './campaign-applications.entity';
 import { Wallet } from './wallet.entity';
 import { CampaignEntity } from './campaign.entity';
+import { StripeConnectAccount } from './stripe-connect-account.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -161,4 +162,7 @@ export class UserEntity {
 
   @OneToMany(() => CampaignEntity, (campaign) => campaign.advertiser)
   campaigns?: CampaignEntity[];
+
+  @OneToOne(() => StripeConnectAccount, (stripeAccount) => stripeAccount.user)
+  stripeConnectAccount?: StripeConnectAccount;
 }

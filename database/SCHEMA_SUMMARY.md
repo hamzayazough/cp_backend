@@ -47,6 +47,13 @@ This document provides a comprehensive overview of the CrowdProp database schema
 - `stripe_connect_accounts` - Stripe Connect account management
 - `stripe_webhook_events` - Webhook processing log
 
+### 5. Monthly Payout Tracking Tables
+
+- `monthly_earnings_tracking` - Track cumulative monthly earnings with $20 minimum threshold
+- `monthly_campaign_earnings` - Campaign-specific earnings breakdown per month
+- `monthly_payout_batches` - Administrative tracking of monthly payout processing
+- `monthly_earnings_payout_batch` - Link earnings to payout batches
+
 ---
 
 ## Detailed Table Reference
@@ -441,6 +448,134 @@ await campaignBudgetTracking.save(campaignBudget);
 - **Use Stripe Connect APIs** for actual payouts
 
 ### Data Consistency Rules
+
+- **Always maintain platform fees**: Every promoter earning should include 20% platform fee
+- **Real vs Virtual Money**: Keep `payment_records` (real) and `wallets` (virtual) in sync
+- **Campaign Budget Integrity**: Ensure `campaign_budget_tracking.allocated_budget_cents` equals sum of actual `payment_records`
+- **Audit Trail Completeness**: Every money movement must have corresponding `transactions` record
+
+---
+
+## Monthly Payout System for Visibility Campaigns
+
+### Overview
+
+The monthly payout system handles the requirement that promoters in visibility campaigns must accumulate at least $20 before receiving payment. If a promoter doesn't reach $20 in a given month, their earnings carry forward to the next month until they reach the threshold.
+
+### Core Tables
+
+#### `monthly_earnings_tracking`
+
+**Purpose**: Track cumulative monthly earnings per promoter with carryover logic
+
+**Key Fields**:
+
+- `promoter_id` - Promoter UUID
+- `year`, `month` - Tracking period
+- `views_generated` - Total views for this month
+- `gross_earnings_cents` - Before platform fees (in cents)
+- `platform_fee_cents` - 20% platform fee (in cents)
+- `net_earnings_cents` - After platform fees (in cents)
+- `cumulative_unpaid_cents` - Carried over from previous months
+- `total_accumulated_cents` - This month + carryover
+- `qualifies_for_payout` - TRUE if total >= $20 (2000 cents)
+- `carried_forward_cents` - Amount carried to next month if < $20
+
+#### `monthly_campaign_earnings`
+
+**Purpose**: Breakdown of earnings per campaign per month
+
+**Key Fields**:
+
+- `monthly_tracking_id` - Links to monthly_earnings_tracking
+- `campaign_id` - Specific campaign
+- `views_generated` - Views for this campaign this month
+- `cpv_cents` - Cost per 100 views in cents
+- `gross_earnings_cents` - Earnings from this campaign
+
+#### `monthly_payout_batches`
+
+**Purpose**: Administrative tracking of monthly payout processing
+
+**Key Fields**:
+
+- `year`, `month` - Payout period
+- `total_promoters` - Number of promoters paid
+- `total_payout_amount_cents` - Total amount paid out
+- `status` - PENDING, PROCESSING, COMPLETED, FAILED
+- `stripe_batch_id` - Reference to Stripe batch processing
+
+### Monthly Process Flow
+
+1. **End of Month Calculation**
+
+   ```sql
+   SELECT calculate_monthly_earnings(promoter_id, year, month)
+   FROM promoters_with_views_this_month;
+   ```
+
+2. **Identify Eligible Promoters**
+
+   ```sql
+   SELECT * FROM monthly_earnings_tracking
+   WHERE qualifies_for_payout = TRUE AND payout_executed = FALSE;
+   ```
+
+3. **Create Payout Batch**
+
+   ```sql
+   INSERT INTO monthly_payout_batches (year, month, total_promoters, total_payout_amount_cents)
+   SELECT year, month, COUNT(*), SUM(total_accumulated_cents)
+   FROM eligible_promoters;
+   ```
+
+4. **Execute Stripe Payouts**
+   - Process payments through Stripe Connect
+   - Update `payout_executed = TRUE`
+   - Set `carried_forward_cents = 0` for paid promoters
+
+5. **Carryover Management**
+   - Promoters under $20 automatically have earnings carried forward
+   - `carried_forward_cents` becomes `cumulative_unpaid_cents` for next month
+
+### Example Scenarios
+
+#### Scenario 1: Promoter Reaches $20 in First Month
+
+- Month 1: Earns $25 → Gets paid $25, carryover = $0
+- Month 2: Earns $15 → Gets paid $15, carryover = $0
+
+#### Scenario 2: Promoter Accumulates Over Multiple Months
+
+- Month 1: Earns $15 → No payout, carryover = $15
+- Month 2: Earns $10 → Total = $25 → Gets paid $25, carryover = $0
+- Month 3: Earns $5 → No payout, carryover = $5
+
+#### Scenario 3: Gradual Accumulation
+
+- Month 1: Earns $8 → carryover = $8
+- Month 2: Earns $7 → total = $15, carryover = $15
+- Month 3: Earns $12 → total = $27 → Gets paid $27, carryover = $0
+
+### Helper Function
+
+```sql
+-- Calculate earnings for a specific promoter and month
+SELECT calculate_monthly_earnings(
+    'promoter-uuid'::UUID,
+    2024,
+    12
+);
+```
+
+This function automatically:
+
+- Calculates total views across all visibility campaigns
+- Computes earnings based on CPV rates
+- Applies 20% platform fee
+- Carries forward previous unpaid amounts
+- Determines payout eligibility
+- Updates or inserts tracking record
 
 1. **Advertiser wallet balance** = SUM(payment_records.WALLET_DEPOSIT) - SUM(payment_records.WITHDRAWAL)
 2. **Campaign spent budget** = SUM(transactions.amount WHERE campaign_id = X AND user_type = 'PROMOTER')
