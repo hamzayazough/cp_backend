@@ -20,6 +20,8 @@ import { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 import { PromoterCampaign } from './promoter-campaign.entity';
 import { Transaction } from './transaction.entity';
 import { CampaignApplicationEntity } from './campaign-applications.entity';
+import { UniqueViewEntity } from './unique-view.entity';
+import { CampaignEarningsTracking } from './financial/campaign-earnings-tracking.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -278,4 +280,10 @@ export class CampaignEntity {
     (application) => application.campaign,
   )
   campaignApplications!: CampaignApplicationEntity[];
+
+  @OneToMany(() => UniqueViewEntity, (uniqueView) => uniqueView.campaign)
+  uniqueViews: UniqueViewEntity[];
+
+  @OneToMany(() => CampaignEarningsTracking, (earnings) => earnings.campaign)
+  earningsTracking: CampaignEarningsTracking[];
 }

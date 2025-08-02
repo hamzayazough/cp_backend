@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
+import { CampaignEntity } from './campaign.entity';
 
 @Entity('unique_views')
 @Unique(['campaignId', 'promoterId', 'fingerprint'])
@@ -41,4 +42,8 @@ export class UniqueViewEntity {
   @ManyToOne(() => UserEntity, (user) => user.uniqueViews)
   @JoinColumn({ name: 'promoter_id' })
   promoter: UserEntity;
+
+  @ManyToOne(() => CampaignEntity, (campaign) => campaign.uniqueViews)
+  @JoinColumn({ name: 'campaign_id' })
+  campaign: CampaignEntity;
 }

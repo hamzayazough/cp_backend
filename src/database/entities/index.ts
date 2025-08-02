@@ -23,6 +23,8 @@ export { StripeConnectAccount } from './stripe-connect-account.entity';
 export { PaymentMethod } from './payment-method.entity';
 export { CampaignBudgetTracking } from './campaign-budget-tracking.entity';
 export { SalesRecordEntity } from './sales-record.entity';
+export { CampaignEarningsTracking } from './financial/campaign-earnings-tracking.entity';
+export { CampaignViewTracking } from './financial/campaign-view-tracking.entity';
 
 // Stripe Connect entities
 export { PaymentRecord } from './payment-record.entity';
