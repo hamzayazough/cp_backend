@@ -26,8 +26,30 @@ export class ViewsService {
     private readonly campaignCompletionService: CampaignCompletionService,
   ) {}
 
-  private makeFingerprint(ip: string, ua: string, token: string): string {
-    return createHash('sha256').update(`${ip}|${ua}|${token}`).digest('hex');
+  private makeFingerprint(ip: string, ua: string): string {
+    // Extract device information without browser-specific details
+    // This helps identify the same user across different browsers on the same device
+    const deviceInfo = this.extractDeviceInfo(ua);
+
+    // Create fingerprint based on IP + device info (not browser-specific token)
+    // This ensures same user on same device gets same fingerprint regardless of browser
+    return createHash('sha256').update(`${ip}|${deviceInfo}`).digest('hex');
+  }
+
+  private extractDeviceInfo(userAgent: string): string {
+    // Extract only device-level information, not browser-specific details
+    const osMatch = userAgent.match(
+      /(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android [\d.]+|iOS [\d.]+)/,
+    );
+    const platformMatch = userAgent.match(
+      /(Win64|WOW64|Win32|Intel Mac|ARM Mac|X11|Mobile)/,
+    );
+
+    const os = osMatch ? osMatch[1] : 'Unknown OS';
+    const platform = platformMatch ? platformMatch[1] : 'Unknown Platform';
+
+    // Return a device signature that's consistent across browsers
+    return `${os}|${platform}`;
   }
 
   async trackAndRedirect(
@@ -35,7 +57,6 @@ export class ViewsService {
     promoterId: string,
     ip: string,
     userAgent: string,
-    browserToken: string,
   ): Promise<string> {
     // Add validation logging for UUID corruption detection
     console.log('🔍 trackAndRedirect called:', {
@@ -62,8 +83,9 @@ export class ViewsService {
       });
     }
 
-    const fingerprint = this.makeFingerprint(ip, userAgent, browserToken);
+    const fingerprint = this.makeFingerprint(ip, userAgent);
     console.log('🔐 Generated fingerprint:', fingerprint);
+    console.log('🖥️ Device info extracted:', this.extractDeviceInfo(userAgent));
 
     // 1) Try to insert a new unique view
     try {

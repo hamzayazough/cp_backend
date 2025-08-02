@@ -51,7 +51,6 @@ export class VisitController {
         promoterId,
         clientIp,
         req.headers['user-agent'] || '',
-        token,
       );
 
       // 4) Redirect the user
