@@ -12,8 +12,11 @@ import { UserType } from '../../enums/user-type';
 
 // Transformer to handle PostgreSQL DECIMAL to JavaScript number conversion
 const DecimalTransformer = {
-  to: (value: number): number => value,
-  from: (value: string): number => parseFloat(value),
+  to: (value: number): number => Number(value) || 0,
+  from: (value: string): number => {
+    const parsed = parseFloat(value);
+    return isFinite(parsed) ? parsed : 0;
+  },
 };
 
 @Entity('wallets')

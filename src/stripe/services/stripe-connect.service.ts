@@ -78,6 +78,15 @@ export class StripeConnectService {
         country: dto.country,
         email: dto.email,
         business_type: dto.isBusiness ? 'company' : 'individual',
+
+        // Pre-fill business profile to reduce onboarding friction
+        business_profile: {
+          mcc: '7399', // "Business services, not elsewhere classified"
+          url: 'https://crowdpro.shop',
+          product_description: dto.isBusiness
+            ? `Business providing promotional services via CrowdPro platform`
+            : `Individual earning income by completing promotional campaigns via CrowdPro`,
+        },
       };
 
       // For non-US countries, explicitly specify capabilities

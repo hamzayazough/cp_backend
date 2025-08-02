@@ -342,12 +342,20 @@ export class PromoterMyCampaignService {
     // Convert campaign currency amounts to promoter currency
     const campaignCurrency = campaign.currency || 'USD';
     const convertAmount = (amount: number) => {
+      // Ensure amount is a valid number
+      const safeAmount = Number(amount) || 0;
+      if (!isFinite(safeAmount)) {
+        return 0;
+      }
+
       if (campaignCurrency === promoterCurrency) {
-        return Number(amount.toFixed(2));
+        return Number(safeAmount.toFixed(2));
       }
       return Number(
         AmountAfterApplicationFee(
-          Number(amount * getCachedFxRate(campaignCurrency, promoterCurrency)),
+          Number(
+            safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency),
+          ),
         ).toFixed(2),
       );
     };
@@ -491,13 +499,19 @@ export class PromoterMyCampaignService {
   ): number {
     const campaignCurrency = pc.campaign.currency || 'USD';
     const convertAmount = (amount: number) => {
+      // Ensure amount is a valid number
+      const safeAmount = Number(amount) || 0;
+      if (!isFinite(safeAmount)) {
+        return 0;
+      }
+
       if (campaignCurrency === promoterCurrency) {
-        return amount;
+        return safeAmount;
       }
       return Number(
-        (amount * getCachedFxRate(campaignCurrency, promoterCurrency)).toFixed(
-          2,
-        ),
+        (
+          safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency)
+        ).toFixed(2),
       );
     };
 
@@ -530,13 +544,19 @@ export class PromoterMyCampaignService {
   ): number {
     const campaignCurrency = campaign.currency || 'USD';
     const convertAmount = (amount: number) => {
+      // Ensure amount is a valid number
+      const safeAmount = Number(amount) || 0;
+      if (!isFinite(safeAmount)) {
+        return 0;
+      }
+
       if (campaignCurrency === promoterCurrency) {
-        return amount;
+        return safeAmount;
       }
       return Number(
-        (amount * getCachedFxRate(campaignCurrency, promoterCurrency)).toFixed(
-          2,
-        ),
+        (
+          safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency)
+        ).toFixed(2),
       );
     };
 

@@ -132,7 +132,7 @@ export class PromoterDashboardService {
 
         return inTimeRange && isCompleted && isEarningType;
       })
-      .reduce((sum, tx) => sum + tx.amount, 0);
+      .reduce((sum, tx) => sum + (tx.amount || 0), 0);
   }
 
   /**

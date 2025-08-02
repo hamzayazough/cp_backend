@@ -108,8 +108,8 @@ export class CampaignEntity {
   @Column({
     name: 'cpv',
     type: 'decimal',
-    precision: 6,
-    scale: 4,
+    precision: 7,
+    scale: 2,
     nullable: true,
   })
   cpv?: number; // Required for VISIBILITY campaigns

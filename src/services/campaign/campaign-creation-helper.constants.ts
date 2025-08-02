@@ -87,7 +87,8 @@ export const CAMPAIGN_CREATION_UTILITIES = {
    * Format currency amount
    */
   formatCurrency: (amount: number): string => {
-    return amount.toFixed(2);
+    const safeAmount = Number(amount) || 0;
+    return isFinite(safeAmount) ? safeAmount.toFixed(2) : '0.00';
   },
 
   /**

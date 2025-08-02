@@ -105,17 +105,20 @@ export function getTransactionAmountInUserCurrency(
   transaction: Transaction,
 ): number {
   const paymentRecord = transaction.paymentRecord;
+  const safeAmount = Number(transaction.amount) || 0;
+
   if (paymentRecord && paymentRecord.currency) {
     if (paymentRecord.currency === usedCurrency) {
-      return transaction.amount;
+      return safeAmount;
     } else {
       const fromCurrency = paymentRecord.currency as 'USD' | 'CAD';
       if (!['USD', 'CAD'].includes(fromCurrency)) {
         throw new Error(`Unsupported currency: ${paymentRecord.currency}`);
       }
       const rate = getCachedFxRate(fromCurrency, usedCurrency);
-      return Number((transaction.amount * rate).toFixed(2));
+      const convertedAmount = safeAmount * rate;
+      return isFinite(convertedAmount) ? Number(convertedAmount.toFixed(2)) : 0;
     }
   }
-  return transaction.amount;
+  return safeAmount;
 }

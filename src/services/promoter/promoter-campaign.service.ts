@@ -52,8 +52,14 @@ export class PromoterCampaignService {
     campaignCurrency: string,
     promoterCurrency: 'USD' | 'CAD',
   ): number {
+    // Ensure amount is a valid number
+    const safeAmount = Number(amount) || 0;
+    if (!isFinite(safeAmount)) {
+      return 0;
+    }
+
     if (campaignCurrency === promoterCurrency) {
-      return Number(amount.toFixed(2));
+      return Number(safeAmount.toFixed(2));
     }
 
     const fxRate = getCachedFxRate(
@@ -61,9 +67,9 @@ export class PromoterCampaignService {
       promoterCurrency,
     );
     return Number(
-      AmountAfterApplicationFee(Number((amount * fxRate).toFixed(2))).toFixed(
-        2,
-      ),
+      AmountAfterApplicationFee(
+        Number((safeAmount * fxRate).toFixed(2)),
+      ).toFixed(2),
     );
   }
 
