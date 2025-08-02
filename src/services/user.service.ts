@@ -91,6 +91,7 @@ export class UserService {
       youtubeUrl: createUserDto.youtubeUrl,
       twitterUrl: createUserDto.twitterUrl,
       websiteUrl: createUserDto.websiteUrl,
+      country: createUserDto.country,
       walletBalance: 0,
     });
 
@@ -325,6 +326,9 @@ export class UserService {
     const promoterDetails = this.promoterDetailsRepository.create({
       userId,
       location: promoterData.location,
+      isBusiness: promoterData.isBusiness,
+      businessName: promoterData.businessName,
+      verified: false,
     });
 
     const savedPromoterDetails =
@@ -447,6 +451,7 @@ export class UserService {
     if (promoterData.location !== undefined) {
       updateFields.location = promoterData.location;
     }
+    updateFields.isBusiness = promoterData.isBusiness;
     updateFields.verified = true; // TODO: change when we get more users
 
     updateFields.totalSales = 0;
@@ -577,6 +582,7 @@ export class UserService {
         ? parseFloat(userEntity.walletBalance.toString())
         : 0,
       usedCurrency: userEntity.usedCurrency || 'USD',
+      country: userEntity.country || 'CA',
     };
 
     if (userEntity.advertiserDetails) {
@@ -602,6 +608,8 @@ export class UserService {
     if (userEntity.promoterDetails) {
       user.promoterDetails = {
         location: userEntity.promoterDetails.location,
+        isBusiness: userEntity.promoterDetails.isBusiness,
+        businessName: userEntity.promoterDetails.businessName,
         verified: userEntity.promoterDetails.verified,
         totalSales: userEntity.promoterDetails.totalSales
           ? parseFloat(userEntity.promoterDetails.totalSales.toString())

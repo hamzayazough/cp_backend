@@ -5,6 +5,7 @@ import { Repository, DataSource } from 'typeorm';
 import { CampaignEarningsTracking } from '../database/entities/financial/campaign-earnings-tracking.entity';
 import { PromoterPaymentService } from './promoter/promoter-payment.service';
 import { getCachedFxRate } from '../helpers/currency.helper';
+import { TransactionType } from '../database/entities/transaction.entity';
 
 interface CampaignPromoterPair {
   promoter_id: string;
@@ -100,7 +101,12 @@ export class CampaignPayoutService {
         qualifiesForPayout: true,
         payoutExecuted: false,
       },
-      relations: ['promoter', 'promoter.stripeConnectAccount', 'campaign'],
+      relations: [
+        'promoter',
+        'promoter.stripeConnectAccount',
+        'campaign',
+        'campaign.advertiser',
+      ],
     });
 
     if (eligibleEarnings.length === 0) {
@@ -142,21 +148,21 @@ export class CampaignPayoutService {
     // Convert payout amount to promoter's preferred currency
     const campaignCurrency = earnings.campaign.currency;
     const promoterCurrency = earnings.promoter.usedCurrency;
-    
+
     let payoutAmountCents = earnings.netEarningsCents;
-    
+
     // Convert currency if needed
     if (campaignCurrency !== promoterCurrency) {
       const exchangeRate = getCachedFxRate(campaignCurrency, promoterCurrency);
       payoutAmountCents = Math.round(earnings.netEarningsCents * exchangeRate);
     }
-    
+
     const payoutAmountDollars = payoutAmountCents / 100;
 
     this.logger.log(
       `Processing campaign payout of ${payoutAmountDollars.toFixed(2)} ${promoterCurrency} for promoter ${earnings.promoterId} in campaign "${earnings.campaign.title}"${
-        campaignCurrency !== promoterCurrency 
-          ? ` (converted from ${earnings.netEarningsDollars.toFixed(2)} ${campaignCurrency})` 
+        campaignCurrency !== promoterCurrency
+          ? ` (converted from ${earnings.netEarningsDollars.toFixed(2)} ${campaignCurrency})`
           : ''
       }`,
     );
@@ -170,13 +176,16 @@ export class CampaignPayoutService {
       }
 
       // Use the promoter payment service to process the payment
-      const paymentResult =
-        await this.promoterPaymentService.processPromoterPayment(
-          earnings.promoter, // promoter
-          payoutAmountCents, // Amount in promoter's currency
-          `Campaign earnings payout for "${earnings.campaign.title}" - ${earnings.viewsGenerated} views generated`,
-          earnings.campaignId,
-        );
+      const paymentResult = await this.promoterPaymentService.payPromoter(
+        earnings.campaign.advertiser.firebaseUid,
+        {
+          campaignId: earnings.campaignId,
+          promoterId: earnings.promoterId,
+          amount: payoutAmountCents, // Amount in promoter's currency
+          description: `Campaign earnings payout for "${earnings.campaign.title}" - ${earnings.viewsGenerated} views generated`,
+          transactionType: TransactionType.VIEW_EARNING,
+        },
+      );
 
       // Mark as paid in database using the PostgreSQL function
       await this.dataSource.query(
@@ -184,13 +193,13 @@ export class CampaignPayoutService {
         [
           earnings.id,
           payoutAmountCents, // Store the converted amount
-          null, // transaction_id - we can add this later if needed
-          paymentResult.transferId,
+          paymentResult.paymentId, // Use the payment transaction ID
+          null, // No direct Stripe transfer ID from payPromoter
         ],
       );
 
       this.logger.log(
-        `Successfully processed campaign payout for promoter ${earnings.promoterId} in campaign ${earnings.campaignId} - Transfer ID: ${paymentResult.transferId}`,
+        `Successfully processed campaign payout for promoter ${earnings.promoterId} in campaign ${earnings.campaignId} - Payment ID: ${paymentResult.paymentId}`,
       );
     } catch (error) {
       this.logger.error(
@@ -253,34 +262,5 @@ export class CampaignPayoutService {
     }
 
     this.logger.log(`Completed payout processing for promoter ${promoterId}`);
-  }
-
-  /**
-   * Get campaign earnings summary for monitoring
-   */
-  async getCampaignEarningsSummary(campaignId?: string): Promise<any> {
-    const whereClause = campaignId ? 'WHERE campaign_id = $1' : '';
-    const params = campaignId ? [campaignId] : [];
-
-    const result: any[] = await this.dataSource.query(
-      `
-      SELECT 
-        COUNT(DISTINCT promoter_id) as total_promoters,
-        COUNT(*) as total_campaigns,
-        SUM(views_generated) as total_views,
-        SUM(gross_earnings_cents) / 100.0 as total_gross_earnings,
-        SUM(platform_fee_cents) / 100.0 as total_platform_fees,
-        SUM(net_earnings_cents) / 100.0 as total_net_earnings,
-        COUNT(*) FILTER (WHERE qualifies_for_payout = TRUE) as eligible_for_payout,
-        SUM(net_earnings_cents) FILTER (WHERE qualifies_for_payout = TRUE) / 100.0 as total_payout_amount,
-        COUNT(*) FILTER (WHERE payout_executed = TRUE) as payouts_completed,
-        SUM(payout_amount_cents) FILTER (WHERE payout_executed = TRUE) / 100.0 as total_paid_out
-      FROM campaign_earnings_tracking
-      ${whereClause}
-    `,
-      params,
-    );
-
-    return result[0] || {};
   }
 }

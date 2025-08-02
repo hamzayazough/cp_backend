@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS users (
     number_of_seller_campaign_done INTEGER DEFAULT 0 CHECK (number_of_seller_campaign_done >= 0),
     number_of_salesman_campaign_done INTEGER DEFAULT 0 CHECK (number_of_salesman_campaign_done >= 0),
     number_of_consultant_campaign_done INTEGER DEFAULT 0 CHECK (number_of_consultant_campaign_done >= 0),
+    country VARCHAR(100) DEFAULT 'CA', -- User's country for localization
     total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
+
 );
 
 -- Advertiser details table
@@ -91,7 +93,8 @@ CREATE TABLE IF NOT EXISTS promoter_details (
     total_sales DECIMAL(10,2) DEFAULT 0.00 CHECK (total_sales >= 0),
     number_of_campaign_done INTEGER DEFAULT 0 CHECK (number_of_campaign_done >= 0),
     total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0),
-    
+    is_business BOOLEAN DEFAULT FALSE, -- TRUE if the promoter is a business entity
+    business_name VARCHAR(255), -- Optional business name if is_business is TRUE
     CONSTRAINT unique_promoter_user UNIQUE(user_id)
 );
 

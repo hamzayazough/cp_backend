@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     
     budget_allocated DECIMAL(10,2) NOT NULL, -- Total budget allocated for the campaign
     -- Campaign-specific fields for VISIBILITY campaigns
-    cpv DECIMAL(6,4),
+    cpv DECIMAL(7,2),
     max_views INTEGER CHECK (max_views > 1000),
     tracking_link TEXT, -- Required for VISIBILITY campaigns
     current_views INTEGER,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
-    currency VARCHAR(10) DEFAULT 'USD', -- Currency for the campaign budget
+    currency VARCHAR(10) DEFAULT 'USD' -- Currency for the campaign budget
 );
 
 -- Campaign applications (for CONSULTANT and SELLER campaigns)

@@ -89,6 +89,7 @@ export class PayPromoterDto {
   promoterId: string;
   amount: number; // in cents
   description?: string;
+  transactionType?: TransactionType;
 }
 
 @Controller('advertiser')

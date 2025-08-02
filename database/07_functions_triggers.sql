@@ -20,9 +20,11 @@ CREATE OR REPLACE FUNCTION calculate_campaign_earnings(
 DECLARE
     v_total_views INTEGER := 0;
     v_cpv_cents INTEGER := 0;
-    v_gross_earnings_cents INTEGER := 0;
-    v_platform_fee_cents INTEGER := 0;
-    v_net_earnings_cents INTEGER := 0;
+    v_total_gross_earnings_cents INTEGER := 0;
+    v_total_platform_fee_cents INTEGER := 0;
+    v_total_net_earnings_cents INTEGER := 0;
+    v_already_paid_cents INTEGER := 0;
+    v_unpaid_net_earnings_cents INTEGER := 0;
     v_qualifies_for_payout BOOLEAN := FALSE;
 BEGIN
     -- Get campaign CPV
@@ -41,24 +43,41 @@ BEGIN
     WHERE uv.promoter_id = p_promoter_id
         AND uv.campaign_id = p_campaign_id;
     
-    -- Calculate earnings (CPV is per 100 views, so divide by 100)
-    v_gross_earnings_cents := (v_total_views * v_cpv_cents) / 100;
+    -- Calculate total lifetime earnings (CPV is per 100 views, so divide by 100)
+    v_total_gross_earnings_cents := (v_total_views * v_cpv_cents) / 100;
     
-    -- Calculate platform fee (20%)
-    v_platform_fee_cents := ROUND(v_gross_earnings_cents * 0.20);
-    v_net_earnings_cents := v_gross_earnings_cents - v_platform_fee_cents;
+    -- Calculate total platform fee (20%)
+    v_total_platform_fee_cents := ROUND(v_total_gross_earnings_cents * 0.20);
+    v_total_net_earnings_cents := v_total_gross_earnings_cents - v_total_platform_fee_cents;
     
-    -- Check if qualifies for payout (minimum $5 = 500 cents)
-    v_qualifies_for_payout := v_net_earnings_cents >= 500;
+    -- Get total amount already paid for this campaign-promoter pair
+    SELECT COALESCE(payout_amount_cents, 0)
+    INTO v_already_paid_cents
+    FROM campaign_earnings_tracking
+    WHERE promoter_id = p_promoter_id
+        AND campaign_id = p_campaign_id
+        AND payout_executed = TRUE;
+    
+    -- Calculate unpaid earnings (what's eligible for payout)
+    v_unpaid_net_earnings_cents := v_total_net_earnings_cents - v_already_paid_cents;
+    
+    -- Ensure unpaid earnings is not negative
+    IF v_unpaid_net_earnings_cents < 0 THEN
+        v_unpaid_net_earnings_cents := 0;
+    END IF;
+    
+    -- Check if qualifies for payout (minimum $5 = 500 cents in unpaid earnings)
+    v_qualifies_for_payout := v_unpaid_net_earnings_cents >= 500;
     
     -- Insert or update campaign earnings tracking
+    -- Store unpaid earnings in net_earnings_cents for payout processing
     INSERT INTO campaign_earnings_tracking (
         promoter_id, campaign_id, views_generated, cpv_cents,
         gross_earnings_cents, platform_fee_cents, net_earnings_cents,
         qualifies_for_payout
     ) VALUES (
         p_promoter_id, p_campaign_id, v_total_views, v_cpv_cents,
-        v_gross_earnings_cents, v_platform_fee_cents, v_net_earnings_cents,
+        v_total_gross_earnings_cents, v_total_platform_fee_cents, v_unpaid_net_earnings_cents,
         v_qualifies_for_payout
     )
     ON CONFLICT (promoter_id, campaign_id)
@@ -117,33 +136,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get eligible campaigns for payout for a specific promoter
-CREATE OR REPLACE FUNCTION get_eligible_campaign_payouts(p_promoter_id UUID)
-RETURNS TABLE (
-    earnings_id UUID,
-    campaign_id UUID,
-    campaign_title VARCHAR(255),
-    views_generated INTEGER,
-    net_earnings_cents INTEGER,
-    created_at TIMESTAMP WITH TIME ZONE
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        cet.id,
-        cet.campaign_id,
-        c.title,
-        cet.views_generated,
-        cet.net_earnings_cents,
-        cet.created_at
-    FROM campaign_earnings_tracking cet
-    INNER JOIN campaigns c ON c.id = cet.campaign_id
-    WHERE cet.promoter_id = p_promoter_id
-        AND cet.qualifies_for_payout = TRUE
-        AND cet.payout_executed = FALSE
-    ORDER BY cet.created_at ASC;
-END;
-$$ LANGUAGE plpgsql;
 
 -- ========================================
 -- TRIGGERS FOR CORE TABLES

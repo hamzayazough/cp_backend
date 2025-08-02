@@ -36,6 +36,7 @@ export interface User {
   advertiserDetails?: AdvertiserDetails;
   promoterDetails?: PromoterDetails;
   usedCurrency?: 'USD' | 'CAD'; // Currency used by the user
+  country: string; // User's country for localization
 }
 
 // Advertiser-specific data
@@ -55,6 +56,8 @@ export interface PromoterDetails {
   works?: PromoterWork[]; // List of past projects (mp4, images)
   followersEstimate?: FollowerEstimate[];
   verified?: boolean;
+  isBusiness?: boolean;
+  businessName?: string; // Optional business name if isBusiness is TRUE
 
   // Statistics
   totalSales?: number;
@@ -84,6 +87,7 @@ export interface CreateUserDto {
   advertiserDetails?: AdvertiserDetailsDto;
 
   promoterDetails?: PromoterDetailsDto;
+  country: string; // User's country for localization
 }
 
 export interface AdvertiserDetailsDto {
@@ -97,6 +101,8 @@ export interface PromoterDetailsDto {
   skills: string[];
   followerEstimates?: FollowerEstimateDto[];
   works?: PromoterWorkDto[];
+  isBusiness?: boolean;
+  businessName?: string; // Optional business name if isBusiness is TRUE
 }
 
 export interface FollowerEstimateDto {
@@ -141,4 +147,7 @@ export interface Promoter {
   numberOfSalesmanCampaignDone?: number;
   numberOfConsultantCampaignDone?: number;
   totalViewsGenerated?: number;
+  isBusiness: boolean;
+  businessName?: string;
+  country: string;
 }

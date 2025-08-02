@@ -164,13 +164,16 @@ export class PromoterPaymentService {
         `Currency conversion: ${netPaymentDollars} ${advertiserCurrency} = ${convertedNetPaymentDollars} ${promoterCurrency} (rate: ${fxRate})`,
       );
     }
+    if (!dto.transactionType) {
+      dto.transactionType = TransactionType.DIRECT_PAYMENT;
+    }
 
     // 8. Create transaction record for advertiser (deduction)
     const advertiserTransaction = this.transactionRepo.create({
       userId: user.id,
       userType: UserType.ADVERTISER,
       campaignId: dto.campaignId,
-      type: TransactionType.DIRECT_PAYMENT,
+      type: dto.transactionType,
       amount: -amountDollars, // Always in advertiser's currency
       grossAmountCents: dto.amount,
       platformFeeCents: platformFeeCents,

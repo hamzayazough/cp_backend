@@ -37,6 +37,17 @@ export class PromoterDetailsEntity {
   })
   totalSales: number;
 
+  @Column({ name: 'is_business', type: 'boolean', default: false })
+  isBusiness: boolean;
+
+  @Column({
+    name: 'business_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  businessName?: string;
+
   @Column({ name: 'number_of_campaign_done', default: 0 })
   numberOfCampaignDone: number;
 

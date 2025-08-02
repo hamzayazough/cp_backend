@@ -3,7 +3,6 @@ import {
   Post,
   Get,
   Param,
-  Body,
   HttpException,
   HttpStatus,
   Logger,
@@ -20,16 +19,6 @@ import { FirebaseUser } from '../../interfaces/firebase-user.interface';
 import { BusinessType } from '../../database/entities/stripe-enums';
 import { StripeConnectAccount } from 'src/database/entities';
 import { UserService } from 'src/services/user.service';
-
-// DTOs
-export class CreateAccountDto {
-  email: string;
-  country: string; // 'US' or 'CA'
-  isBusiness: boolean;
-  businessName?: string;
-  firstName?: string;
-  lastName?: string;
-}
 
 @Controller('connect')
 export class ConnectController {
@@ -67,10 +56,7 @@ export class ConnectController {
    * Create the Stripe Connect account, then redirect the user to Stripe’s onboarding page.
    */
   @Post('create-account')
-  async createAccount(
-    @User() user: FirebaseUser,
-    @Body() createAccountDto: CreateAccountDto,
-  ) {
+  async createAccount(@User() user: FirebaseUser) {
     try {
       // Check if user is authenticated
       if (!user || !user.uid) {
@@ -112,12 +98,12 @@ export class ConnectController {
 
       const accountData: CreateConnectedAccountDto = {
         userId: user.uid,
-        email: createAccountDto.email || user.email,
-        country: createAccountDto.country,
-        isBusiness: createAccountDto.isBusiness,
-        businessName: createAccountDto.businessName,
-        firstName: createAccountDto.firstName,
-        lastName: createAccountDto.lastName,
+        email: userEntity.email,
+        country: userEntity.country,
+        isBusiness: userEntity.promoterDetails?.isBusiness || false,
+        businessName: userEntity.promoterDetails?.businessName,
+        firstName: userEntity.name,
+        lastName: userEntity.name,
         currency: userEntity.usedCurrency || 'USD',
       };
 

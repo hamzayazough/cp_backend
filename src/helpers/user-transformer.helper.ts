@@ -31,5 +31,8 @@ export function transformUserToPromoter(user: UserEntity): Promoter {
     numberOfSalesmanCampaignDone: user.numberOfSalesmanCampaignDone,
     numberOfConsultantCampaignDone: user.numberOfConsultantCampaignDone,
     totalViewsGenerated: user.promoterDetails?.totalViewsGenerated,
+    country: user.country || 'CA',
+    isBusiness: user.promoterDetails?.isBusiness || false,
+    businessName: user.promoterDetails?.businessName,
   };
 }

@@ -128,6 +128,9 @@ export class UserEntity {
   })
   usedCurrency: 'CAD' | 'USD';
 
+  @Column({ name: 'country', type: 'varchar', length: 100, default: 'CA' })
+  country: string;
+
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
     cascade: true,
