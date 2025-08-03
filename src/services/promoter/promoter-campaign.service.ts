@@ -146,6 +146,7 @@ export class PromoterCampaignService {
 
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.media', 'media')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
@@ -207,7 +208,20 @@ export class PromoterCampaignService {
     const baseCampaign = {
       id: campaign.id,
       title: campaign.title,
-      mediaUrl: campaign.mediaUrl,
+      mediaUrls:
+        campaign.media?.map((m) => ({
+          id: m.id,
+          campaignId: m.campaignId,
+          mediaUrl: m.mediaUrl,
+          mediaType: m.mediaType as 'image' | 'video' | 'document' | undefined,
+          fileName: m.fileName,
+          fileSize: m.fileSize,
+          mimeType: m.mimeType,
+          displayOrder: m.displayOrder,
+          isPrimary: m.isPrimary,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        })) || [],
       type: campaign.type,
       advertiser,
       deadline: campaign.deadline
@@ -380,6 +394,7 @@ export class PromoterCampaignService {
   ): SelectQueryBuilder<CampaignEntity> {
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.media', 'media')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')
@@ -466,7 +481,20 @@ export class PromoterCampaignService {
       advertiser,
       title: campaign.title,
       type: campaign.type,
-      mediaUrl: campaign.mediaUrl,
+      mediaUrls:
+        campaign.media?.map((m) => ({
+          id: m.id,
+          campaignId: m.campaignId,
+          mediaUrl: m.mediaUrl,
+          mediaType: m.mediaType as 'image' | 'video' | 'document' | undefined,
+          fileName: m.fileName,
+          fileSize: m.fileSize,
+          mimeType: m.mimeType,
+          displayOrder: m.displayOrder,
+          isPrimary: m.isPrimary,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        })) || [],
       status:
         campaign.promoterCampaigns?.find((pm) => pm.promoterId === promoterId)
           ?.status || PromoterCampaignStatus.ONGOING,
@@ -599,6 +627,7 @@ export class PromoterCampaignService {
   ): Promise<CampaignEntity | null> {
     return await this.campaignRepository
       .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.media', 'media')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .leftJoinAndSelect('campaign.campaignDeliverables', 'deliverables')

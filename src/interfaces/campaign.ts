@@ -12,7 +12,6 @@ export interface BaseCampaign {
   description: string;
   advertiserTypes?: AdvertiserType[];
   isPublic: boolean;
-  mediaUrl?: string;
 
   requirements?: string[];
   targetAudience?: string;

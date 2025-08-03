@@ -8,6 +8,7 @@ import { AdvertiserStatsService } from 'src/services/advertiser/advertiser-stats
 import { AdvertiserTransactionService } from 'src/services/advertiser/advertiser-transaction.service';
 import { AdvertiserMessageService } from 'src/services/advertiser/advertiser-message.service';
 import { CampaignService } from 'src/services/campaign/campaign.service';
+import { CampaignMediaService } from 'src/services/campaign-media.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
 import { PaymentModule } from './payment.module';
@@ -25,6 +26,7 @@ import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
+import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from 'src/database/entities';
 import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 
@@ -33,6 +35,7 @@ import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-pay
     TypeOrmModule.forFeature([
       UserEntity,
       CampaignEntity,
+      CampaignMedia,
       Transaction,
       Wallet,
       PromoterCampaign,
@@ -61,6 +64,7 @@ import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-pay
     AdvertiserMessageService,
     AdvertiserPaymentService,
     CampaignService,
+    CampaignMediaService,
     S3Service,
   ],
   exports: [AdvertiserService, CampaignService],

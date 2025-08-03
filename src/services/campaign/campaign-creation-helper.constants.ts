@@ -348,3 +348,8 @@ export interface UploadFileResponse {
   fileUrl?: string;
   campaign?: Campaign;
 }
+
+export interface DeleteMediaResponse {
+  success: boolean;
+  message: string;
+}

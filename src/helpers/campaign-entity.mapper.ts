@@ -15,7 +15,9 @@ export class CampaignEntityMapper {
       description: entity.description,
       advertiserTypes: entity.advertiserTypes,
       isPublic: entity.isPublic,
-      mediaUrl: entity.mediaUrl,
+      // mediaUrl is now handled via campaign.media relationship
+      // Use the primary media URL if available, otherwise null
+      mediaUrl: entity.media?.find(m => m.isPrimary)?.mediaUrl || entity.media?.[0]?.mediaUrl || undefined,
       requirements: entity.requirements,
       targetAudience: entity.targetAudience,
       preferredPlatforms: entity.preferredPlatforms,

@@ -52,7 +52,8 @@ export class CampaignEntityBuilder {
     campaign.title = campaignData.title;
     campaign.description = campaignData.description;
     campaign.type = campaignData.type;
-    campaign.mediaUrl = campaignData.mediaUrl;
+    // Note: mediaUrl is now handled via campaign_media relationship
+    // The mediaUrl from campaignData will be processed separately in the service layer
     campaign.requirements = campaignData.requirements;
     campaign.targetAudience = campaignData.targetAudience;
     campaign.preferredPlatforms = campaignData.preferredPlatforms;

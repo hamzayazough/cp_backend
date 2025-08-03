@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS campaigns (
     advertiser_types advertiser_type[] DEFAULT '{}',
     is_public BOOLEAN DEFAULT FALSE,
     expiry_date TIMESTAMP WITH TIME ZONE,
-    media_url TEXT, -- S3 URL for campaign media (image/video)
     promoter_work UUID[], -- List of campaign_works IDs
     discord_invite_link TEXT, -- Optional Discord invite link for campaign discussions
     
@@ -127,6 +126,21 @@ CREATE TABLE IF NOT EXISTS campaign_work_comments (
     commentator_id UUID REFERENCES users(id) ON DELETE SET NULL,
     commentator_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- New table: campaign_media
+CREATE TABLE IF NOT EXISTS campaign_media (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+    media_url TEXT NOT NULL, -- S3 URL for the media file
+    media_type VARCHAR(50), -- 'image' or 'video' or 'document'
+    file_name VARCHAR(255), -- Original file name
+    file_size BIGINT, -- File size in bytes
+    mime_type VARCHAR(100), -- MIME type (image/jpeg, video/mp4, etc.)
+    display_order INTEGER DEFAULT 0, -- For ordering media items
+    is_primary BOOLEAN DEFAULT FALSE, -- Mark one as primary/thumbnail
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 

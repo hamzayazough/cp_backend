@@ -189,8 +189,10 @@ export class AdvertiserService {
       );
 
       // Delete media from S3 if exists
-      if (validatedCampaign.mediaUrl) {
-        await this.deleteCampaignMediaFromS3(validatedCampaign.mediaUrl);
+      if (validatedCampaign.media && validatedCampaign.media.length > 0) {
+        for (const media of validatedCampaign.media) {
+          await this.deleteCampaignMediaFromS3(media.mediaUrl);
+        }
       }
 
       // Delete campaign using userRepository to maintain entity relationships

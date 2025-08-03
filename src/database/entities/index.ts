@@ -8,6 +8,7 @@ export { PromoterSkillEntity } from './promoter-skill.entity';
 export { FollowerEstimateEntity } from './follower-estimate.entity';
 export { PromoterWorkEntity } from './promoter-work.entity';
 export { CampaignEntity } from './campaign.entity';
+export { CampaignMedia } from './campaign-media.entity';
 export { CampaignDeliverableEntity } from './campaign-deliverable.entity';
 export { CampaignWorkEntity } from './campaign-work.entity';
 export { CampaignWorkCommentEntity } from './campaign-work-comment.entity';

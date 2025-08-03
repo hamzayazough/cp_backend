@@ -22,6 +22,7 @@ import {
   CampaignService,
   CreateCampaignResponse,
   UploadFileResponse,
+  DeleteMediaResponse,
 } from 'src/services/campaign/campaign.service';
 import {
   GetAdvertiserDashboardRequest,
@@ -150,6 +151,25 @@ export class AdvertiserController {
       firebaseUid,
     );
   }
+
+  @Delete('campaigns/:campaignId/media')
+  async deleteCampaignMedia(
+    @Param('campaignId') campaignId: string,
+    @Body('mediaUrl') mediaUrl: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<DeleteMediaResponse> {
+    if (!mediaUrl) {
+      throw new BadRequestException('Media URL is required');
+    }
+
+    const firebaseUid = req.user.uid;
+    return this.campaignService.deleteCampaignMedia(
+      campaignId,
+      mediaUrl,
+      firebaseUid,
+    );
+  }
+
   @Post('create-campaign')
   async createCampaign(
     @Body()

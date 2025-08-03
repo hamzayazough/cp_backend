@@ -61,6 +61,7 @@ export const ADVERTISER_CAMPAIGN_CONSTANTS = {
  */
 export const USER_CAMPAIGN_RELATIONS = [
   'campaigns',
+  'campaigns.media',
   'campaigns.advertiser',
   'campaigns.advertiser.advertiserDetails',
   'campaigns.advertiser.advertiserDetails.advertiserTypeMappings',
@@ -89,6 +90,7 @@ export const USER_CAMPAIGN_RELATIONS = [
  */
 export const BASIC_CAMPAIGN_RELATIONS = [
   'campaigns',
+  'campaigns.media',
   'campaigns.promoterCampaigns',
   'campaigns.promoterCampaigns.promoter',
   'campaigns.campaignApplications',

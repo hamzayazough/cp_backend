@@ -5,6 +5,7 @@ import { Deliverable } from '../enums/deliverable';
 import { MeetingPlan } from '../enums/meeting-plan';
 import { SalesTrackingMethod } from '../enums/sales-tracking-method';
 import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
+import { CampaignMedia } from './campaign-media';
 
 export interface GetPromoterCampaignsRequest {
   // Pagination
@@ -138,7 +139,7 @@ export interface CampaignPromoter {
   id: string;
   title: string;
   type: CampaignType;
-  mediaUrl?: string; // URL to the S3 campaign media (image/video)
+  mediaUrls?: CampaignMedia[]; // Campaign media files (images/videos)
   status: PromoterCampaignStatus; // PromoterCampaign.status
   description: string; // from Campaign
   advertiser: Advertiser;
