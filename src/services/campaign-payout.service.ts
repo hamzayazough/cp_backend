@@ -25,10 +25,10 @@ export class CampaignPayoutService {
   ) {}
 
   /**
-   * Runs every 5 minutes to check for campaigns ready for payout
+   * Runs once per month to check for campaigns ready for payout
    * Calculates earnings and processes payouts for eligible campaigns
    */
-  @Cron('0 * * * *', {
+  @Cron('0 0 1 * *', {
     name: 'campaignPayoutProcess',
     timeZone: 'UTC',
   })
