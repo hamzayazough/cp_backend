@@ -13,6 +13,7 @@ import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { Wallet } from '../database/entities/wallet.entity';
 import { Transaction } from '../database/entities/transaction.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { StripeModule } from '../stripe/stripe.module';
 
 @Module({
@@ -28,10 +29,15 @@ import { StripeModule } from '../stripe/stripe.module';
       Wallet,
       Transaction,
       PromoterCampaign,
+      PaymentRecord,
     ]),
     StripeModule,
   ],
-  providers: [CampaignPayoutService, CampaignEarningsService, PromoterPaymentService],
+  providers: [
+    CampaignPayoutService,
+    CampaignEarningsService,
+    PromoterPaymentService,
+  ],
   exports: [CampaignPayoutService, CampaignEarningsService],
 })
 export class CampaignPayoutModule {}

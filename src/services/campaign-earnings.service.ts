@@ -4,9 +4,9 @@ import { Repository, DataSource } from 'typeorm';
 import { CampaignEarningsTracking } from '../database/entities/financial/campaign-earnings-tracking.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 import { CampaignEntity } from '../database/entities/campaign.entity';
-import { 
-  CAMPAIGN_EARNINGS_CONSTANTS, 
-  CAMPAIGN_EARNINGS_MESSAGES 
+import {
+  CAMPAIGN_EARNINGS_CONSTANTS,
+  CAMPAIGN_EARNINGS_MESSAGES,
 } from '../constants/campaign-earnings.constants';
 
 interface CampaignViewQueryResult {
@@ -56,8 +56,10 @@ export class CampaignEarningsService {
     this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.CALCULATION_STARTED);
 
     const campaignViewData = await this.getActiveCampaignViewData();
-    
-    this.logger.log(`Found ${campaignViewData.length} campaign-promoter pairs to process`);
+
+    this.logger.log(
+      `Found ${campaignViewData.length} campaign-promoter pairs to process`,
+    );
 
     for (const viewData of campaignViewData) {
       try {
@@ -97,7 +99,11 @@ export class CampaignEarningsService {
 
     if (earningsRecord) {
       // Update existing record
-      await this.updateEarningsRecord(earningsRecord, viewData, earningsCalculation);
+      await this.updateEarningsRecord(
+        earningsRecord,
+        viewData,
+        earningsCalculation,
+      );
       this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.RECORD_UPDATED);
     } else {
       // Create new record
@@ -107,9 +113,9 @@ export class CampaignEarningsService {
 
     this.logger.log(
       `✅ Earnings calculated: Views: ${viewData.viewCount}, ` +
-      `Gross: ${earningsCalculation.grossEarningsCents}¢, ` +
-      `Net: ${earningsCalculation.netEarningsCents}¢, ` +
-      `Qualifies: ${earningsCalculation.qualifiesForPayout}`,
+        `Gross: ${earningsCalculation.grossEarningsCents}¢, ` +
+        `Net: ${earningsCalculation.netEarningsCents}¢, ` +
+        `Qualifies: ${earningsCalculation.qualifiesForPayout}`,
     );
   }
 
@@ -170,7 +176,9 @@ export class CampaignEarningsService {
       payoutTransactionId: transactionId,
     });
 
-    this.logger.log(`Marked payout as executed for earnings record ${earningsId}`);
+    this.logger.log(
+      `Marked payout as executed for earnings record ${earningsId}`,
+    );
   }
 
   // Private helper methods
@@ -179,7 +187,9 @@ export class CampaignEarningsService {
    * Get campaign view data for all active visibility campaigns
    * @returns Promise<CampaignPromoterViewData[]>
    */
-  private async getActiveCampaignViewData(): Promise<CampaignPromoterViewData[]> {
+  private async getActiveCampaignViewData(): Promise<
+    CampaignPromoterViewData[]
+  > {
     const result: CampaignViewQueryResult[] = await this.dataSource.query(`
       SELECT 
         uv.promoter_id as "promoterId",
@@ -198,7 +208,9 @@ export class CampaignEarningsService {
       promoterId: row.promoterId,
       campaignId: row.campaignId,
       viewCount: parseInt(row.viewCount, 10),
-      cpvCents: Math.round(parseFloat(row.cpvCents) * CAMPAIGN_EARNINGS_CONSTANTS.CENTS_TO_DOLLARS),
+      cpvCents: Math.round(
+        parseFloat(row.cpvCents) * CAMPAIGN_EARNINGS_CONSTANTS.CENTS_TO_DOLLARS,
+      ),
     }));
   }
 
@@ -229,7 +241,8 @@ export class CampaignEarningsService {
   ): EarningsCalculationResult {
     // Calculate gross earnings: (views * cpv) / 100 (since CPV is per 100 views)
     const grossEarningsCents = Math.round(
-      (viewCount * cpvCents) / CAMPAIGN_EARNINGS_CONSTANTS.VIEWS_PER_CPV_CALCULATION,
+      (viewCount * cpvCents) /
+        CAMPAIGN_EARNINGS_CONSTANTS.VIEWS_PER_CPV_CALCULATION,
     );
 
     // Calculate platform fee (20% of gross)
@@ -241,7 +254,9 @@ export class CampaignEarningsService {
     const netEarningsCents = grossEarningsCents - platformFeeCents;
 
     // Check if qualifies for payout ($5 minimum)
-    const qualifiesForPayout = netEarningsCents >= CAMPAIGN_EARNINGS_CONSTANTS.MINIMUM_PAYOUT_THRESHOLD_CENTS;
+    const qualifiesForPayout =
+      netEarningsCents >=
+      CAMPAIGN_EARNINGS_CONSTANTS.MINIMUM_PAYOUT_THRESHOLD_CENTS;
 
     return {
       grossEarningsCents,

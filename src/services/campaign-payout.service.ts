@@ -151,7 +151,8 @@ export class CampaignPayoutService {
       payoutExecuted: earnings.payoutExecuted,
     });
 
-    // Convert payout amount to promoter's preferred currency
+    // The payment should be based on NET earnings (after 20% platform fee)
+    // Currency conversion will be handled by the PromoterPaymentService
     const campaignCurrency = earnings.campaign.currency;
     const promoterCurrency = earnings.promoter.usedCurrency;
 
@@ -159,29 +160,34 @@ export class CampaignPayoutService {
       `💱 Currency conversion: ${campaignCurrency} → ${promoterCurrency}`,
     );
 
-    let payoutAmountCents = earnings.netEarningsCents;
+    // Use NET earnings (after 20% fee) as the base amount - NO conversion here
+    const netEarningsCents = earnings.netEarningsCents;
+    const netEarningsDollars = netEarningsCents / 100;
 
-    // Convert currency if needed
+    // We need to pass the GROSS amount to the payment service so it can:
+    // 1. Calculate the 20% platform fee correctly
+    // 2. Handle currency conversion properly
+    // 3. Update budget tracking with the full gross amount
+    const grossEarningsCents = earnings.grossEarningsCents;
+
     if (campaignCurrency !== promoterCurrency) {
       this.logger.log(
         `🔄 Converting currency from ${campaignCurrency} to ${promoterCurrency}`,
       );
       const exchangeRate = getCachedFxRate(campaignCurrency, promoterCurrency);
       this.logger.log(`📈 Exchange rate: ${exchangeRate}`);
-      payoutAmountCents = Math.round(earnings.netEarningsCents * exchangeRate);
+      const convertedNetEarnings = Math.round(netEarningsCents * exchangeRate);
       this.logger.log(
-        `💰 Converted amount: ${earnings.netEarningsCents}¢ → ${payoutAmountCents}¢`,
+        `💰 Converted amount: ${netEarningsCents}¢ → ${convertedNetEarnings}¢`,
       );
     } else {
       this.logger.log(`✅ No currency conversion needed`);
     }
 
-    const payoutAmountDollars = payoutAmountCents / 100;
-
     this.logger.log(
-      `💳 Processing campaign payout of ${payoutAmountDollars.toFixed(2)} ${promoterCurrency} for promoter ${earnings.promoterId} in campaign "${earnings.campaign.title}"${
+      `💳 Processing campaign payout of ${netEarningsDollars.toFixed(2)} ${campaignCurrency} for promoter ${earnings.promoterId} in campaign "${earnings.campaign.title}"${
         campaignCurrency !== promoterCurrency
-          ? ` (converted from ${earnings.netEarningsDollars.toFixed(2)} ${campaignCurrency})`
+          ? ` (converted from ${netEarningsDollars.toFixed(2)} ${campaignCurrency})`
           : ''
       }`,
     );
@@ -208,21 +214,21 @@ export class CampaignPayoutService {
         {
           campaignId: earnings.campaignId,
           promoterId: earnings.promoterId,
-          amount: payoutAmountCents, // Amount in promoter's currency
+          amount: grossEarningsCents, // Pass GROSS amount - service will calculate 20% fee and handle conversion
           description: `Campaign earnings payout for "${earnings.campaign.title}" - ${earnings.viewsGenerated} views generated`,
           transactionType: TransactionType.VIEW_EARNING,
         },
       );
       this.logger.log(`✅ Payment processed successfully:`, {
         paymentId: paymentResult.paymentId,
-        amount: payoutAmountCents,
+        amount: grossEarningsCents,
       });
 
-      // Mark as paid in database using the new service
+      // Mark as paid in database using NET earnings in campaign currency (not converted)
       this.logger.log(`📝 Marking payout as executed in database...`);
       await this.campaignEarningsService.markPayoutExecuted(
         earnings.id,
-        payoutAmountCents,
+        netEarningsCents, // Store NET earnings in campaign currency (560¢ CAD, not 507¢ USD)
         paymentResult.paymentId,
       );
       this.logger.log(`✅ Database updated successfully`);
