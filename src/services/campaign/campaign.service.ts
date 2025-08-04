@@ -34,11 +34,17 @@ import {
   CAMPAIGN_RESPONSE_BUILDERS,
   CreateCampaignResponse,
   UploadFileResponse,
+  UploadMultipleFilesResponse,
   DeleteMediaResponse,
 } from './campaign-creation-helper.constants';
 
 // Export interfaces for use by controllers
-export { CreateCampaignResponse, UploadFileResponse, DeleteMediaResponse };
+export {
+  CreateCampaignResponse,
+  UploadFileResponse,
+  UploadMultipleFilesResponse,
+  DeleteMediaResponse,
+};
 
 @Injectable()
 export class CampaignService {
@@ -116,6 +122,84 @@ export class CampaignService {
         error,
         CAMPAIGN_CREATION_CONSTANTS.ERROR_MESSAGES.FILE_UPLOAD_FAILED,
       );
+    }
+  }
+
+  async uploadCampaignFiles(
+    files: Express.Multer.File[],
+    campaignId: string,
+    firebaseUid: string,
+  ): Promise<UploadMultipleFilesResponse> {
+    try {
+      // Get and validate user
+      const user = await this.getUserByFirebaseUid(firebaseUid);
+      const validatedUser = CAMPAIGN_VALIDATORS.validateUserExists(user);
+
+      // Get and validate campaign ownership
+      const campaign = await this.getCampaignByIdAndOwner(
+        campaignId,
+        validatedUser.id,
+      );
+      const validatedCampaign = CAMPAIGN_VALIDATORS.validateCampaignOwnership(
+        campaign,
+        validatedUser.id,
+      );
+
+      const uploadedFiles: string[] = [];
+      const failedFiles: string[] = [];
+
+      // Process each file
+      for (const file of files) {
+        try {
+          // Validate file using helper
+          FileValidationHelper.validateFile(file);
+
+          // Upload file to S3
+          const fileUrl = await this.uploadFileToS3(
+            file,
+            firebaseUid,
+            validatedUser.id,
+            campaignId,
+          );
+
+          // Add media to campaign using the new media service
+          await this.addMediaToCampaign(validatedCampaign.id, fileUrl, file);
+
+          uploadedFiles.push(fileUrl);
+        } catch (fileError) {
+          console.error(
+            `Failed to upload file ${file.originalname}:`,
+            fileError,
+          );
+          failedFiles.push(file.originalname);
+        }
+      }
+
+      // Reload campaign with media relationship
+      const updatedCampaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+        relations: ['media'],
+      });
+
+      if (!updatedCampaign) {
+        throw new NotFoundException('Campaign not found after media upload');
+      }
+
+      // Convert entity to interface using helper
+      const campaignResponse =
+        CampaignEntityMapper.entityToInterface(updatedCampaign);
+
+      return {
+        success: true,
+        message: `Successfully uploaded ${uploadedFiles.length} files${
+          failedFiles.length > 0 ? `, ${failedFiles.length} failed` : ''
+        }`,
+        uploadedFiles,
+        failedFiles,
+        campaign: campaignResponse,
+      };
+    } catch (error) {
+      this.handleCampaignError(error, 'Failed to upload campaign files');
     }
   }
 

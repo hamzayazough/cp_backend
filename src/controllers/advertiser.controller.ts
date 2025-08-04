@@ -5,6 +5,7 @@ import {
   Request,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
   Get,
   Param,
@@ -14,7 +15,7 @@ import {
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AdvertiserService } from '../services/advertiser/advertiser.service';
 import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 import { PromoterService } from 'src/services/promoter/promoter.service';
@@ -22,6 +23,7 @@ import {
   CampaignService,
   CreateCampaignResponse,
   UploadFileResponse,
+  UploadMultipleFilesResponse,
   DeleteMediaResponse,
 } from 'src/services/campaign/campaign.service';
 import {
@@ -147,6 +149,39 @@ export class AdvertiserController {
     const firebaseUid = req.user.uid;
     return this.campaignService.uploadCampaignFile(
       file,
+      campaignId,
+      firebaseUid,
+    );
+  }
+
+  @Post('upload-files')
+  @UseInterceptors(FilesInterceptor('files', 10)) // Maximum 10 files
+  async uploadCampaignFiles(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body('campaignId') campaignId: string,
+    @Request() req: { user: FirebaseUser },
+  ): Promise<UploadMultipleFilesResponse> {
+    if (!campaignId) {
+      throw new BadRequestException('Campaign ID is required');
+    }
+
+    if (!files || files.length === 0) {
+      // Return success response for 0 files case
+      return {
+        success: true,
+        message: 'No files uploaded',
+        uploadedFiles: [],
+        failedFiles: [],
+      };
+    }
+
+    if (files.length > 10) {
+      throw new BadRequestException('Maximum 10 files allowed');
+    }
+
+    const firebaseUid = req.user.uid;
+    return await this.campaignService.uploadCampaignFiles(
+      files,
       campaignId,
       firebaseUid,
     );

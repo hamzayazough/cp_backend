@@ -349,6 +349,14 @@ export interface UploadFileResponse {
   campaign?: Campaign;
 }
 
+export interface UploadMultipleFilesResponse {
+  success: boolean;
+  message: string;
+  uploadedFiles: string[];
+  failedFiles: string[];
+  campaign?: Campaign;
+}
+
 export interface DeleteMediaResponse {
   success: boolean;
   message: string;

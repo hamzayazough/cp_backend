@@ -199,6 +199,7 @@ export class PromoterService {
       relations: [
         'promoterCampaigns',
         'promoterCampaigns.campaign',
+        'promoterCampaigns.campaign.media',
         'promoterCampaigns.campaign.advertiser',
         'promoterCampaigns.campaign.advertiser.advertiserDetails',
         'promoterCampaigns.campaign.campaignDeliverables',
@@ -206,6 +207,7 @@ export class PromoterService {
         'promoterCampaigns.campaign.campaignDeliverables.promoterWork.comments',
         'campaignApplications',
         'campaignApplications.campaign',
+        'campaignApplications.campaign.media',
         'campaignApplications.campaign.advertiser',
         'campaignApplications.campaign.advertiser.advertiserDetails',
         'campaignApplications.campaign.campaignDeliverables',
@@ -364,6 +366,7 @@ export class PromoterService {
       relations: [
         'promoterCampaigns',
         'promoterCampaigns.campaign',
+        'promoterCampaigns.campaign.media',
         'promoterCampaigns.campaign.advertiser',
         'promoterCampaigns.campaign.advertiser.advertiserDetails',
         'promoterCampaigns.campaign.campaignDeliverables',
@@ -371,6 +374,7 @@ export class PromoterService {
         'promoterCampaigns.campaign.campaignDeliverables.promoterWork.comments',
         'campaignApplications',
         'campaignApplications.campaign',
+        'campaignApplications.campaign.media',
         'campaignApplications.campaign.advertiser',
         'campaignApplications.campaign.advertiser.advertiserDetails',
         'campaignApplications.campaign.campaignDeliverables',
