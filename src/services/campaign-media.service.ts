@@ -74,16 +74,19 @@ export class CampaignMediaService {
     await this.campaignMediaRepository.delete(mediaId);
   }
 
-  async deleteMediaByUrl(campaignId: string, mediaUrl: string): Promise<CampaignMedia | null> {
+  async deleteMediaByUrl(
+    campaignId: string,
+    mediaUrl: string,
+  ): Promise<CampaignMedia | null> {
     const media = await this.campaignMediaRepository.findOne({
       where: { campaignId, mediaUrl },
     });
-    
+
     if (media) {
       await this.campaignMediaRepository.delete(media.id);
       return media;
     }
-    
+
     return null;
   }
 

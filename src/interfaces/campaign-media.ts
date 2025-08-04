@@ -18,7 +18,7 @@ export interface CampaignWithMedia {
   title: string;
   description: string;
   // ... other campaign fields
-  
+
   // Add media relationship
   media?: CampaignMedia[];
 }
