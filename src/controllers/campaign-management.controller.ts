@@ -1,107 +1,54 @@
-import { Controller, Post, Param, Get } from '@nestjs/common';
+import { Controller, Param, Request, Logger, Patch } from '@nestjs/common';
 import { CampaignExpirationService } from '../services/campaign/campaign-expiration.service';
-import { CampaignExpirationCheckResult } from '../interfaces/campaign-management';
+import { AdvertiserService } from '../services/advertiser/advertiser.service';
+import { FirebaseUser } from '../interfaces/firebase-user.interface';
+import { CampaignAdvertiser } from '../interfaces/advertiser-campaign';
 
 /**
- * TESTING PURPOSES ONLY
- * TODO: Remove
  * Controller for campaign management operations
  * Provides endpoints for manual triggering of campaign expiration checks and completions
+ * All endpoints are protected and require Firebase authentication
  */
 @Controller('campaign-management')
 export class CampaignManagementController {
+  private readonly logger = new Logger(CampaignManagementController.name);
+
   constructor(
     private readonly campaignExpirationService: CampaignExpirationService,
+    private readonly advertiserService: AdvertiserService,
   ) {}
 
   /**
-   * Manually trigger campaign expiration check
-   * GET /campaign-management/check-expirations
+   * Complete a specific campaign
+   * PATCH /campaign-management/campaigns/:campaignId/complete
    */
-  @Get('check-expirations')
-  async checkExpirations(): Promise<CampaignExpirationCheckResult> {
-    return await this.campaignExpirationService.checkCampaignExpirations();
-  }
-
-  /**
-   * Manually complete a specific campaign
-   * POST /campaign-management/complete/:campaignId
-   */
-  @Post('complete/:campaignId')
+  @Patch('campaigns/:campaignId/complete')
   async completeCampaign(
     @Param('campaignId') campaignId: string,
-  ): Promise<{ success: boolean; message: string }> {
+    @Request() req: { user: FirebaseUser },
+  ): Promise<{ success: boolean; message: string; data?: CampaignAdvertiser }> {
+    this.logger.log(
+      `Campaign completion triggered by user: ${req.user.uid} for campaign: ${campaignId}`,
+    );
     try {
       await this.campaignExpirationService.triggerCampaignCompletion(
         campaignId,
       );
+
+      // Get the completed campaign data
+      const campaignData = await this.advertiserService.getCampaignById(
+        req.user.uid,
+        campaignId,
+      );
+
       return {
         success: true,
         message: `Campaign ${campaignId} completed successfully`,
+        data: campaignData,
       };
     } catch (error) {
       return {
         success: false,
-        message:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Manually send expiration notifications for campaigns ending in a week
-   * POST /campaign-management/notify/week
-   */
-  @Post('notify/week')
-  async notifyWeekExpiration(): Promise<{
-    success: boolean;
-    emailsSent: number;
-    message: string;
-  }> {
-    try {
-      const emailsSent =
-        await this.campaignExpirationService.triggerExpirationNotifications(
-          'week',
-        );
-      return {
-        success: true,
-        emailsSent,
-        message: `Sent ${emailsSent} week expiration notifications`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        emailsSent: 0,
-        message:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Manually send expiration notifications for campaigns ending in a day
-   * POST /campaign-management/notify/day
-   */
-  @Post('notify/day')
-  async notifyDayExpiration(): Promise<{
-    success: boolean;
-    emailsSent: number;
-    message: string;
-  }> {
-    try {
-      const emailsSent =
-        await this.campaignExpirationService.triggerExpirationNotifications(
-          'day',
-        );
-      return {
-        success: true,
-        emailsSent,
-        message: `Sent ${emailsSent} day expiration notifications`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        emailsSent: 0,
         message:
           error instanceof Error ? error.message : 'Unknown error occurred',
       };

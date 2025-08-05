@@ -5,14 +5,33 @@ import { CampaignEntity } from '../../database/entities/campaign.entity';
 import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { PromoterDetailsEntity } from '../../database/entities/promoter-details.entity';
+import { CampaignBudgetTracking } from '../../database/entities/campaign-budget-tracking.entity';
+import { UniqueViewEntity } from '../../database/entities/unique-view.entity';
+import { Wallet } from '../../database/entities/wallet.entity';
+import { Transaction } from '../../database/entities/transaction.entity';
 import { CampaignStatus } from '../../enums/campaign-status';
 import { PromoterCampaignStatus } from '../../database/entities/promoter-campaign.entity';
 import { CampaignType } from '../../enums/campaign-type';
-import { CAMPAIGN_MANAGEMENT_CONSTANTS } from '../../constants/campaign-management.constants';
+import {
+  TransactionType,
+  TransactionStatus,
+  PaymentMethod,
+} from '../../database/entities/transaction.entity';
+import { UserType } from '../../enums/user-type';
 import {
   CampaignCompletionResult,
   PromoterCampaignStatsUpdate,
 } from '../../interfaces/campaign-management';
+import { PromoterPaymentService } from '../promoter/promoter-payment.service';
+import {
+  CAMPAIGN_COMPLETION_MESSAGES,
+  TRANSACTION_DESCRIPTIONS,
+  CampaignBudgetCalculator,
+  CampaignTypeValidator,
+  CampaignValidator,
+  CAMPAIGN_MANAGEMENT_ERROR_MESSAGES,
+  CAMPAIGN_COMPLETION_STATUS,
+} from './campaign-management-helper.constants';
 
 /**
  * Service responsible for completing campaigns and updating related entities
@@ -24,13 +43,18 @@ export class CampaignCompletionService {
   constructor(
     @InjectRepository(CampaignEntity)
     private readonly campaignRepository: Repository<CampaignEntity>,
-    @InjectRepository(PromoterCampaign)
-    private readonly promoterCampaignRepository: Repository<PromoterCampaign>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
-    @InjectRepository(PromoterDetailsEntity)
-    private readonly promoterDetailsRepository: Repository<PromoterDetailsEntity>,
+    @InjectRepository(CampaignBudgetTracking)
+    private readonly campaignBudgetTrackingRepository: Repository<CampaignBudgetTracking>,
+    @InjectRepository(UniqueViewEntity)
+    private readonly uniqueViewRepository: Repository<UniqueViewEntity>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepository: Repository<Transaction>,
     private readonly dataSource: DataSource,
+    private readonly promoterPaymentService: PromoterPaymentService,
   ) {}
 
   /**
@@ -41,7 +65,7 @@ export class CampaignCompletionService {
     campaignId: string,
   ): Promise<CampaignCompletionResult> {
     this.logger.log(
-      `🏁 Starting completion process for campaign ${campaignId}`,
+      CAMPAIGN_COMPLETION_MESSAGES.GENERAL.COMPLETION_STARTING(campaignId),
     );
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -55,9 +79,7 @@ export class CampaignCompletionService {
       });
 
       if (!campaign) {
-        throw new Error(
-          CAMPAIGN_MANAGEMENT_CONSTANTS.ERROR_MESSAGES.CAMPAIGN_NOT_FOUND,
-        );
+        throw new Error(CAMPAIGN_MANAGEMENT_ERROR_MESSAGES.CAMPAIGN_NOT_FOUND);
       }
 
       campaign.status = CampaignStatus.INACTIVE;
@@ -96,6 +118,10 @@ export class CampaignCompletionService {
 
       await queryRunner.commitTransaction();
 
+      // 5. Process budget reconciliation for CONSULTANT and SELLER campaigns
+      // This is done after transaction commit to avoid payment failures affecting campaign completion
+      await this.processBudgetReconciliation(campaign, promoterCampaigns);
+
       const result: CampaignCompletionResult = {
         campaignId,
         completedAt,
@@ -105,16 +131,20 @@ export class CampaignCompletionService {
       };
 
       this.logger.log(
-        `✅ Campaign ${campaignId} completed successfully. ` +
-          `Affected: ${result.affectedPromoterCampaigns} promoter campaigns, ` +
-          `${result.updatedPromoterDetails} promoter details, ` +
-          `${result.updatedUserStats} user stats`,
+        CAMPAIGN_COMPLETION_MESSAGES.GENERAL.COMPLETION_SUCCESS(
+          campaignId,
+          result.affectedPromoterCampaigns,
+          true, // Budget reconciliation was processed
+        ),
       );
 
       return result;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`❌ Failed to complete campaign ${campaignId}:`, error);
+      this.logger.error(
+        CAMPAIGN_COMPLETION_MESSAGES.GENERAL.COMPLETION_FAILED(campaignId),
+        error,
+      );
       throw error;
     } finally {
       await queryRunner.release();
@@ -129,7 +159,7 @@ export class CampaignCompletionService {
     campaignIds: string[],
   ): Promise<CampaignCompletionResult[]> {
     this.logger.log(
-      `🏁 Starting batch completion for ${campaignIds.length} campaigns`,
+      CAMPAIGN_COMPLETION_MESSAGES.GENERAL.BATCH_STARTING(campaignIds.length),
     );
 
     const results: CampaignCompletionResult[] = [];
@@ -143,12 +173,14 @@ export class CampaignCompletionService {
           `Failed to complete campaign ${campaignId} in batch:`,
           error,
         );
-        // Continue with other campaigns even if one fails
       }
     }
 
     this.logger.log(
-      `📊 Batch completion results: ${results.length}/${campaignIds.length} campaigns completed successfully`,
+      CAMPAIGN_COMPLETION_MESSAGES.GENERAL.BATCH_RESULTS(
+        results.length,
+        campaignIds.length,
+      ),
     );
 
     return results;
@@ -172,7 +204,7 @@ export class CampaignCompletionService {
 
     if (!promoterDetails) {
       throw new Error(
-        CAMPAIGN_MANAGEMENT_CONSTANTS.ERROR_MESSAGES.PROMOTER_DETAILS_NOT_FOUND,
+        CAMPAIGN_MANAGEMENT_ERROR_MESSAGES.PROMOTER_DETAILS_NOT_FOUND,
       );
     }
 
@@ -185,9 +217,7 @@ export class CampaignCompletionService {
     });
 
     if (!user) {
-      throw new Error(
-        CAMPAIGN_MANAGEMENT_CONSTANTS.ERROR_MESSAGES.USER_NOT_FOUND,
-      );
+      throw new Error(CAMPAIGN_MANAGEMENT_ERROR_MESSAGES.USER_NOT_FOUND);
     }
 
     this.updateUserCampaignTypeStatistics(user, campaignType);
@@ -202,6 +232,386 @@ export class CampaignCompletionService {
         campaignType,
       ),
     };
+  }
+
+  /**
+   * Process budget reconciliation for campaigns
+   * - VISIBILITY: Release unused heldForCampaigns funds back to advertiser
+   * - CONSULTANT/SELLER: Pay remaining minBudget to promoters
+   */
+  private async processBudgetReconciliation(
+    campaign: CampaignEntity,
+    promoterCampaigns: PromoterCampaign[],
+  ): Promise<void> {
+    if (!CampaignTypeValidator.requiresReconciliation(campaign.type)) {
+      return;
+    }
+
+    this.logger.log(
+      CAMPAIGN_COMPLETION_MESSAGES.GENERAL.STARTING(campaign.type, campaign.id),
+    );
+
+    try {
+      if (CampaignTypeValidator.isVisibilityCampaign(campaign.type)) {
+        await this.processVisibilityBudgetReconciliation(campaign);
+      } else if (
+        CampaignTypeValidator.isConsultantOrSellerCampaign(campaign.type)
+      ) {
+        await this.processConsultantSellerBudgetReconciliation(
+          campaign,
+          promoterCampaigns,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        CAMPAIGN_COMPLETION_MESSAGES.GENERAL.RECONCILIATION_FAILED(campaign.id),
+        error,
+      );
+      // Don't throw error to avoid failing the entire campaign completion
+    }
+  }
+
+  /**
+   * Process budget reconciliation for VISIBILITY campaigns
+   * Releases unused heldForCampaigns funds back to advertiser wallet
+   */
+  private async processVisibilityBudgetReconciliation(
+    campaign: CampaignEntity,
+  ): Promise<void> {
+    // Validate campaign has CPV set
+    const validation = CampaignValidator.validateVisibilityCampaign(campaign);
+    if (!validation.isValid) {
+      this.logger.warn(validation.reason);
+      return;
+    }
+
+    // Calculate actual money used based on unique views
+    const totalUniqueViews = await this.getTotalUniqueViewsForCampaign(
+      campaign.id,
+    );
+    const actualSpentDollars =
+      CampaignBudgetCalculator.calculateVisibilityActualSpent(
+        totalUniqueViews,
+        campaign.cpv!,
+      );
+
+    this.logger.log(
+      CAMPAIGN_COMPLETION_MESSAGES.VISIBILITY.ANALYSIS(
+        campaign.id,
+        totalUniqueViews,
+        campaign.cpv!,
+        actualSpentDollars,
+      ),
+    );
+
+    // Get advertiser wallet and calculate funds to release
+    const advertiserWallet = await this.getAdvertiserWallet(
+      campaign.advertiserId,
+    );
+    if (!advertiserWallet) {
+      this.logger.error(
+        CAMPAIGN_COMPLETION_MESSAGES.VISIBILITY.NO_WALLET(campaign.id),
+      );
+      return;
+    }
+
+    const currentHeldFunds = advertiserWallet.heldForCampaigns || 0;
+    const fundsToRelease = CampaignBudgetCalculator.calculateFundsToRelease(
+      currentHeldFunds,
+      actualSpentDollars,
+    );
+
+    if (!CampaignValidator.shouldReleaseFunds(fundsToRelease)) {
+      this.logger.log(
+        CAMPAIGN_COMPLETION_MESSAGES.VISIBILITY.NO_FUNDS_TO_RELEASE(
+          campaign.id,
+        ),
+      );
+      return;
+    }
+
+    // Release the unused funds
+    await this.releaseUnusedHeldFunds(
+      campaign,
+      advertiserWallet,
+      fundsToRelease,
+      actualSpentDollars,
+    );
+  }
+
+  /**
+   * Process budget reconciliation for CONSULTANT and SELLER campaigns
+   * Pays remaining minBudget amount to promoters if not fully spent
+   */
+  private async processConsultantSellerBudgetReconciliation(
+    campaign: CampaignEntity,
+    promoterCampaigns: PromoterCampaign[],
+  ): Promise<void> {
+    // Validate campaign has minBudget set
+    const validation =
+      CampaignValidator.validateConsultantSellerCampaign(campaign);
+    if (!validation.isValid) {
+      this.logger.warn(validation.reason);
+      return;
+    }
+
+    try {
+      // Get budget tracking for this campaign
+      const budgetTracking = await this.getBudgetTracking(campaign.id);
+      if (!budgetTracking) {
+        this.logger.warn(
+          CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.NO_BUDGET_TRACKING(
+            campaign.id,
+          ),
+        );
+        return;
+      }
+
+      // Calculate remaining budget using helper
+      const minBudgetCents = CampaignBudgetCalculator.convertMinBudgetToCents(
+        campaign.minBudget!,
+      );
+      const spentBudgetCents = budgetTracking.spentBudgetCents;
+      const remainingBudgetCents =
+        CampaignBudgetCalculator.calculateRemainingBudgetCents(
+          minBudgetCents,
+          spentBudgetCents,
+        );
+
+      this.logger.log(
+        CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.ANALYSIS(
+          campaign.id,
+          campaign.minBudget!,
+          CampaignBudgetCalculator.centsToDollars(spentBudgetCents),
+          CampaignBudgetCalculator.centsToDollars(remainingBudgetCents),
+        ),
+      );
+
+      if (
+        !CampaignValidator.shouldDistributeRemainingBudget(remainingBudgetCents)
+      ) {
+        this.logger.log(
+          CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.FULLY_UTILIZED(
+            campaign.id,
+          ),
+        );
+        return;
+      }
+
+      // Process payments to promoters
+      await this.payRemainingBudgetToPromoters(
+        campaign,
+        promoterCampaigns,
+        remainingBudgetCents,
+      );
+    } catch (error) {
+      this.logger.error(
+        CAMPAIGN_COMPLETION_MESSAGES.GENERAL.RECONCILIATION_FAILED(campaign.id),
+        error,
+      );
+      // Don't throw error to avoid failing the entire campaign completion
+    }
+  }
+
+  /**
+   * Get budget tracking for a campaign
+   */
+  private async getBudgetTracking(
+    campaignId: string,
+  ): Promise<CampaignBudgetTracking | null> {
+    return await this.campaignBudgetTrackingRepository.findOne({
+      where: { campaignId },
+    });
+  }
+
+  /**
+   * Get total unique views for a campaign
+   */
+  private async getTotalUniqueViewsForCampaign(
+    campaignId: string,
+  ): Promise<number> {
+    const result: { count: string } | undefined =
+      await this.uniqueViewRepository
+        .createQueryBuilder('unique_view')
+        .select('COUNT(*)', 'count')
+        .where('unique_view.campaignId = :campaignId', { campaignId })
+        .getRawOne();
+
+    return parseInt(result?.count || '0', 10);
+  }
+
+  /**
+   * Get advertiser wallet
+   */
+  private async getAdvertiserWallet(
+    advertiserId: string,
+  ): Promise<Wallet | null> {
+    return await this.walletRepository.findOne({
+      where: { userId: advertiserId, userType: UserType.ADVERTISER },
+    });
+  }
+
+  /**
+   * Release unused held funds back to advertiser wallet
+   */
+  private async releaseUnusedHeldFunds(
+    campaign: CampaignEntity,
+    advertiserWallet: Wallet,
+    fundsToRelease: number,
+    actualSpentDollars: number,
+  ): Promise<void> {
+    this.logger.log(
+      CAMPAIGN_COMPLETION_MESSAGES.VISIBILITY.RELEASING_FUNDS(
+        fundsToRelease,
+        campaign.id,
+      ),
+    );
+
+    // Update wallet balances
+    advertiserWallet.heldForCampaigns =
+      (advertiserWallet.heldForCampaigns || 0) - fundsToRelease;
+
+    await this.walletRepository.save(advertiserWallet);
+
+    // Create transaction record for the fund release
+    await this.createFundReleaseTransaction(
+      campaign,
+      fundsToRelease,
+      actualSpentDollars,
+    );
+
+    this.logger.log(
+      CAMPAIGN_COMPLETION_MESSAGES.VISIBILITY.FUNDS_RELEASED(
+        fundsToRelease,
+        campaign.id,
+      ),
+    );
+  }
+
+  /**
+   * Create transaction record for fund release
+   */
+  private async createFundReleaseTransaction(
+    campaign: CampaignEntity,
+    releasedAmount: number,
+    actualSpentAmount: number,
+  ): Promise<void> {
+    const transaction = this.transactionRepository.create({
+      userId: campaign.advertiserId,
+      userType: UserType.ADVERTISER,
+      campaignId: campaign.id,
+      type: TransactionType.CAMPAIGN_FUNDING, // Positive transaction for released funds
+      amount: releasedAmount,
+      grossAmountCents: Math.round(releasedAmount * 100),
+      platformFeeCents: 0,
+      status: TransactionStatus.COMPLETED,
+      description: TRANSACTION_DESCRIPTIONS.FUND_RELEASE(actualSpentAmount),
+      paymentMethod: PaymentMethod.WALLET,
+    });
+
+    await this.transactionRepository.save(transaction);
+  }
+
+  /**
+   * Pay remaining budget to promoters equally
+   */
+  private async payRemainingBudgetToPromoters(
+    campaign: CampaignEntity,
+    promoterCampaigns: PromoterCampaign[],
+    remainingBudgetCents: number,
+  ): Promise<void> {
+    if (promoterCampaigns.length === 0) {
+      this.logger.warn(
+        CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.NO_PROMOTERS(
+          campaign.id,
+        ),
+      );
+      return;
+    }
+
+    // Get advertiser user for payment processing
+    const advertiser = await this.userRepository.findOne({
+      where: { id: campaign.advertiserId },
+    });
+
+    if (!advertiser) {
+      this.logger.error(
+        CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.NO_ADVERTISER(
+          campaign.id,
+        ),
+      );
+      return;
+    }
+
+    // Calculate payment per promoter (split equally)
+    const paymentPerPromoterCents =
+      CampaignBudgetCalculator.calculatePaymentPerPromoter(
+        remainingBudgetCents,
+        promoterCampaigns.length,
+      );
+
+    if (!CampaignValidator.isPaymentAmountValid(paymentPerPromoterCents)) {
+      this.logger.log(
+        CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.AMOUNT_TOO_SMALL(
+          promoterCampaigns.length,
+        ),
+      );
+      return;
+    }
+
+    this.logger.log(
+      CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.DISTRIBUTING(
+        CampaignBudgetCalculator.centsToDollars(paymentPerPromoterCents),
+        promoterCampaigns.length,
+      ),
+    );
+
+    // Process payments to each promoter
+    for (const promoterCampaign of promoterCampaigns) {
+      try {
+        await this.processPromoterReconciliationPayment(
+          advertiser.firebaseUid,
+          campaign.id,
+          promoterCampaign.promoterId,
+          paymentPerPromoterCents,
+        );
+
+        this.logger.log(
+          CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.PAYMENT_SUCCESS(
+            promoterCampaign.promoterId,
+          ),
+        );
+      } catch (error) {
+        this.logger.error(
+          CAMPAIGN_COMPLETION_MESSAGES.CONSULTANT_SELLER.PAYMENT_FAILED(
+            promoterCampaign.promoterId,
+          ),
+          error,
+        );
+      }
+    }
+  }
+
+  /**
+   * Process a single reconciliation payment to a promoter
+   */
+  private async processPromoterReconciliationPayment(
+    advertiserFirebaseUid: string,
+    campaignId: string,
+    promoterId: string,
+    amountCents: number,
+  ): Promise<void> {
+    const payPromoterDto = {
+      campaignId,
+      promoterId,
+      amount: amountCents,
+      transactionType: TransactionType.DIRECT_PAYMENT,
+    };
+
+    await this.promoterPaymentService.payPromoter(
+      advertiserFirebaseUid,
+      payPromoterDto,
+    );
   }
 
   /**
@@ -266,7 +676,7 @@ export class CampaignCompletionService {
     return await this.campaignRepository
       .createQueryBuilder('campaign')
       .where('campaign.status = :status', {
-        status: CAMPAIGN_MANAGEMENT_CONSTANTS.COMPLETION_STATUS.ACTIVE,
+        status: CAMPAIGN_COMPLETION_STATUS.ACTIVE,
       })
       .andWhere('campaign.deadline IS NOT NULL')
       .andWhere('campaign.deadline <= :today', { today })

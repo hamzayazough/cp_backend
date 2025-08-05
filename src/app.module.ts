@@ -51,15 +51,13 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(FirebaseAuthMiddleware)
-      .exclude(
-        { path: 'connect/oauth/callback', method: RequestMethod.GET },
-        { path: 'connect/test-create-account', method: RequestMethod.POST },
-        { path: 'connect/test-onboard/:userId', method: RequestMethod.GET },
-      )
+      .exclude({ path: 'connect/oauth/callback', method: RequestMethod.GET })
       .forRoutes(
         'auth/*',
+        'user/*',
         'promoter/*',
         'advertiser/*',
+        'campaign-management/*',
         'connect/create-account',
         'connect/onboard',
         'connect/onboard/*',
