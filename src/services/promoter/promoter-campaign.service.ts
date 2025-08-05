@@ -45,7 +45,7 @@ export class PromoterCampaignService {
    * @param amount Amount in campaign currency
    * @param campaignCurrency Campaign's currency (USD or CAD)
    * @param promoterCurrency Promoter's currency (USD or CAD)
-   * @returns Amount converted to promoter's currency
+   * @returns Amount converted to promoter's currency with fees applied
    */
   private convertCurrencyAmount(
     amount: number,
@@ -54,17 +54,33 @@ export class PromoterCampaignService {
   ): number {
     // Ensure amount is a valid number
     const safeAmount = Number(amount) || 0;
+    console.log(
+      `Converting ${safeAmount} from ${campaignCurrency} to ${promoterCurrency}`,
+    );
     if (!isFinite(safeAmount)) {
       return 0;
     }
 
     if (campaignCurrency === promoterCurrency) {
-      return Number(safeAmount.toFixed(2));
+      console.log(`No conversion needed, same currency: ${campaignCurrency}`);
+      console.log(
+        `Amount after fees: ${AmountAfterApplicationFee(Number(safeAmount)).toFixed(2)}`,
+      );
+      return Number(AmountAfterApplicationFee(Number(safeAmount)).toFixed(2));
     }
 
     const fxRate = getCachedFxRate(
       campaignCurrency as 'USD' | 'CAD',
       promoterCurrency,
+    );
+    console.log(
+      `Exchange rate from ${campaignCurrency} to ${promoterCurrency}: ${fxRate}`,
+    );
+    console.log(
+      `Amount after conversion: ${Number((safeAmount * fxRate).toFixed(2))}`,
+    );
+    console.log(
+      `Amount after fees: ${AmountAfterApplicationFee(Number((safeAmount * fxRate).toFixed(2))).toFixed(2)}`,
     );
     return Number(
       AmountAfterApplicationFee(
@@ -193,6 +209,10 @@ export class PromoterCampaignService {
     promoterCurrency: 'USD' | 'CAD',
     campaign: CampaignEntity,
   ) {
+    console.log(
+      `createBaseCampaignDto called with promoterCurrency: ${promoterCurrency} for campaign type: ${campaign.type}`,
+    );
+
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
       companyName:
@@ -240,6 +260,9 @@ export class PromoterCampaignService {
       case CampaignType.SELLER: {
         // Convert budget amounts from campaign currency to promoter currency
         const campaignCurrency = campaign.currency || 'USD';
+        console.log(
+          `TransformCampaignToUnion - CampaignType.SELLER: ${campaignCurrency}`,
+        );
         const minBudgetConverted = this.convertCurrencyAmount(
           campaign.minBudget || 0,
           campaignCurrency,
@@ -262,6 +285,9 @@ export class PromoterCampaignService {
       case CampaignType.VISIBILITY: {
         // Convert CPV from campaign currency to promoter currency
         const visibilityCampaignCurrency = campaign.currency || 'USD';
+        console.log(
+          `CreateBaseCampaignDto - visibilityCampaignCurrency: ${visibilityCampaignCurrency}`,
+        );
         const cpvConverted = this.convertCurrencyAmount(
           campaign.cpv || 0,
           visibilityCampaignCurrency,
@@ -321,12 +347,13 @@ export class PromoterCampaignService {
     const campaigns = await query.skip(skip).take(limit).getMany();
 
     // Transform campaigns to the required format
+    const promoterCurrency = promoter.usedCurrency || 'USD';
+    console.log(
+      `getExploreCampaigns - promoter.usedCurrency: ${promoter.usedCurrency}, final promoterCurrency: ${promoterCurrency}`,
+    );
+
     const transformedCampaigns: CampaignUnion[] = campaigns.map((campaign) =>
-      this.transformCampaignToUnion(
-        campaign,
-        promoter.id,
-        promoter.usedCurrency || 'USD',
-      ),
+      this.transformCampaignToUnion(campaign, promoter.id, promoterCurrency),
     );
 
     return {
@@ -464,6 +491,10 @@ export class PromoterCampaignService {
     promoterId: string,
     promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): CampaignUnion {
+    console.log(
+      `transformCampaignToUnion called with promoterCurrency: ${promoterCurrency} for campaign type: ${campaign.type}`,
+    );
+
     const advertiser: Advertiser = {
       id: campaign.advertiser.id,
       companyName:
@@ -518,6 +549,9 @@ export class PromoterCampaignService {
       case CampaignType.VISIBILITY: {
         // Convert CPV from campaign currency to promoter currency
         const campaignCurrency = campaign.currency || 'USD';
+        console.log(
+          `TransformCampaignToUnion - visibilityCampaignCurrency: ${campaignCurrency}`,
+        );
         const cpvConverted = this.convertCurrencyAmount(
           campaign.cpv || 0,
           campaignCurrency,
@@ -537,6 +571,9 @@ export class PromoterCampaignService {
       case CampaignType.CONSULTANT: {
         // Convert budget amounts from campaign currency to promoter currency
         const campaignCurrency = campaign.currency || 'USD';
+        console.log(
+          `TransformCampaignToUnion - CampaignType.CONSULTANT: ${campaignCurrency}`,
+        );
         const minBudgetConverted = this.convertCurrencyAmount(
           campaign.minBudget || 0,
           campaignCurrency,
@@ -565,6 +602,10 @@ export class PromoterCampaignService {
       case CampaignType.SELLER: {
         // Convert budget amounts from campaign currency to promoter currency
         const campaignCurrency = campaign.currency || 'USD';
+        console.log(
+          'TransformCampaignToUnion - CampaignType.SELLER:',
+          campaignCurrency,
+        );
         const minBudgetConverted = this.convertCurrencyAmount(
           campaign.minBudget || 0,
           campaignCurrency,
@@ -593,6 +634,10 @@ export class PromoterCampaignService {
       case CampaignType.SALESMAN: {
         // Convert commission from campaign currency to promoter currency
         const campaignCurrency = campaign.currency || 'USD';
+        console.log(
+          'TransformCampaignToUnion - CampaignType.SALESMAN:',
+          campaignCurrency,
+        );
         const commissionConverted = this.convertCurrencyAmount(
           campaign.commissionPerSale || 0,
           campaignCurrency,
