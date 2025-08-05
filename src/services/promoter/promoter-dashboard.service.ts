@@ -249,6 +249,7 @@ export class PromoterDashboardService {
 
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
+      .leftJoinAndSelect('campaign.media', 'media')
       .leftJoinAndSelect('campaign.advertiser', 'advertiser')
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });

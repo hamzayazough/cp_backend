@@ -2,6 +2,7 @@ import { CampaignType } from '../enums/campaign-type';
 import { CampaignStatus } from '../enums/campaign-status';
 import { PromoterCampaignStatus } from '../database/entities/promoter-campaign.entity';
 import { Advertiser } from './explore-campaign';
+import { CampaignMedia } from './campaign-media';
 
 export interface PromoterDashboardRequest {
   includeStats?: boolean;
@@ -33,7 +34,7 @@ export interface PromoterStats {
 export interface PromoterActiveCampaign {
   id: string;
   title: string;
-  mediaUrl?: string; // URL to the S3 campaign media (image/video)
+  mediaUrls?: CampaignMedia[]; // Campaign media files (images/videos)
   type: CampaignType;
   status: PromoterCampaignStatus;
   views: number;
@@ -57,7 +58,7 @@ export interface PromoterActiveCampaign {
 export interface PromoterSuggestedCampaign {
   id: string;
   title: string;
-  mediaUrl?: string; // URL to the S3 campaign media (image/video)
+  mediaUrls?: CampaignMedia[]; // Campaign media files (images/videos)
   type: CampaignType;
   status: CampaignStatus;
   advertiser: Advertiser;

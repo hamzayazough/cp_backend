@@ -120,7 +120,24 @@ export class AdvertiserCampaignService {
         id: campaign.id,
         title: campaign.title,
         type: campaign.type,
-        mediaUrl: campaign.mediaUrl,
+        mediaUrls:
+          campaign.media?.map((m) => ({
+            id: m.id,
+            campaignId: m.campaignId,
+            mediaUrl: m.mediaUrl,
+            mediaType: m.mediaType as
+              | 'image'
+              | 'video'
+              | 'document'
+              | undefined,
+            fileName: m.fileName,
+            fileSize: m.fileSize,
+            mimeType: m.mimeType,
+            displayOrder: m.displayOrder,
+            isPrimary: m.isPrimary,
+            createdAt: m.createdAt,
+            updatedAt: m.updatedAt,
+          })) || [],
         status: CAMPAIGN_TRANSFORMERS.mapCampaignStatus(
           campaign,
           campaign.promoterCampaigns || [],
@@ -182,7 +199,20 @@ export class AdvertiserCampaignService {
       id: campaign.id,
       title: campaign.title,
       type: campaign.type,
-      mediaUrl: campaign.mediaUrl,
+      mediaUrls:
+        campaign.media?.map((m) => ({
+          id: m.id,
+          campaignId: m.campaignId,
+          mediaUrl: m.mediaUrl,
+          mediaType: m.mediaType as 'image' | 'video' | 'document' | undefined,
+          fileName: m.fileName,
+          fileSize: m.fileSize,
+          mimeType: m.mimeType,
+          displayOrder: m.displayOrder,
+          isPrimary: m.isPrimary,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        })) || [],
       status: CAMPAIGN_TRANSFORMERS.mapCampaignStatus(
         campaign,
         campaign.promoterCampaigns || [],

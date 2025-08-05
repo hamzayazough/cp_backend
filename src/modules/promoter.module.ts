@@ -16,6 +16,7 @@ import { CampaignApplicationEntity } from '../database/entities/campaign-applica
 import { CampaignWorkEntity } from '../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
+import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
 
 @Module({
@@ -23,6 +24,7 @@ import { UniqueViewEntity } from '../database/entities/unique-view.entity';
     TypeOrmModule.forFeature([
       UserEntity,
       CampaignEntity,
+      CampaignMedia,
       Transaction,
       Wallet,
       PromoterCampaign,

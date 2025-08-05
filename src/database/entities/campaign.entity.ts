@@ -22,6 +22,7 @@ import { Transaction } from './transaction.entity';
 import { CampaignApplicationEntity } from './campaign-applications.entity';
 import { UniqueViewEntity } from './unique-view.entity';
 import { CampaignEarningsTracking } from './financial/campaign-earnings-tracking.entity';
+import { CampaignMedia } from './campaign-media.entity';
 
 @Entity('campaigns')
 export class CampaignEntity {
@@ -57,9 +58,6 @@ export class CampaignEntity {
     nullable: true,
   })
   expiryDate?: Date;
-
-  @Column({ name: 'media_url', type: 'text', nullable: true })
-  mediaUrl?: string;
 
   @Column({
     type: 'enum',
@@ -286,4 +284,7 @@ export class CampaignEntity {
 
   @OneToMany(() => CampaignEarningsTracking, (earnings) => earnings.campaign)
   earningsTracking: CampaignEarningsTracking[];
+
+  @OneToMany(() => CampaignMedia, (media) => media.campaign)
+  media: CampaignMedia[];
 }
