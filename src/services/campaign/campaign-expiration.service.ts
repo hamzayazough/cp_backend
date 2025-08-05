@@ -1,7 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CampaignNotificationService } from './campaign-notification.service';
 import { CampaignCompletionService } from './campaign-management.service';
+import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { UserEntity } from '../../database/entities';
+import { CampaignStatus } from '../../enums/campaign-status';
 import { CAMPAIGN_MANAGEMENT_CONSTANTS } from '../../constants/campaign-management.constants';
 import { CampaignExpirationCheckResult } from '../../interfaces/campaign-management';
 
@@ -15,6 +26,10 @@ export class CampaignExpirationService {
   private isProcessing = false; // Lock to prevent overlapping executions
 
   constructor(
+    @InjectRepository(CampaignEntity)
+    private readonly campaignRepository: Repository<CampaignEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
     private readonly campaignNotificationService: CampaignNotificationService,
     private readonly campaignCompletionService: CampaignCompletionService,
   ) {}
@@ -238,6 +253,111 @@ export class CampaignExpirationService {
         error,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Extend a campaign's deadline by adding days
+   * @param firebaseUid - Firebase UID of the requesting user
+   * @param campaignId - ID of the campaign to extend
+   * @param additionalDays - Number of days to add to the current deadline
+   * @returns The updated campaign with new deadline
+   */
+  async extendCampaignDeadline(
+    firebaseUid: string,
+    campaignId: string,
+    additionalDays: number,
+  ): Promise<{ success: boolean; message: string; newDeadline: Date }> {
+    this.logger.log(
+      `🔄 Extending campaign ${campaignId} deadline by ${additionalDays} days for user ${firebaseUid}`,
+    );
+
+    try {
+      // Validate input
+      if (additionalDays <= 0) {
+        throw new BadRequestException(
+          'Additional days must be a positive number',
+        );
+      }
+
+      // Find the user by Firebase UID
+      const user = await this.userRepository.findOne({
+        where: { firebaseUid },
+        select: ['id', 'name', 'email'],
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Find the campaign with advertiser check
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+        select: ['id', 'title', 'deadline', 'status', 'advertiserId'],
+      });
+
+      if (!campaign) {
+        throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
+      }
+
+      // Validate campaign ownership
+      if (campaign.advertiserId !== user.id) {
+        throw new ForbiddenException(
+          'You are not authorized to modify this campaign',
+        );
+      }
+
+      // Validate campaign status
+      if (campaign.status !== CampaignStatus.ACTIVE) {
+        throw new BadRequestException(
+          'Can only extend deadline for active campaigns',
+        );
+      }
+
+      if (!campaign.deadline) {
+        throw new BadRequestException('Campaign does not have a deadline set');
+      }
+
+      // Calculate new deadline
+      const currentDeadline = new Date(campaign.deadline);
+      const newDeadline = new Date(currentDeadline);
+      newDeadline.setDate(currentDeadline.getDate() + additionalDays);
+
+      // Update the campaign deadline
+      await this.campaignRepository.update(
+        { id: campaignId },
+        {
+          deadline: newDeadline,
+          updatedAt: new Date(),
+        },
+      );
+
+      this.logger.log(
+        `✅ Campaign ${campaignId} deadline extended by user ${user.email} from ${currentDeadline.toISOString()} to ${newDeadline.toISOString()}`,
+      );
+
+      return {
+        success: true,
+        message: `Campaign "${campaign.title}" deadline extended by ${additionalDays} days`,
+        newDeadline,
+      };
+    } catch (error) {
+      this.logger.error(
+        `❌ Failed to extend campaign ${campaignId} deadline for user ${firebaseUid}:`,
+        error,
+      );
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+
+      throw new Error(
+        `Failed to extend campaign deadline: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 }
