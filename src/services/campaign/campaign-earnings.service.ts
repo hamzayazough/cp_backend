@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { CampaignEarningsTracking } from '../database/entities/financial/campaign-earnings-tracking.entity';
-import { UniqueViewEntity } from '../database/entities/unique-view.entity';
-import { CampaignEntity } from '../database/entities/campaign.entity';
+import { CampaignEarningsTracking } from 'src/database/entities/financial/campaign-earnings-tracking.entity';
+import { UniqueViewEntity } from 'src/database/entities/unique-view.entity';
+import { CampaignEntity } from 'src/database/entities';
 import {
   CAMPAIGN_EARNINGS_CONSTANTS,
   CAMPAIGN_EARNINGS_MESSAGES,
-} from '../constants/campaign-earnings.constants';
+} from 'src/constants/campaign-earnings.constants';
 
 interface CampaignViewQueryResult {
   promoterId: string;

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CampaignMedia } from '../database/entities/campaign-media.entity';
+import { CampaignMedia } from '../../database/entities/campaign-media.entity';
 
 @Injectable()
 export class CampaignMediaService {

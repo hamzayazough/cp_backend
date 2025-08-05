@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { CampaignEarningsTracking } from '../database/entities/financial/campaign-earnings-tracking.entity';
-import { PromoterPaymentService } from './promoter/promoter-payment.service';
+import { CampaignEarningsTracking } from '../../database/entities/financial/campaign-earnings-tracking.entity';
+import { PromoterPaymentService } from '../promoter/promoter-payment.service';
 import { CampaignEarningsService } from './campaign-earnings.service';
-import { getCachedFxRate } from '../helpers/currency.helper';
-import { TransactionType } from '../database/entities/transaction.entity';
+import { getCachedFxRate } from '../../helpers/currency.helper';
+import { TransactionType } from '../../database/entities/transaction.entity';
 
 /**
  * Automated campaign-based payout processing service

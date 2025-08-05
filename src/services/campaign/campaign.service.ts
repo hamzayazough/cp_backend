@@ -23,7 +23,7 @@ import { FileValidationHelper } from 'src/helpers/file-validation.helper';
 import { CampaignValidationHelper } from 'src/helpers/campaign-validation.helper';
 import { CampaignEntityBuilder } from 'src/helpers/campaign-entity.builder';
 import { CampaignEntityMapper } from 'src/helpers/campaign-entity.mapper';
-import { CampaignMediaService } from '../campaign-media.service';
+import { CampaignMediaService } from './campaign-media.service';
 
 // Constants
 import {

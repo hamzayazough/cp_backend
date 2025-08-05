@@ -8,7 +8,7 @@ import { AdvertiserStatsService } from 'src/services/advertiser/advertiser-stats
 import { AdvertiserTransactionService } from 'src/services/advertiser/advertiser-transaction.service';
 import { AdvertiserMessageService } from 'src/services/advertiser/advertiser-message.service';
 import { CampaignService } from 'src/services/campaign/campaign.service';
-import { CampaignMediaService } from 'src/services/campaign-media.service';
+import { CampaignMediaService } from 'src/services/campaign/campaign-media.service';
 import { S3Service } from '../services/s3.service';
 import { PromoterModule } from './promoter.module';
 import { PaymentModule } from './payment.module';
