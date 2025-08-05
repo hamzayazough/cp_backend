@@ -15,3 +15,6 @@ export * from './view-stat';
 
 // Firebase integration
 export * from './firebase-user.interface';
+
+// Campaign management
+export * from './campaign-management';

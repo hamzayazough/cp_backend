@@ -4,7 +4,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { UniqueViewEntity } from 'src/database/entities/unique-view.entity';
 import { CampaignEntity } from 'src/database/entities/campaign.entity';
-import { PromoterCampaign } from 'src/database/entities/promoter-campaign.entity';
+import {
+  PromoterCampaign,
+  PromoterCampaignStatus,
+} from 'src/database/entities/promoter-campaign.entity';
 import { PromoterDetailsEntity } from 'src/database/entities/promoter-details.entity';
 import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
 import { CampaignStatus } from 'src/enums/campaign-status';
@@ -66,14 +69,6 @@ export class ViewsService {
       userAgent: userAgent.substring(0, 50) + '...',
     });
 
-    console.log('🔍 UUID Validation:', {
-      'Raw promoterId': JSON.stringify(promoterId),
-      'promoterId length': promoterId.length,
-      'promoterId ends with': promoterId.slice(-5),
-      'campaignId length': campaignId.length,
-      'campaignId ends with': campaignId.slice(-5),
-    });
-
     // Clean promoterId if it has corruption
     const cleanPromoterId = promoterId.trim().replace(/[<>]/g, '');
     if (cleanPromoterId !== promoterId) {
@@ -87,7 +82,44 @@ export class ViewsService {
     console.log('🔐 Generated fingerprint:', fingerprint);
     console.log('🖥️ Device info extracted:', this.extractDeviceInfo(userAgent));
 
-    // 1) Try to insert a new unique view
+    // 1) Validate campaign exists and is active
+    console.log('✅ Validating campaign status...');
+    const campaign = await this.campaignRepo.findOne({
+      where: { id: campaignId, status: CampaignStatus.ACTIVE },
+      select: ['id', 'status', 'trackingLink', 'cpv', 'currentViews'],
+    });
+
+    if (!campaign) {
+      console.log('❌ Campaign not found or not active');
+      throw new NotFoundException('Campaign not found or not active');
+    }
+
+    if (!campaign.trackingLink) {
+      console.log('❌ Campaign tracking link not configured');
+      throw new NotFoundException('Campaign tracking link not configured');
+    }
+
+    console.log('✅ Campaign validation passed');
+
+    // 2) Validate promoter campaign exists and is ongoing
+    console.log('👤 Validating promoter campaign status...');
+    const promoterCampaign = await this.promoterCampaignRepo.findOne({
+      where: {
+        campaignId,
+        promoterId: cleanPromoterId,
+        status: PromoterCampaignStatus.ONGOING,
+      },
+      select: ['id', 'status', 'campaignId', 'promoterId'],
+    });
+
+    if (!promoterCampaign) {
+      console.log('❌ Promoter campaign not found or not ongoing');
+      throw new NotFoundException('Promoter campaign not found or not ongoing');
+    }
+
+    console.log('✅ Promoter campaign validation passed');
+
+    // 3) Try to insert a new unique view
     try {
       console.log('📝 Inserting unique view record...');
       await this.uniqueViewRepo.insert({
@@ -99,15 +131,10 @@ export class ViewsService {
       });
       console.log('✅ Unique view inserted successfully');
 
-      console.log('✅ Unique view inserted successfully');
-
-      // New view detected → get campaign details for budget calculations
-      console.log('🎯 Fetching campaign details for budget calculations...');
-      const campaign = await this.campaignRepo.findOne({
-        where: { id: campaignId },
-        select: ['id', 'cpv', 'currentViews'],
-      });
-      console.log('📊 Campaign found:', campaign);
+      // New view detected → use already validated campaign for budget calculations
+      console.log(
+        '💰 Processing budget calculations with validated campaign...',
+      );
 
       if (campaign && campaign.cpv) {
         const costPerView = campaign.cpv / 100; // Convert from cents to dollars
@@ -220,34 +247,9 @@ export class ViewsService {
       // This is expected behavior for subsequent visits by the same user
     }
 
-    // 2) Fetch the campaign's tracking_link (reuse if already fetched, or fetch again)
-    console.log('🔗 Fetching campaign for redirect...');
-    const campaignForRedirect = await this.campaignRepo.findOne({
-      where: { id: campaignId },
-      select: ['id', 'trackingLink', 'status'],
-    });
-    console.log('🎯 Campaign for redirect:', campaignForRedirect);
-
-    if (!campaignForRedirect) {
-      console.log('❌ Campaign not found');
-      throw new NotFoundException('Campaign not found');
-    }
-
-    if (!campaignForRedirect.trackingLink) {
-      console.log('❌ Campaign tracking link not configured');
-      throw new NotFoundException('Campaign tracking link not configured');
-    }
-
-    if (campaignForRedirect.status !== CampaignStatus.ACTIVE) {
-      console.log(
-        '❌ Campaign is not active, status:',
-        campaignForRedirect.status,
-      );
-      throw new NotFoundException('Campaign is not active');
-    }
-
-    console.log('✅ Redirecting to:', campaignForRedirect.trackingLink);
-    return campaignForRedirect.trackingLink;
+    // 2) Return the tracking link from already validated campaign
+    console.log('✅ Redirecting to:', campaign.trackingLink);
+    return campaign.trackingLink;
   }
 
   async getUniqueViewStats(campaignId: string, promoterId?: string) {

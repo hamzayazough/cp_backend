@@ -18,6 +18,7 @@ import { ViewsModule } from './modules/views.module';
 import { StripeModule } from './stripe/stripe.module';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 import { CampaignPayoutModule } from './modules/campaign-payout.module';
+import { CampaignManagementModule } from './modules/campaign-management.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { CampaignPayoutModule } from './modules/campaign-payout.module';
     AdvertiserModule,
     ViewsModule,
     CampaignPayoutModule,
+    CampaignManagementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
