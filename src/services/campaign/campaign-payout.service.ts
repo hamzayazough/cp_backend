@@ -7,6 +7,7 @@ import { PromoterPaymentService } from '../promoter/promoter-payment.service';
 import { CampaignEarningsService } from './campaign-earnings.service';
 import { getCachedFxRate } from '../../helpers/currency.helper';
 import { TransactionType } from '../../database/entities/transaction.entity';
+import { CAMPAIGN_MANAGEMENT_CONSTANTS } from 'src/constants/campaign-management.constants';
 
 /**
  * Automated campaign-based payout processing service
@@ -28,7 +29,7 @@ export class CampaignPayoutService {
    * Runs once per month to check for campaigns ready for payout
    * Calculates earnings and processes payouts for eligible campaigns
    */
-  @Cron('0 0 1 * *', {
+  @Cron(CAMPAIGN_MANAGEMENT_CONSTANTS.CRON_SCHEDULES.MONTHLY_CHECK, {
     name: 'campaignPayoutProcess',
     timeZone: 'UTC',
   })

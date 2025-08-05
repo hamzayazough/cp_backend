@@ -16,6 +16,7 @@ export const CAMPAIGN_MANAGEMENT_CONSTANTS = {
    */
   CRON_SCHEDULES: {
     DAILY_CHECK: '0 0 * * *', // Run at midnight every day
+    MONTHLY_CHECK: '0 0 1 * *', // Run at midnight on the first day of every month
   },
 
   /**

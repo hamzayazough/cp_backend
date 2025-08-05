@@ -12,6 +12,7 @@ import { CampaignExpirationCheckResult } from '../../interfaces/campaign-managem
 @Injectable()
 export class CampaignExpirationService {
   private readonly logger = new Logger(CampaignExpirationService.name);
+  private isProcessing = false; // Lock to prevent overlapping executions
 
   constructor(
     private readonly campaignNotificationService: CampaignNotificationService,
@@ -27,6 +28,15 @@ export class CampaignExpirationService {
     timeZone: 'UTC',
   })
   async processCampaignExpirations(): Promise<void> {
+    // Prevent overlapping executions
+    if (this.isProcessing) {
+      this.logger.warn(
+        '⏳ Campaign expiration check already in progress, skipping this execution',
+      );
+      return;
+    }
+
+    this.isProcessing = true;
     this.logger.log('🕒 Starting daily campaign expiration check');
 
     try {
@@ -53,6 +63,8 @@ export class CampaignExpirationService {
         '❌ Failed to complete daily campaign expiration check:',
         error,
       );
+    } finally {
+      this.isProcessing = false;
     }
   }
 
