@@ -199,7 +199,6 @@ export class CampaignEarningsService {
       FROM unique_views uv
       INNER JOIN campaigns c ON c.id = uv.campaign_id
       WHERE c.type = 'VISIBILITY'
-        AND c.status = 'ACTIVE'
         AND c.cpv IS NOT NULL
       GROUP BY uv.promoter_id, uv.campaign_id, c.cpv
     `);
