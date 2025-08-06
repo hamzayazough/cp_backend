@@ -749,7 +749,6 @@ export class AdvertiserController {
     if (dto.amount < 100) {
       throw new BadRequestException('Minimum payment amount is $1.00');
     }
-
     const result = await this.advertiserPaymentService.payPromoter(
       req.user.uid,
       dto,

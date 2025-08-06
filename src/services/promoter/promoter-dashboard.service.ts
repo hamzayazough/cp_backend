@@ -10,7 +10,11 @@ import {
   TransactionType,
 } from '../../database/entities/transaction.entity';
 import { UniqueViewEntity } from '../../database/entities/unique-view.entity';
-import { PromoterCampaignStatus } from '../../database/entities/promoter-campaign.entity';
+import {
+  PromoterCampaign,
+  PromoterCampaignStatus,
+} from '../../database/entities/promoter-campaign.entity';
+import { CampaignApplicationEntity } from '../../database/entities/campaign-applications.entity';
 import {
   PromoterStats,
   PromoterActiveCampaign,
@@ -35,6 +39,10 @@ export class PromoterDashboardService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
+    @InjectRepository(PromoterCampaign)
+    private promoterCampaignRepository: Repository<PromoterCampaign>,
+    @InjectRepository(CampaignApplicationEntity)
+    private campaignApplicationRepository: Repository<CampaignApplicationEntity>,
     private readonly promoterCampaignService: PromoterCampaignService,
   ) {}
 
@@ -244,8 +252,16 @@ export class PromoterDashboardService {
     promoter: UserEntity,
     limit: number,
   ): Promise<PromoterSuggestedCampaign[]> {
-    const relatedCampaignIds =
-      promoter.promoterCampaigns?.map((pc) => pc.campaignId) || [];
+    // Get excluded campaign IDs using the same logic as getExploreCampaigns
+    const excludedCampaignIds = await this.getExcludedCampaignIds(promoter);
+
+    // Get additional private campaigns taken by others
+    const takenPrivateIds = await this.getTakenPrivateCampaignIds(promoter.id);
+
+    // Combine all exclusions
+    const allExcludedCampaignIds = [
+      ...new Set([...excludedCampaignIds, ...takenPrivateIds]),
+    ];
 
     let query = this.campaignRepository
       .createQueryBuilder('campaign')
@@ -254,10 +270,14 @@ export class PromoterDashboardService {
       .leftJoinAndSelect('advertiser.advertiserDetails', 'advertiserDetails')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE });
 
-    if (relatedCampaignIds.length > 0) {
-      query = query.andWhere('campaign.id NOT IN (:...relatedCampaignIds)', {
-        relatedCampaignIds,
-      });
+    // Exclude campaigns using comprehensive exclusion logic
+    if (allExcludedCampaignIds.length > 0) {
+      query = query.andWhere(
+        'campaign.id NOT IN (:...allExcludedCampaignIds)',
+        {
+          allExcludedCampaignIds,
+        },
+      );
     }
 
     const suggestedCampaigns = await query
@@ -268,6 +288,51 @@ export class PromoterDashboardService {
     return this.promoterCampaignService.convertToPromoterSuggestedCampaignDto(
       promoter.usedCurrency,
       suggestedCampaigns,
+    );
+  }
+
+  /**
+   * Get campaign IDs that should be excluded from suggested results
+   * Same logic as used in promoter-campaign.service.ts getExploreCampaigns
+   */
+  private async getExcludedCampaignIds(
+    promoter: UserEntity,
+  ): Promise<string[]> {
+    const joinedIds = (promoter.promoterCampaigns || []).map(
+      (pc) => pc.campaignId,
+    );
+
+    // Get applied campaign IDs separately since it's not a direct relation on UserEntity
+    const appliedCampaignIds = await this.campaignApplicationRepository
+      .createQueryBuilder('ca')
+      .select('ca.campaignId', 'campaignId')
+      .where('ca.promoterId = :promoterId', { promoterId: promoter.id })
+      .getRawMany();
+
+    const appliedIds = appliedCampaignIds.map(
+      (row: { campaignId: string }) => row.campaignId,
+    );
+
+    return [...new Set([...joinedIds, ...appliedIds])];
+  }
+
+  /**
+   * Get private campaigns that are already taken by other promoters
+   * Same logic as used in promoter-campaign.service.ts getExploreCampaigns
+   */
+  private async getTakenPrivateCampaignIds(
+    promoterId: string,
+  ): Promise<string[]> {
+    const takenPrivateCampaignIds = await this.promoterCampaignRepository
+      .createQueryBuilder('pc')
+      .innerJoin('pc.campaign', 'campaign')
+      .select('pc.campaignId', 'campaignId')
+      .where('campaign.isPublic = :isPublic', { isPublic: false })
+      .andWhere('pc.promoterId != :promoterId', { promoterId })
+      .getRawMany();
+
+    return takenPrivateCampaignIds.map(
+      (row: { campaignId: string }) => row.campaignId,
     );
   }
 

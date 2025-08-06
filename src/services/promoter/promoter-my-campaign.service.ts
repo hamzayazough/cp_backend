@@ -20,11 +20,43 @@ import { CampaignType } from '../../enums/campaign-type';
 import { UserType } from '../../enums/user-type';
 import { Advertiser } from '../../interfaces/explore-campaign';
 import { getCachedFxRate } from '../../helpers/currency.helper';
-import { AmountAfterApplicationFee } from 'src/constants/application-fees';
 
 @Injectable()
 export class PromoterMyCampaignService {
   constructor() {}
+
+  /**
+   * Convert amount from campaign currency to promoter currency
+   * Applies currency conversion and 80% platform fee deduction
+   */
+  private convertAmount(
+    amount: number,
+    campaignCurrency: 'USD' | 'CAD',
+    promoterCurrency: 'USD' | 'CAD',
+    applyPlatformFee: boolean = true,
+  ): number {
+    // Ensure amount is a valid number
+    const safeAmount = Number(amount) || 0;
+    if (!isFinite(safeAmount)) {
+      return 0;
+    }
+
+    let convertedAmount: number;
+
+    if (campaignCurrency === promoterCurrency) {
+      convertedAmount = safeAmount;
+    } else {
+      convertedAmount =
+        safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency);
+    }
+
+    // Apply 80% platform fee deduction if requested (promoter gets 80% of the amount)
+    if (applyPlatformFee) {
+      convertedAmount = convertedAmount * 0.8;
+    }
+
+    return Number(convertedAmount.toFixed(2));
+  }
 
   /**
    * Get promoter's campaigns with filtering, sorting, and pagination
@@ -367,27 +399,13 @@ export class PromoterMyCampaignService {
   ): CampaignDetailsUnion {
     // Convert campaign currency amounts to promoter currency
     const campaignCurrency = campaign.currency || 'USD';
-    const convertAmount = (amount: number) => {
-      // Ensure amount is a valid number
-      const safeAmount = Number(amount) || 0;
-      if (!isFinite(safeAmount)) {
-        return 0;
-      }
-
-      if (campaignCurrency === promoterCurrency) {
-        return Number(safeAmount.toFixed(2));
-      }
-      return Number(
-        AmountAfterApplicationFee(
-          Number(
-            safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency),
-          ),
-        ).toFixed(2),
-      );
-    };
 
     const baseCampaign = {
-      budgetHeld: convertAmount(Number(campaign.budgetAllocated) || 0),
+      budgetHeld: this.convertAmount(
+        Number(campaign.budgetAllocated) || 0,
+        campaignCurrency,
+        promoterCurrency,
+      ),
       spentBudget: this.calculateSpentBudget(
         campaign,
         promoterId,
@@ -414,7 +432,11 @@ export class PromoterMyCampaignService {
           type: CampaignType.VISIBILITY,
           maxViews: campaign.maxViews || 0,
           currentViews: promoterCampaign ? promoterCampaign.viewsGenerated : 0,
-          cpv: convertAmount(campaign.cpv || 0),
+          cpv: this.convertAmount(
+            campaign.cpv || 0,
+            campaignCurrency,
+            promoterCurrency,
+          ),
           minFollowers: campaign.minFollowers,
           trackingLink: `${process.env.SERVER_URL || 'http://localhost:3000'}/api/visit/${campaign.id}/${promoterId}`,
         };
@@ -454,8 +476,16 @@ export class PromoterMyCampaignService {
             })) || [],
           expertiseRequired: campaign.expertiseRequired,
           meetingCount: campaign.meetingCount || 0,
-          maxBudget: convertAmount(campaign.maxBudget || 0),
-          minBudget: convertAmount(campaign.minBudget || 0),
+          maxBudget: this.convertAmount(
+            campaign.maxBudget || 0,
+            campaignCurrency,
+            promoterCurrency,
+          ),
+          minBudget: this.convertAmount(
+            campaign.minBudget || 0,
+            campaignCurrency,
+            promoterCurrency,
+          ),
         };
 
       case CampaignType.SELLER:
@@ -492,8 +522,16 @@ export class PromoterMyCampaignService {
                 })) || [],
             })) || [],
           fixedPrice: undefined,
-          maxBudget: convertAmount(campaign.maxBudget || 0),
-          minBudget: convertAmount(campaign.minBudget || 0),
+          maxBudget: this.convertAmount(
+            campaign.maxBudget || 0,
+            campaignCurrency,
+            promoterCurrency,
+          ),
+          minBudget: this.convertAmount(
+            campaign.minBudget || 0,
+            campaignCurrency,
+            promoterCurrency,
+          ),
           minFollowers: campaign.minFollowers,
           needMeeting: campaign.needMeeting || false,
           meetingPlan: campaign.meetingPlan!,
@@ -524,22 +562,6 @@ export class PromoterMyCampaignService {
     promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): number {
     const campaignCurrency = pc.campaign.currency || 'USD';
-    const convertAmount = (amount: number) => {
-      // Ensure amount is a valid number
-      const safeAmount = Number(amount) || 0;
-      if (!isFinite(safeAmount)) {
-        return 0;
-      }
-
-      if (campaignCurrency === promoterCurrency) {
-        return safeAmount;
-      }
-      return Number(
-        (
-          safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency)
-        ).toFixed(2),
-      );
-    };
 
     if (
       pc.campaign.type === CampaignType.VISIBILITY &&
@@ -548,14 +570,24 @@ export class PromoterMyCampaignService {
     ) {
       const maxPossibleEarnings =
         (pc.campaign.maxViews / 100) * pc.campaign.cpv;
-      return convertAmount(maxPossibleEarnings);
+      return this.convertAmount(
+        maxPossibleEarnings,
+        campaignCurrency,
+        promoterCurrency,
+        false,
+      );
     }
 
     if (
       pc.campaign.type === CampaignType.CONSULTANT ||
       pc.campaign.type === CampaignType.SELLER
     ) {
-      return convertAmount(pc.campaign.maxBudget || Number(pc.earnings));
+      return this.convertAmount(
+        pc.campaign.maxBudget || Number(pc.earnings),
+        campaignCurrency,
+        promoterCurrency,
+        false,
+      );
     }
 
     return Number(pc.earnings);
@@ -569,22 +601,6 @@ export class PromoterMyCampaignService {
     promoterCurrency: 'USD' | 'CAD' = 'USD',
   ): number {
     const campaignCurrency = campaign.currency || 'USD';
-    const convertAmount = (amount: number) => {
-      // Ensure amount is a valid number
-      const safeAmount = Number(amount) || 0;
-      if (!isFinite(safeAmount)) {
-        return 0;
-      }
-
-      if (campaignCurrency === promoterCurrency) {
-        return safeAmount;
-      }
-      return Number(
-        (
-          safeAmount * getCachedFxRate(campaignCurrency, promoterCurrency)
-        ).toFixed(2),
-      );
-    };
 
     if (
       campaign.type === CampaignType.VISIBILITY &&
@@ -592,14 +608,24 @@ export class PromoterMyCampaignService {
       campaign.cpv
     ) {
       const maxPossibleEarnings = (campaign.maxViews / 100) * campaign.cpv;
-      return convertAmount(maxPossibleEarnings);
+      return this.convertAmount(
+        maxPossibleEarnings,
+        campaignCurrency,
+        promoterCurrency,
+        false,
+      );
     }
 
     if (
       campaign.type === CampaignType.CONSULTANT ||
       campaign.type === CampaignType.SELLER
     ) {
-      return convertAmount(campaign.maxBudget || 0);
+      return this.convertAmount(
+        campaign.maxBudget || 0,
+        campaignCurrency,
+        promoterCurrency,
+        false,
+      );
     }
 
     return 0;

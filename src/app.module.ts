@@ -18,6 +18,7 @@ import { ViewsModule } from './modules/views.module';
 import { StripeModule } from './stripe/stripe.module';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 import { CampaignPayoutModule } from './modules/campaign-payout.module';
+import { CampaignManagementModule } from './modules/campaign-management.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { CampaignPayoutModule } from './modules/campaign-payout.module';
     AdvertiserModule,
     ViewsModule,
     CampaignPayoutModule,
+    CampaignManagementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -49,15 +51,13 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(FirebaseAuthMiddleware)
-      .exclude(
-        { path: 'connect/oauth/callback', method: RequestMethod.GET },
-        { path: 'connect/test-create-account', method: RequestMethod.POST },
-        { path: 'connect/test-onboard/:userId', method: RequestMethod.GET },
-      )
+      .exclude({ path: 'connect/oauth/callback', method: RequestMethod.GET })
       .forRoutes(
         'auth/*',
+        'user/*',
         'promoter/*',
         'advertiser/*',
+        'campaign-management/*',
         'connect/create-account',
         'connect/onboard',
         'connect/onboard/*',

@@ -186,6 +186,7 @@ export class PromoterService {
     return this.promoterCampaignService.transformCampaignToUnion(
       campaign,
       promoter.id,
+      promoter.usedCurrency || 'USD',
     );
   }
 
