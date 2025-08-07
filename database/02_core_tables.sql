@@ -36,8 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
     number_of_seller_campaign_done INTEGER DEFAULT 0 CHECK (number_of_seller_campaign_done >= 0),
     number_of_salesman_campaign_done INTEGER DEFAULT 0 CHECK (number_of_salesman_campaign_done >= 0),
     number_of_consultant_campaign_done INTEGER DEFAULT 0 CHECK (number_of_consultant_campaign_done >= 0),
-    country VARCHAR(100) DEFAULT 'CA', -- User's country for localization
-    total_views_generated INTEGER DEFAULT 0 CHECK (total_views_generated >= 0)
+    country VARCHAR(100) DEFAULT 'CA'
 
 );
 

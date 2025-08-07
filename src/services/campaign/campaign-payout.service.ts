@@ -26,7 +26,7 @@ export class CampaignPayoutService {
   ) {}
 
   /**
-   * Runs once per month to check for campaigns ready for payout
+   * Runs every 5 minutes to check for campaigns ready for payout (TESTING MODE)
    * Calculates earnings and processes payouts for eligible campaigns
    */
   @Cron(CAMPAIGN_MANAGEMENT_CONSTANTS.CRON_SCHEDULES.MONTHLY_CHECK, {
@@ -34,18 +34,48 @@ export class CampaignPayoutService {
     timeZone: 'UTC',
   })
   async processCampaignPayouts(): Promise<void> {
-    this.logger.log('Starting campaign payout processing cycle');
+    this.logger.log(
+      '🚀 Starting campaign payout processing cycle (every 5 minutes for testing)',
+    );
 
     try {
-      // Step 1: Calculate earnings for all active campaigns using the new service
-      await this.campaignEarningsService.calculateAllCampaignEarnings();
+      // For testing: Calculate earnings for current month
+      // In production, this would be calculatePreviousMonthEarnings()
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1; // getMonth() is 0-indexed
+      const currentYear = currentDate.getFullYear();
+
+      this.logger.log(
+        `📅 Calculating earnings for current month: ${currentMonth}/${currentYear}`,
+      );
+
+      // Check if we've already calculated earnings for this month to avoid duplicates
+      const hasCalculations =
+        await this.campaignEarningsService.hasCalculationsForMonth(
+          currentMonth,
+          currentYear,
+        );
+
+      if (hasCalculations) {
+        this.logger.log(
+          `⏭️  Earnings already calculated for ${currentMonth}/${currentYear}, skipping calculation`,
+        );
+      } else {
+        this.logger.log(
+          `🔢 Calculating new earnings for ${currentMonth}/${currentYear}`,
+        );
+        await this.campaignEarningsService.calculateAllCampaignEarnings(
+          currentMonth,
+          currentYear,
+        );
+      }
 
       // Step 2: Process eligible campaign payouts
       await this.processEligibleCampaignPayouts();
 
-      this.logger.log('Completed campaign payout processing cycle');
+      this.logger.log('✅ Completed campaign payout processing cycle');
     } catch (error) {
-      this.logger.error('Failed campaign payout processing cycle:', error);
+      this.logger.error('❌ Failed campaign payout processing cycle:', error);
     }
   }
 
@@ -99,7 +129,7 @@ export class CampaignPayoutService {
           ? (earning.netEarningsCents / 100).toFixed(2)
           : 'NULL';
         this.logger.log(
-          `  - Promoter ${earning.promoterId.substring(0, 8)}... has net earnings: $${netDollars} (needs $5.00 minimum)`,
+          `  - Promoter ${earning.promoterId.substring(0, 8)}... has net earnings: $${netDollars} (minimum: $0.01)`,
         );
       });
 
