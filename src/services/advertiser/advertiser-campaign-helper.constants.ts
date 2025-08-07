@@ -345,6 +345,7 @@ export const CAMPAIGN_DETAIL_BUILDERS = {
       : '',
     isPublic: campaign.isPublic || false,
     discordInviteLink: campaign.discordInviteLink || '',
+    discordThreadId: campaign.discordThreadId || '',
     budgetAllocated: campaign.budgetAllocated || 0,
   }),
 

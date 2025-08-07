@@ -79,7 +79,7 @@ export class CampaignEntityBuilder {
     campaign.updatedAt = new Date();
     campaign.currency = user.usedCurrency || 'USD';
 
-    //TODO: generate discord invite link for this campaign
+    //TODO: generate discord invite link for this campaign and discord thread ID
   }
 
   /**

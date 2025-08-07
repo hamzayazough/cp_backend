@@ -58,6 +58,7 @@ export interface AdvertiserBaseCampaignDetails {
   startDate: string;
   isPublic: boolean; // Indicates if the campaign is visible to all promoters or if the advertiser has selected a specific promoter
   discordInviteLink: string; // Discord invite link for the campaign.
+  discordThreadId: string; // Discord thread ID for campaign discussions
   budgetAllocated?: number; // Total budget allocated for the campaign
 }
 

@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS advertiser_details (
     stripe_customer_id VARCHAR(255) UNIQUE, -- Stripe Customer ID for payment processing
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
+    discord_channel_id VARCHAR(255), -- Discord channel ID for advertiser communication
     CONSTRAINT unique_advertiser_user UNIQUE(user_id)
 );
 

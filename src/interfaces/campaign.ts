@@ -26,6 +26,7 @@ export interface BaseCampaign {
   updatedAt?: Date;
   advertiserId?: string;
   discordInviteLink?: string;
+  discordThreadId?: string;
   budgetAllocated?: number; // Total budget allocated for the campaign
 }
 

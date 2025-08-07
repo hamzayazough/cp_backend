@@ -423,6 +423,7 @@ export class PromoterMyCampaignService {
         : '',
       isPublic: campaign.isPublic,
       discordInviteLink: campaign.discordInviteLink || '',
+      discordThreadId: campaign.discordThreadId || '',
     };
 
     switch (campaign.type) {

@@ -590,6 +590,7 @@ export class UserService {
         companyName: userEntity.advertiserDetails.companyName,
         companyWebsite: userEntity.advertiserDetails.companyWebsite,
         verified: userEntity.advertiserDetails.verified,
+        discordChannelId: userEntity.advertiserDetails.discordChannelId,
         advertiserTypes:
           userEntity.advertiserDetails.advertiserTypeMappings?.map(
             (mapping: AdvertiserTypeMappingEntity) => mapping.advertiserType,
