@@ -1,6 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits } from 'discord.js';
+import {
+  Client,
+  GatewayIntentBits,
+  ChannelType,
+  PermissionFlagsBits,
+} from 'discord.js';
 
 @Injectable()
 export class DiscordService implements OnModuleInit {
@@ -15,15 +20,14 @@ export class DiscordService implements OnModuleInit {
     this.botToken = this.configService.get<string>('DISCORD_BOT_TOKEN') || '';
 
     if (!this.guildId || !this.botToken) {
-      this.logger.warn('Discord configuration missing. Discord features will be disabled.');
+      this.logger.warn(
+        'Discord configuration missing. Discord features will be disabled.',
+      );
       return;
     }
 
     this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-      ],
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
     });
 
     this.setupEventHandlers();
@@ -38,6 +42,59 @@ export class DiscordService implements OnModuleInit {
       await this.client.login(this.botToken);
     } catch (error) {
       this.logger.error('Failed to login to Discord', error);
+    }
+  }
+
+  /**
+   * Check if the bot has the required permissions in the guild
+   */
+  checkBotPermissions(): boolean {
+    try {
+      if (!this.isReady) {
+        this.logger.warn('Discord bot not ready, cannot check permissions');
+        return false;
+      }
+
+      const guild = this.client.guilds.cache.get(this.guildId);
+      if (!guild) {
+        this.logger.error('Discord guild not found or bot not in server');
+        return false;
+      }
+
+      const botMember = guild.members.cache.get(this.client.user!.id);
+      if (!botMember) {
+        this.logger.error('Bot member not found in guild');
+        return false;
+      }
+
+      const requiredPermissions = [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageThreads,
+        PermissionFlagsBits.CreateInstantInvite,
+      ];
+
+      const missingPermissions = requiredPermissions.filter(
+        (permission) => !botMember.permissions.has(permission),
+      );
+
+      if (missingPermissions.length > 0) {
+        this.logger.error(
+          'Bot missing required permissions:',
+          missingPermissions,
+        );
+        this.logger.error(
+          'Please ensure the bot role has: Manage Channels, Manage Threads, Create Instant Invite',
+        );
+        return false;
+      }
+
+      this.logger.log('Discord bot has all required permissions');
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to check bot permissions:', error);
+      return false;
     }
   }
 
@@ -58,9 +115,14 @@ export class DiscordService implements OnModuleInit {
    * @param firebaseUid - Firebase UID to use as fallback identifier
    * @returns Promise<string> - Discord channel ID
    */
-  async createAdvertiserChannel(advertiserName: string, firebaseUid: string): Promise<string | null> {
+  async createAdvertiserChannel(
+    advertiserName: string,
+    firebaseUid: string,
+  ): Promise<string | null> {
     if (!this.isReady || !this.guildId) {
-      this.logger.warn('Discord not ready or not configured, skipping channel creation');
+      this.logger.warn(
+        'Discord not ready or not configured, skipping channel creation',
+      );
       return null;
     }
 
@@ -72,15 +134,21 @@ export class DiscordService implements OnModuleInit {
       }
 
       // Sanitize advertiser name for Discord channel naming
-      const channelName = this.sanitizeChannelName(`advertiser-${advertiserName}`);
+      const channelName = this.sanitizeChannelName(
+        `advertiser-${advertiserName}`,
+      );
 
       // Check if channel already exists
       const existingChannel = guild.channels.cache.find(
-        channel => channel.name === channelName && channel.type === ChannelType.GuildText
+        (channel) =>
+          channel.name === channelName &&
+          channel.type === ChannelType.GuildText,
       );
 
       if (existingChannel) {
-        this.logger.log(`Channel already exists for advertiser: ${advertiserName}`);
+        this.logger.log(
+          `Channel already exists for advertiser: ${advertiserName}`,
+        );
         return existingChannel.id;
       }
 
@@ -106,10 +174,38 @@ export class DiscordService implements OnModuleInit {
         ],
       });
 
-      this.logger.log(`Created Discord channel for advertiser: ${advertiserName} (ID: ${channel.id})`);
+      this.logger.log(
+        `Created Discord channel for advertiser: ${advertiserName} (ID: ${channel.id})`,
+      );
       return channel.id;
     } catch (error) {
-      this.logger.error(`Failed to create Discord channel for advertiser: ${advertiserName}`, error);
+      this.logger.error(
+        `Failed to create Discord channel for advertiser: ${advertiserName}`,
+        error,
+      );
+
+      // Provide specific error messages for common Discord API errors
+      const errorString = String(error);
+      if (
+        errorString.includes('50013') ||
+        errorString.includes('Missing Permissions')
+      ) {
+        this.logger.error(
+          'Discord Bot Missing Permissions: The bot needs "Manage Channels" permission in the server.',
+        );
+        this.logger.error(
+          'Please ensure the bot role has "Manage Channels" permission in Server Settings > Roles.',
+        );
+      } else if (errorString.includes('50001')) {
+        this.logger.error(
+          'Discord Bot Missing Access: The bot cannot access the server or channel.',
+        );
+      } else if (errorString.includes('10004')) {
+        this.logger.error(
+          'Discord Guild Not Found: Invalid guild ID or bot not in server.',
+        );
+      }
+
       return null;
     }
   }
@@ -125,7 +221,9 @@ export class DiscordService implements OnModuleInit {
     channelId: string,
   ): Promise<{ threadId: string; inviteUrl: string } | null> {
     if (!this.isReady || !this.guildId) {
-      this.logger.warn('Discord not ready or not configured, skipping thread creation');
+      this.logger.warn(
+        'Discord not ready or not configured, skipping thread creation',
+      );
       return null;
     }
 
@@ -160,13 +258,36 @@ export class DiscordService implements OnModuleInit {
         reason: `Invite for campaign: ${campaignName}`,
       });
 
-      this.logger.log(`Created Discord thread for campaign: ${campaignName} (Thread ID: ${thread.id})`);
+      this.logger.log(
+        `Created Discord thread for campaign: ${campaignName} (Thread ID: ${thread.id})`,
+      );
       return {
         threadId: thread.id,
         inviteUrl: invite.url,
       };
     } catch (error) {
-      this.logger.error(`Failed to create Discord thread for campaign: ${campaignName}`, error);
+      this.logger.error(
+        `Failed to create Discord thread for campaign: ${campaignName}`,
+        error,
+      );
+
+      // Provide specific error messages for common Discord API errors
+      const errorString = String(error);
+      if (
+        errorString.includes('50013') ||
+        errorString.includes('Missing Permissions')
+      ) {
+        this.logger.error(
+          'Discord Bot Missing Permissions: The bot needs "Manage Threads" and "Create Instant Invite" permissions.',
+        );
+      } else if (errorString.includes('50001')) {
+        this.logger.error(
+          'Discord Bot Missing Access: The bot cannot access the channel.',
+        );
+      } else if (errorString.includes('10003')) {
+        this.logger.error('Discord Channel Not Found: Invalid channel ID.');
+      }
+
       return null;
     }
   }
@@ -176,7 +297,9 @@ export class DiscordService implements OnModuleInit {
    * For now, this is a placeholder that logs the action
    */
   addUserToChannel(channelId: string, firebaseUid: string): boolean {
-    this.logger.log(`Would add user with Firebase UID ${firebaseUid} to channel ${channelId}`);
+    this.logger.log(
+      `Would add user with Firebase UID ${firebaseUid} to channel ${channelId}`,
+    );
     // TODO: Implement Discord OAuth integration to map Firebase UIDs to Discord user IDs
     return true;
   }
