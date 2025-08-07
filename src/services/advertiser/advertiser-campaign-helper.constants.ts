@@ -27,6 +27,8 @@ import {
   ApplicationStatus,
 } from 'src/database/entities/campaign-applications.entity';
 import { UserEntity } from '../../database/entities/user.entity';
+import { DiscordService } from '../discord.service';
+
 /**
  * Constants for advertiser campaign operations
  */
@@ -321,6 +323,21 @@ export const CAMPAIGN_TRANSFORMERS = {
 } as const;
 
 /**
+ * Helper function to generate Discord thread URL
+ * @param guildId Discord server ID
+ * @param channelId Discord channel ID 
+ * @param threadId Discord thread ID
+ * @returns Full Discord thread URL
+ */
+export const generateDiscordThreadUrl = (
+  guildId: string,
+  channelId: string,
+  threadId: string,
+): string => {
+  return `https://discord.com/channels/${guildId}/${channelId}/${threadId}`;
+};
+
+/**
  * Campaign detail builders for different campaign types
  */
 export const CAMPAIGN_DETAIL_BUILDERS = {
@@ -329,33 +346,53 @@ export const CAMPAIGN_DETAIL_BUILDERS = {
    */
   buildBaseCampaignDetails: (
     campaign: CampaignEntity,
-  ): AdvertiserBaseCampaignDetails => ({
-    budgetHeld: campaign.budgetAllocated || 0,
-    spentBudget:
-      CAMPAIGN_TRANSFORMERS.calculateTotalSpentFromTransactions(campaign),
-    targetAudience: campaign.targetAudience,
-    preferredPlatforms: campaign.preferredPlatforms,
-    requirements: campaign.requirements,
-    createdAt: campaign.createdAt,
-    deadline: campaign.deadline
-      ? new Date(campaign.deadline).toISOString()
-      : '',
-    startDate: campaign.startDate
-      ? new Date(campaign.startDate).toISOString()
-      : '',
-    isPublic: campaign.isPublic || false,
-    discordInviteLink: campaign.discordInviteLink || '',
-    discordThreadId: campaign.discordThreadId || '',
-    budgetAllocated: campaign.budgetAllocated || 0,
-  }),
+    discordService?: DiscordService,
+  ): AdvertiserBaseCampaignDetails => {
+    let discordThreadUrl = campaign.discordThreadId || '';
+    
+    // Generate proper Discord thread URL if we have the necessary data
+    if (campaign.discordThreadId && campaign.advertiser?.advertiserDetails?.discordChannelId && discordService) {
+      try {
+        discordThreadUrl = discordService.generateThreadUrl(
+          campaign.advertiser.advertiserDetails.discordChannelId,
+          campaign.discordThreadId
+        );
+      } catch (error) {
+        console.warn('Failed to generate Discord thread URL:', error);
+        // Fallback to thread ID if URL generation fails
+        discordThreadUrl = campaign.discordThreadId;
+      }
+    }
+
+    return {
+      budgetHeld: campaign.budgetAllocated || 0,
+      spentBudget:
+        CAMPAIGN_TRANSFORMERS.calculateTotalSpentFromTransactions(campaign),
+      targetAudience: campaign.targetAudience,
+      preferredPlatforms: campaign.preferredPlatforms,
+      requirements: campaign.requirements,
+      createdAt: campaign.createdAt,
+      deadline: campaign.deadline
+        ? new Date(campaign.deadline).toISOString()
+        : '',
+      startDate: campaign.startDate
+        ? new Date(campaign.startDate).toISOString()
+        : '',
+      isPublic: campaign.isPublic || false,
+      discordInviteLink: campaign.discordInviteLink || '',
+      discordThreadUrl: discordThreadUrl,
+      budgetAllocated: campaign.budgetAllocated || 0,
+    };
+  },
 
   /**
    * Build visibility campaign details
    */
   buildVisibilityCampaignDetails: (
     campaign: CampaignEntity,
+    discordService?: DiscordService,
   ): AdvertiserVisibilityCampaignDetails => ({
-    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign),
+    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign, discordService),
     maxViews: campaign.maxViews || 0,
     currentViews: campaign.currentViews || 0,
     cpv: campaign.cpv || 0,
@@ -369,8 +406,9 @@ export const CAMPAIGN_DETAIL_BUILDERS = {
    */
   buildConsultantCampaignDetails: (
     campaign: CampaignEntity,
+    discordService?: DiscordService,
   ): AdvertiserConsultantCampaignDetails => ({
-    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign),
+    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign, discordService),
     meetingPlan: campaign.meetingPlan || MeetingPlan.CUSTOM,
     expectedDeliverables: CAMPAIGN_TRANSFORMERS.transformCampaignDeliverables(
       campaign.expectedDeliverables,
@@ -387,8 +425,9 @@ export const CAMPAIGN_DETAIL_BUILDERS = {
    */
   buildSellerCampaignDetails: (
     campaign: CampaignEntity,
+    discordService?: DiscordService,
   ): AdvertiserSellerCampaignDetails => ({
-    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign),
+    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign, discordService),
     sellerRequirements: campaign.sellerRequirements,
     deliverables: CAMPAIGN_TRANSFORMERS.transformCampaignDeliverables(
       campaign.deliverables,
@@ -407,8 +446,9 @@ export const CAMPAIGN_DETAIL_BUILDERS = {
    */
   buildSalesmanCampaignDetails: (
     campaign: CampaignEntity,
+    discordService?: DiscordService,
   ): AdvertiserSalesmanCampaignDetails => ({
-    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign),
+    ...CAMPAIGN_DETAIL_BUILDERS.buildBaseCampaignDetails(campaign, discordService),
     commissionPerSale: campaign.commissionPerSale || 0,
     trackSalesVia: campaign.trackSalesVia || SalesTrackingMethod.COUPON_CODE,
     codePrefix: campaign.codePrefix,

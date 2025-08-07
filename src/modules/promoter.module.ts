@@ -18,6 +18,7 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
+import { DiscordService } from '../services/discord.service';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { UniqueViewEntity } from '../database/entities/unique-view.entity';
     PromoterCampaignService,
     PromoterMyCampaignService,
     PromoterCampaignInteractionService,
+    DiscordService,
   ],
   exports: [PromoterService],
 })

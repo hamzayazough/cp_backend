@@ -29,6 +29,7 @@ import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tra
 import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from 'src/database/entities';
 import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
+import { DiscordService } from '../services/discord.service';
 
 @Module({
   imports: [
@@ -66,7 +67,8 @@ import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-pay
     CampaignService,
     CampaignMediaService,
     S3Service,
+    DiscordService,
   ],
-  exports: [AdvertiserService, CampaignService],
+  exports: [AdvertiserService, CampaignService, DiscordService],
 })
 export class AdvertiserModule {}

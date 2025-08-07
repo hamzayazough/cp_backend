@@ -24,6 +24,7 @@ import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { Language } from 'src/enums/language';
 import { S3Service } from './s3.service';
+import { DiscordService } from './discord.service';
 
 @Injectable()
 export class UserService {
@@ -47,6 +48,7 @@ export class UserService {
     @InjectRepository(PromoterWorkEntity)
     private readonly promoterWorkRepository: Repository<PromoterWorkEntity>,
     private readonly s3Service: S3Service,
+    private readonly discordService: DiscordService,
   ) {}
 
   /**
@@ -290,10 +292,32 @@ export class UserService {
       throw new Error('Advertiser data is required');
     }
 
+    // Get user information for Discord channel creation
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Create Discord channel for the advertiser using Firebase UID
+    let discordChannelId: string | null = null;
+    try {
+      discordChannelId = await this.discordService.createAdvertiserChannel(
+        advertiserData.companyName,
+        user.firebaseUid, // Use Firebase UID instead of Discord user ID
+      );
+    } catch (error) {
+      console.error('Failed to create Discord channel:', error);
+      // Continue with advertiser creation even if Discord fails
+    }
+
     const advertiserDetails = this.advertiserDetailsRepository.create({
       userId,
       companyName: advertiserData.companyName,
       companyWebsite: advertiserData.companyWebsite,
+      discordChannelId: discordChannelId || undefined,
     });
 
     const savedAdvertiserDetails =
@@ -590,7 +614,7 @@ export class UserService {
         companyName: userEntity.advertiserDetails.companyName,
         companyWebsite: userEntity.advertiserDetails.companyWebsite,
         verified: userEntity.advertiserDetails.verified,
-        discordChannelId: userEntity.advertiserDetails.discordChannelId,
+        discordChannelUrl: userEntity.advertiserDetails.discordChannelId ? this.generateDiscordChannelUrl(userEntity.advertiserDetails.discordChannelId) : undefined,
         advertiserTypes:
           userEntity.advertiserDetails.advertiserTypeMappings?.map(
             (mapping: AdvertiserTypeMappingEntity) => mapping.advertiserType,
@@ -986,5 +1010,17 @@ export class UserService {
 
     // Delete user
     await this.userRepository.delete(user.id);
+  }
+
+  /**
+   * Generate Discord channel URL from channel ID
+   */
+  private generateDiscordChannelUrl(channelId: string): string | undefined {
+    try {
+      return this.discordService.generateChannelUrl(channelId);
+    } catch (error) {
+      console.warn('Failed to generate Discord channel URL:', error);
+      return undefined;
+    }
   }
 }

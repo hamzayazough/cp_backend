@@ -20,10 +20,11 @@ import { CampaignType } from '../../enums/campaign-type';
 import { UserType } from '../../enums/user-type';
 import { Advertiser } from '../../interfaces/explore-campaign';
 import { getCachedFxRate } from '../../helpers/currency.helper';
+import { DiscordService } from '../discord.service';
 
 @Injectable()
 export class PromoterMyCampaignService {
-  constructor() {}
+  constructor(private discordService: DiscordService) {}
 
   /**
    * Convert amount from campaign currency to promoter currency
@@ -423,7 +424,7 @@ export class PromoterMyCampaignService {
         : '',
       isPublic: campaign.isPublic,
       discordInviteLink: campaign.discordInviteLink || '',
-      discordThreadId: campaign.discordThreadId || '',
+      discordThreadUrl: this.generateDiscordThreadUrl(campaign),
     };
 
     switch (campaign.type) {
@@ -789,6 +790,30 @@ export class PromoterMyCampaignService {
 
         return total + convertedAmount;
       }, 0);
+  }
+
+  /**
+   * Generate Discord thread URL from campaign data
+   */
+  private generateDiscordThreadUrl(campaign: CampaignEntity): string {
+    if (!campaign.discordThreadId) {
+      return '';
+    }
+
+    // Check if we have the advertiser's Discord channel ID
+    if (campaign.advertiser?.advertiserDetails?.discordChannelId) {
+      try {
+        return this.discordService.generateThreadUrl(
+          campaign.advertiser.advertiserDetails.discordChannelId,
+          campaign.discordThreadId,
+        );
+      } catch (error) {
+        console.warn('Failed to generate Discord thread URL:', error);
+        return campaign.discordThreadId; // Fallback to thread ID
+      }
+    }
+
+    return campaign.discordThreadId; // Fallback to thread ID if no channel ID
   }
 }
 

@@ -24,6 +24,7 @@ import { CampaignValidationHelper } from 'src/helpers/campaign-validation.helper
 import { CampaignEntityBuilder } from 'src/helpers/campaign-entity.builder';
 import { CampaignEntityMapper } from 'src/helpers/campaign-entity.mapper';
 import { CampaignMediaService } from './campaign-media.service';
+import { DiscordService } from '../discord.service';
 
 // Constants
 import {
@@ -63,6 +64,7 @@ export class CampaignService {
     private transactionRepository: Repository<Transaction>,
     private s3Service: S3Service,
     private campaignMediaService: CampaignMediaService,
+    private discordService: DiscordService,
   ) {}
 
   async uploadCampaignFile(
@@ -245,6 +247,9 @@ export class CampaignService {
         savedCampaign,
         campaignData as Campaign,
       );
+
+      // Create Discord thread for the campaign
+      await this.createDiscordThreadForCampaign(updatedCampaign, validatedUser);
 
       // Convert entity to interface using helper
       const campaignResponse =
@@ -517,6 +522,43 @@ export class CampaignService {
       };
     } catch (error) {
       this.handleCampaignError(error, 'Failed to delete media file');
+    }
+  }
+
+  /**
+   * Creates a Discord thread for the campaign
+   */
+  private async createDiscordThreadForCampaign(
+    campaign: CampaignEntity,
+    user: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get advertiser details to find the Discord channel
+      const advertiserDetails = await this.userRepository.findOne({
+        where: { id: user.id },
+        relations: ['advertiserDetails'],
+      });
+
+      if (!advertiserDetails?.advertiserDetails?.discordChannelId) {
+        // No Discord channel available, skip thread creation
+        return;
+      }
+
+      // Create Discord thread
+      const threadResult = await this.discordService.createCampaignThread(
+        campaign.title,
+        advertiserDetails.advertiserDetails.discordChannelId,
+      );
+
+      if (threadResult) {
+        // Update campaign with Discord thread information
+        campaign.discordThreadId = threadResult.threadId;
+        campaign.discordInviteLink = threadResult.inviteUrl;
+        await this.campaignRepository.save(campaign);
+      }
+    } catch (error) {
+      // Log error but don't fail campaign creation
+      console.error('Failed to create Discord thread for campaign:', error);
     }
   }
 
