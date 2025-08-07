@@ -3,8 +3,8 @@
  */
 
 export const CAMPAIGN_EARNINGS_CONSTANTS = {
-  /** Minimum payout threshold in cents ($5.00) */
-  MINIMUM_PAYOUT_THRESHOLD_CENTS: 500,
+  /** Minimum payout threshold in cents (1¢ - pay any amount) */
+  MINIMUM_PAYOUT_THRESHOLD_CENTS: 1,
 
   /** Platform fee percentage (20%) */
   PLATFORM_FEE_PERCENTAGE: 0.2,

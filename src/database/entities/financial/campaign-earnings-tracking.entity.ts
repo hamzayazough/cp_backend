@@ -15,7 +15,7 @@ import { CampaignViewTracking } from './campaign-view-tracking.entity';
 import { Transaction } from '../transaction.entity';
 
 @Entity('campaign_earnings_tracking')
-@Unique(['promoterId', 'campaignId'])
+@Unique(['promoterId', 'campaignId', 'earningsMonth', 'earningsYear'])
 export class CampaignEarningsTracking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -25,6 +25,13 @@ export class CampaignEarningsTracking {
 
   @Column({ name: 'campaign_id', type: 'uuid' })
   campaignId: string;
+
+  // Month and year for which these earnings are calculated
+  @Column({ name: 'earnings_month', type: 'integer' })
+  earningsMonth: number; // 1-12
+
+  @Column({ name: 'earnings_year', type: 'integer' })
+  earningsYear: number;
 
   // Earnings for this specific campaign
   @Column({ name: 'views_generated', type: 'integer', default: 0 })

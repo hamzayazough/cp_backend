@@ -21,6 +21,8 @@ interface CampaignPromoterViewData {
   campaignId: string;
   viewCount: number;
   cpvCents: number;
+  month: number;
+  year: number;
 }
 
 interface EarningsCalculationResult {
@@ -49,16 +51,30 @@ export class CampaignEarningsService {
   ) {}
 
   /**
-   * Calculate earnings for all active visibility campaigns
+   * Calculate earnings for all active visibility campaigns for a specific month
+   * @param month - Target month (1-12), defaults to current month
+   * @param year - Target year, defaults to current year
    * @returns Promise<void>
    */
-  async calculateAllCampaignEarnings(): Promise<void> {
-    this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.CALCULATION_STARTED);
-
-    const campaignViewData = await this.getActiveCampaignViewData();
+  async calculateAllCampaignEarnings(
+    month?: number,
+    year?: number,
+  ): Promise<void> {
+    const targetDate = new Date();
+    const targetMonth = month || targetDate.getMonth() + 1; // getMonth() is 0-indexed
+    const targetYear = year || targetDate.getFullYear();
 
     this.logger.log(
-      `Found ${campaignViewData.length} campaign-promoter pairs to process`,
+      `${CAMPAIGN_EARNINGS_MESSAGES.CALCULATION_STARTED} for ${targetMonth}/${targetYear}`,
+    );
+
+    const campaignViewData = await this.getActiveCampaignViewData(
+      targetMonth,
+      targetYear,
+    );
+
+    this.logger.log(
+      `Found ${campaignViewData.length} campaign-promoter pairs to process for ${targetMonth}/${targetYear}`,
     );
 
     for (const viewData of campaignViewData) {
@@ -76,43 +92,76 @@ export class CampaignEarningsService {
   }
 
   /**
-   * Calculate earnings for a specific campaign-promoter pair
+   * Calculate earnings for the previous month (useful for monthly cron jobs)
+   * @returns Promise<void>
+   */
+  async calculatePreviousMonthEarnings(): Promise<void> {
+    const now = new Date();
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const month = previousMonth.getMonth() + 1; // getMonth() is 0-indexed
+    const year = previousMonth.getFullYear();
+
+    this.logger.log(
+      `📅 Calculating earnings for previous month: ${month}/${year}`,
+    );
+
+    await this.calculateAllCampaignEarnings(month, year);
+  }
+
+  /**
+   * Check if earnings calculations have already been performed for a specific month
+   * @param month - Target month (1-12)
+   * @param year - Target year
+   * @returns Promise<boolean>
+   */
+  async hasCalculationsForMonth(month: number, year: number): Promise<boolean> {
+    const count = await this.campaignEarningsRepo.count({
+      where: {
+        earningsMonth: month,
+        earningsYear: year,
+      },
+    });
+
+    return count > 0;
+  }
+
+  /**
+   * Calculate earnings for a specific campaign-promoter pair for a specific month
    * @param viewData - The view data for calculation
    */
   async calculateIndividualCampaignEarnings(
     viewData: CampaignPromoterViewData,
   ): Promise<void> {
     this.logger.log(
-      `📊 Calculating earnings for promoter ${viewData.promoterId.substring(0, 8)}... in campaign ${viewData.campaignId.substring(0, 8)}...`,
+      `📊 Calculating earnings for promoter ${viewData.promoterId.substring(0, 8)}... in campaign ${viewData.campaignId.substring(0, 8)}... for ${viewData.month}/${viewData.year}`,
     );
 
-    // Get existing earnings record or create new one
-    const earningsRecord = await this.findExistingEarningsRecord(
+    // Check if earnings for this month already exist
+    const existingRecord = await this.findExistingEarningsRecord(
       viewData.promoterId,
       viewData.campaignId,
+      viewData.month,
+      viewData.year,
     );
+
+    if (existingRecord) {
+      this.logger.warn(
+        `Earnings record already exists for promoter ${viewData.promoterId.substring(0, 8)}... in campaign ${viewData.campaignId.substring(0, 8)}... for ${viewData.month}/${viewData.year}. Skipping calculation.`,
+      );
+      return;
+    }
 
     const earningsCalculation = this.computeEarnings(
       viewData.viewCount,
       viewData.cpvCents,
     );
 
-    if (earningsRecord) {
-      // Update existing record
-      await this.updateEarningsRecord(
-        earningsRecord,
-        viewData,
-        earningsCalculation,
-      );
-      this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.RECORD_UPDATED);
-    } else {
-      // Create new record
-      await this.createEarningsRecord(viewData, earningsCalculation);
-      this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.RECORD_CREATED);
-    }
+    // Create new record for this month
+    await this.createEarningsRecord(viewData, earningsCalculation);
+    this.logger.log(CAMPAIGN_EARNINGS_MESSAGES.RECORD_CREATED);
 
     this.logger.log(
-      `✅ Earnings calculated: Views: ${viewData.viewCount}, ` +
+      `✅ Earnings calculated for ${viewData.month}/${viewData.year}: Views: ${viewData.viewCount}, ` +
         `Gross: ${earningsCalculation.grossEarningsCents}¢, ` +
         `Net: ${earningsCalculation.netEarningsCents}¢, ` +
         `Qualifies: ${earningsCalculation.qualifiesForPayout}`,
@@ -148,6 +197,8 @@ export class CampaignEarningsService {
         'id',
         'promoterId',
         'campaignId',
+        'earningsMonth',
+        'earningsYear',
         'viewsGenerated',
         'grossEarningsCents',
         'platformFeeCents',
@@ -155,6 +206,25 @@ export class CampaignEarningsService {
         'qualifiesForPayout',
         'payoutExecuted',
       ],
+    });
+  }
+
+  /**
+   * Get earnings records for a specific month
+   * @param month - Target month (1-12)
+   * @param year - Target year
+   * @returns Promise<CampaignEarningsTracking[]>
+   */
+  async getEarningsForMonth(
+    month: number,
+    year: number,
+  ): Promise<CampaignEarningsTracking[]> {
+    return this.campaignEarningsRepo.find({
+      where: {
+        earningsMonth: month,
+        earningsYear: year,
+      },
+      relations: ['promoter', 'campaign'],
     });
   }
 
@@ -184,13 +254,17 @@ export class CampaignEarningsService {
   // Private helper methods
 
   /**
-   * Get campaign view data for all active visibility campaigns
+   * Get campaign view data for all active visibility campaigns for a specific month
+   * @param month - Target month (1-12)
+   * @param year - Target year
    * @returns Promise<CampaignPromoterViewData[]>
    */
-  private async getActiveCampaignViewData(): Promise<
-    CampaignPromoterViewData[]
-  > {
-    const result: CampaignViewQueryResult[] = await this.dataSource.query(`
+  private async getActiveCampaignViewData(
+    month: number,
+    year: number,
+  ): Promise<CampaignPromoterViewData[]> {
+    const result: CampaignViewQueryResult[] = await this.dataSource.query(
+      `
       SELECT 
         uv.promoter_id as "promoterId",
         uv.campaign_id as "campaignId",
@@ -200,8 +274,12 @@ export class CampaignEarningsService {
       INNER JOIN campaigns c ON c.id = uv.campaign_id
       WHERE c.type = 'VISIBILITY'
         AND c.cpv IS NOT NULL
+        AND EXTRACT(MONTH FROM uv.created_at) = $1
+        AND EXTRACT(YEAR FROM uv.created_at) = $2
       GROUP BY uv.promoter_id, uv.campaign_id, c.cpv
-    `);
+    `,
+      [month, year],
+    );
 
     return result.map((row) => ({
       promoterId: row.promoterId,
@@ -210,21 +288,32 @@ export class CampaignEarningsService {
       cpvCents: Math.round(
         parseFloat(row.cpvCents) * CAMPAIGN_EARNINGS_CONSTANTS.CENTS_TO_DOLLARS,
       ),
+      month,
+      year,
     }));
   }
 
   /**
-   * Find existing earnings record for a promoter-campaign pair
+   * Find existing earnings record for a promoter-campaign pair for a specific month
    * @param promoterId - Promoter ID
    * @param campaignId - Campaign ID
+   * @param month - Earnings month (1-12)
+   * @param year - Earnings year
    * @returns Promise<CampaignEarningsTracking | null>
    */
   private async findExistingEarningsRecord(
     promoterId: string,
     campaignId: string,
+    month: number,
+    year: number,
   ): Promise<CampaignEarningsTracking | null> {
     return this.campaignEarningsRepo.findOne({
-      where: { promoterId, campaignId },
+      where: {
+        promoterId,
+        campaignId,
+        earningsMonth: month,
+        earningsYear: year,
+      },
     });
   }
 
@@ -266,7 +355,7 @@ export class CampaignEarningsService {
   }
 
   /**
-   * Create a new earnings record
+   * Create a new earnings record for a specific month
    * @param viewData - Campaign view data
    * @param calculation - Earnings calculation result
    */
@@ -274,39 +363,38 @@ export class CampaignEarningsService {
     viewData: CampaignPromoterViewData,
     calculation: EarningsCalculationResult,
   ): Promise<void> {
-    const earningsRecord = this.campaignEarningsRepo.create({
-      promoterId: viewData.promoterId,
-      campaignId: viewData.campaignId,
-      viewsGenerated: viewData.viewCount,
-      cpvCents: viewData.cpvCents,
-      grossEarningsCents: calculation.grossEarningsCents,
-      platformFeeCents: calculation.platformFeeCents,
-      netEarningsCents: calculation.netEarningsCents,
-      qualifiesForPayout: calculation.qualifiesForPayout,
-      payoutExecuted: false,
-    });
+    try {
+      const earningsRecord = this.campaignEarningsRepo.create({
+        promoterId: viewData.promoterId,
+        campaignId: viewData.campaignId,
+        earningsMonth: viewData.month,
+        earningsYear: viewData.year,
+        viewsGenerated: viewData.viewCount,
+        cpvCents: viewData.cpvCents,
+        grossEarningsCents: calculation.grossEarningsCents,
+        platformFeeCents: calculation.platformFeeCents,
+        netEarningsCents: calculation.netEarningsCents,
+        qualifiesForPayout: calculation.qualifiesForPayout,
+        payoutExecuted: false,
+      });
 
-    await this.campaignEarningsRepo.save(earningsRecord);
-  }
-
-  /**
-   * Update an existing earnings record
-   * @param earningsRecord - Existing earnings record
-   * @param viewData - Updated view data
-   * @param calculation - New earnings calculation
-   */
-  private async updateEarningsRecord(
-    earningsRecord: CampaignEarningsTracking,
-    viewData: CampaignPromoterViewData,
-    calculation: EarningsCalculationResult,
-  ): Promise<void> {
-    earningsRecord.viewsGenerated = viewData.viewCount;
-    earningsRecord.cpvCents = viewData.cpvCents;
-    earningsRecord.grossEarningsCents = calculation.grossEarningsCents;
-    earningsRecord.platformFeeCents = calculation.platformFeeCents;
-    earningsRecord.netEarningsCents = calculation.netEarningsCents;
-    earningsRecord.qualifiesForPayout = calculation.qualifiesForPayout;
-
-    await this.campaignEarningsRepo.save(earningsRecord);
+      await this.campaignEarningsRepo.save(earningsRecord);
+    } catch (error) {
+      // Handle duplicate key error gracefully (race condition protection)
+      const errorMessage = String(error);
+      if (
+        errorMessage.includes(
+          'duplicate key value violates unique constraint',
+        ) &&
+        errorMessage.includes('promoter_campaign_month_year_key')
+      ) {
+        this.logger.warn(
+          `Duplicate earnings record detected for promoter ${viewData.promoterId.substring(0, 8)}... in campaign ${viewData.campaignId.substring(0, 8)}... for ${viewData.month}/${viewData.year}. This is likely due to concurrent processing. Skipping.`,
+        );
+        return;
+      }
+      // Re-throw any other errors
+      throw error;
+    }
   }
 }
