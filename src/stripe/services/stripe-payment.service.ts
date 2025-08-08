@@ -5,12 +5,6 @@ import Stripe from 'stripe';
 import { STRIPE_CLIENT } from '../stripe.constants';
 import { StripePaymentIntent } from '../../database/entities/stripe-payment-intent.entity';
 import { StripeTransfer } from '../../database/entities/stripe-transfer.entity';
-import { CampaignPaymentConfig } from '../../database/entities/campaign-payment-config.entity';
-import { CampaignEntity } from '../../database/entities/campaign.entity';
-import { UserEntity } from 'src/database/entities';
-import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
-import { StripeConnectService } from './stripe-connect.service';
-
 export interface CreatePaymentIntentDto {
   campaignId: string;
   payerId: string;
@@ -69,15 +63,6 @@ export class StripePaymentService {
     private readonly paymentIntentRepo: Repository<StripePaymentIntent>,
     @InjectRepository(StripeTransfer)
     private readonly transferRepo: Repository<StripeTransfer>,
-    @InjectRepository(CampaignPaymentConfig)
-    private readonly campaignConfigRepo: Repository<CampaignPaymentConfig>,
-    @InjectRepository(CampaignEntity)
-    private readonly campaignRepo: Repository<CampaignEntity>,
-    @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>,
-    @InjectRepository(AdvertiserDetailsEntity)
-    private readonly advertiserDetailsRepo: Repository<AdvertiserDetailsEntity>,
-    private readonly stripeConnectService: StripeConnectService,
   ) {}
 
   /**

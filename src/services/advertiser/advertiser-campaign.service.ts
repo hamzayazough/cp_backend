@@ -25,12 +25,14 @@ import {
   DATE_UTILITIES,
 } from './advertiser-campaign-helper.constants';
 import { TransactionType } from 'src/database/entities/transaction.entity';
+import { DiscordService } from '../discord.service';
 
 @Injectable()
 export class AdvertiserCampaignService {
   constructor(
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
+    private discordService: DiscordService,
   ) {}
 
   async getActiveCampaigns(
@@ -246,18 +248,21 @@ export class AdvertiserCampaignService {
       case CampaignType.VISIBILITY:
         return CAMPAIGN_DETAIL_BUILDERS.buildVisibilityCampaignDetails(
           campaign,
+          this.discordService,
         );
       case CampaignType.CONSULTANT:
         return CAMPAIGN_DETAIL_BUILDERS.buildConsultantCampaignDetails(
           campaign,
+          this.discordService,
         );
       case CampaignType.SELLER:
-        return CAMPAIGN_DETAIL_BUILDERS.buildSellerCampaignDetails(campaign);
+        return CAMPAIGN_DETAIL_BUILDERS.buildSellerCampaignDetails(campaign, this.discordService);
       case CampaignType.SALESMAN:
-        return CAMPAIGN_DETAIL_BUILDERS.buildSalesmanCampaignDetails(campaign);
+        return CAMPAIGN_DETAIL_BUILDERS.buildSalesmanCampaignDetails(campaign, this.discordService);
       default:
         return CAMPAIGN_DETAIL_BUILDERS.buildVisibilityCampaignDetails(
           campaign,
+          this.discordService,
         );
     }
   }

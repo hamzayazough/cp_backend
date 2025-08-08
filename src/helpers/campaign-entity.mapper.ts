@@ -31,6 +31,7 @@ export class CampaignEntityMapper {
       updatedAt: entity.updatedAt,
       advertiserId: entity.advertiserId,
       discordInviteLink: entity.discordInviteLink,
+      discordThreadId: entity.discordThreadId,
     };
 
     switch (entity.type) {

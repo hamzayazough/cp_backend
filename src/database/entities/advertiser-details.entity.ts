@@ -32,6 +32,9 @@ export class AdvertiserDetailsEntity {
   @Column({ name: 'stripe_customer_id', unique: true, nullable: true })
   stripeCustomerId: string;
 
+  @Column({ name: 'discord_channel_id', nullable: true })
+  discordChannelId?: string;
+
   // TODO: uncomment later
   // @Column({ name: 'stripe_connected_account_id', unique: true, nullable: true })
   // stripeConnectedAccountId: string;

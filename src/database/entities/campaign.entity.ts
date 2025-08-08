@@ -225,6 +225,14 @@ export class CampaignEntity {
   discordInviteLink?: string;
 
   @Column({
+    name: 'discord_thread_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  discordThreadId?: string; // Optional Discord thread ID for campaign discussions
+
+  @Column({
     name: 'can_have_multiple_promoters',
     type: 'boolean',
     default: false,

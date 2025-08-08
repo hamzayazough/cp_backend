@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     expiry_date TIMESTAMP WITH TIME ZONE,
     promoter_work UUID[], -- List of campaign_works IDs
     discord_invite_link TEXT, -- Optional Discord invite link for campaign discussions
+    discord_thread_id VARCHAR(255), -- Optional Discord thread ID for campaign discussions
     
     budget_allocated DECIMAL(10,2) NOT NULL, -- Total budget allocated for the campaign
     -- Campaign-specific fields for VISIBILITY campaigns

@@ -78,6 +78,7 @@ export interface BaseCampaignDetails {
   isPublic: boolean; // Indicates if the campaign is visible to all promoters or if the advertiser has selected a specific promoter
 
   discordInviteLink: string; // Discord invite link for the campaign.
+  discordThreadUrl: string; // Discord thread ID for campaign discussions
 }
 
 export interface VisibilityCampaignDetails extends BaseCampaignDetails {
