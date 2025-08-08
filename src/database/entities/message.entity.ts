@@ -6,11 +6,15 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
+  Index,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { CampaignEntity } from './campaign.entity';
+import { MessageSenderType } from '../../enums/message-sender-type';
 
 @Entity('message_threads')
+@Index(['advertiserId', 'promoterId', 'campaignId'], { unique: true })
 export class MessageThread {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -23,6 +27,12 @@ export class MessageThread {
 
   @Column({ name: 'advertiser_id', type: 'uuid' })
   advertiserId: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  subject: string;
+
+  @Column({ name: 'last_message_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
+  lastMessageAt: Date;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
@@ -42,12 +52,12 @@ export class MessageThread {
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'advertiser_id' })
   advertiser: UserEntity;
-}
 
-export enum MessageSenderType {
-  ADVERTISER = 'ADVERTISER',
-  ADMIN = 'ADMIN',
-  SYSTEM = 'SYSTEM',
+  @OneToMany(() => Message, (message) => message.thread)
+  messages: Message[];
+
+  @OneToMany(() => ChatSummary, (summary) => summary.thread)
+  summaries: ChatSummary[];
 }
 
 @Entity('messages')
@@ -84,4 +94,36 @@ export class Message {
   @ManyToOne(() => UserEntity, { eager: false })
   @JoinColumn({ name: 'sender_id' })
   sender: UserEntity;
+}
+
+@Entity('chat_summaries')
+export class ChatSummary {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'thread_id', type: 'uuid' })
+  threadId: string;
+
+  @Column({ type: 'text' })
+  summary: string;
+
+  @Column({ name: 'key_points', type: 'text', array: true, nullable: true })
+  keyPoints: string[];
+
+  @Column({ name: 'action_items', type: 'text', array: true, nullable: true })
+  actionItems: string[];
+
+  @Column({ name: 'sentiment_score', type: 'decimal', precision: 3, scale: 2, nullable: true })
+  sentimentScore: number;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
+
+  // Relations
+  @ManyToOne(() => MessageThread, (thread) => thread.summaries, { eager: false })
+  @JoinColumn({ name: 'thread_id' })
+  thread: MessageThread;
 }

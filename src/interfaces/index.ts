@@ -18,3 +18,6 @@ export * from './firebase-user.interface';
 
 // Campaign management
 export * from './campaign-management';
+
+// Messaging
+export * from './messaging';
