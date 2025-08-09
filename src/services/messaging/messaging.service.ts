@@ -213,26 +213,6 @@ export class MessagingService {
     threadId: string,
     userId: string,
   ): Promise<number> {
-    // Debug: Get all messages in thread to understand the state
-    const allMessages = await this.messageRepository
-      .createQueryBuilder('message')
-      .where('message.threadId = :threadId', { threadId })
-      .getMany();
-
-    const fromCurrentUser = allMessages.filter(
-      (msg) => msg.senderId === userId,
-    );
-    const fromOtherUsers = allMessages.filter((msg) => msg.senderId !== userId);
-    const fromOtherUsersUnread = fromOtherUsers.filter((msg) => !msg.isRead);
-
-    console.log(`Thread ${threadId} message breakdown for user ${userId}:`, {
-      totalMessages: allMessages.length,
-      fromCurrentUser: fromCurrentUser.length,
-      fromOtherUsers: fromOtherUsers.length,
-      fromOtherUsersUnread: fromOtherUsersUnread.length,
-      fromOtherUsersRead: fromOtherUsers.length - fromOtherUsersUnread.length,
-    });
-
     return this.messageRepository
       .createQueryBuilder('message')
       .where('message.threadId = :threadId', { threadId })
@@ -280,37 +260,14 @@ export class MessagingService {
   }
 
   async markThreadAsRead(request: MarkThreadAsReadRequest): Promise<void> {
-    // Debug: Check what messages will be affected before updating
-    const messagesToUpdate = await this.messageRepository
-      .createQueryBuilder('message')
-      .where('message.threadId = :threadId', { threadId: request.threadId })
-      .andWhere('message.senderId != :userId', { userId: request.userId })
-      .getMany();
-
-    const unreadMessages = messagesToUpdate.filter((msg) => !msg.isRead);
-    const alreadyReadMessages = messagesToUpdate.filter((msg) => msg.isRead);
-
-    console.log(
-      `markThreadAsRead: Thread ${request.threadId}, User ${request.userId}:`,
-      {
-        totalMessagesToUpdate: messagesToUpdate.length,
-        currentlyUnread: unreadMessages.length,
-        alreadyRead: alreadyReadMessages.length,
-      },
-    );
-
     // Mark all messages in thread as read for the user (messages not sent by them)
-    const result = await this.messageRepository
+    await this.messageRepository
       .createQueryBuilder()
       .update(Message)
       .set({ isRead: true })
       .where('thread_id = :threadId', { threadId: request.threadId })
       .andWhere('sender_id != :userId', { userId: request.userId })
       .execute();
-
-    console.log(
-      `markThreadAsRead: Updated ${result.affected} messages in thread ${request.threadId} for user ${request.userId}`,
-    );
   }
 
   async getThreadById(threadId: string): Promise<MessageThreadResponse> {

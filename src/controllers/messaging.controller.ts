@@ -104,9 +104,6 @@ export class MessagingController {
     }
 
     // Determine sender type based on user role
-    this.logger.log(
-      `Determining sender type for user ${userId} with role: ${userRole}`,
-    );
     let senderType: MessageSenderType;
     switch (userRole) {
       case UserType.ADVERTISER:
@@ -116,9 +113,6 @@ export class MessagingController {
         senderType = MessageSenderType.PROMOTER;
         break;
       default:
-        this.logger.error(
-          `Invalid user role for messaging: ${String(userRole)}. Expected PROMOTER or ADVERTISER.`,
-        );
         throw new Error(
           `Invalid user role: ${String(userRole)}. Only PROMOTER and ADVERTISER can send messages.`,
         );
@@ -134,19 +128,9 @@ export class MessagingController {
 
     // Automatically mark the thread as read for the sender since they're actively participating
     try {
-      this.logger.log(
-        `Automatically marking thread ${threadId} as read for sender ${userId}`,
-      );
       const markAsReadRequest: MarkThreadAsReadRequest = { threadId, userId };
       await this.messagingService.markThreadAsRead(markAsReadRequest);
-      this.logger.log(
-        `Successfully marked thread ${threadId} as read for sender ${userId}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to automatically mark thread ${threadId} as read for sender ${userId}:`,
-        error,
-      );
+    } catch {
       // Don't throw error - the message was sent successfully, read marking is a bonus feature
     }
 
@@ -164,10 +148,6 @@ export class MessagingController {
         .to(`user_${recipientId}`)
         .emit('newMessage', message);
     });
-
-    this.logger.log(
-      `Message sent via REST API - Thread: ${threadId}, Sender: ${userId}, Recipients: [${recipientIds.join(', ')}]`,
-    );
 
     return message;
   }
@@ -205,16 +185,8 @@ export class MessagingController {
       throw new Error('Unable to resolve database user ID from Firebase UID');
     }
 
-    this.logger.log(
-      `User ${userId} attempting to mark message ${messageId} as read`,
-    );
-
     const request: MarkMessageAsReadRequest = { messageId };
     await this.messagingService.markMessageAsRead(request, userId);
-
-    this.logger.log(
-      `Successfully marked message ${messageId} as read for user ${userId}`,
-    );
 
     // Broadcast read status only to message sender, not to the reader
     if (threadId) {
@@ -232,10 +204,6 @@ export class MessagingController {
             threadId,
           });
       });
-
-      this.logger.log(
-        `Broadcasted messageRead event to recipients: [${recipientIds.join(', ')}]`,
-      );
     }
   }
 
@@ -255,24 +223,11 @@ export class MessagingController {
       throw new Error('Unable to resolve database user ID from Firebase UID');
     }
 
-    this.logger.log(
-      `User ${userId} attempting to mark thread ${threadId} as read`,
-    );
-
     // Verify user has access to this thread
     const thread = await this.messagingService.getThreadById(threadId);
     if (thread.promoterId !== userId && thread.advertiserId !== userId) {
       throw new Error('Access denied: User does not belong to this thread');
     }
-
-    // Get unread count before marking as read
-    const unreadCountBefore = await this.messagingService.getUnreadMessageCount(
-      threadId,
-      userId,
-    );
-    this.logger.log(
-      `Thread ${threadId} has ${unreadCountBefore} unread messages for user ${userId} before marking as read`,
-    );
 
     const request: MarkThreadAsReadRequest = { threadId, userId };
     await this.messagingService.markThreadAsRead(request);
@@ -281,9 +236,6 @@ export class MessagingController {
     const unreadCountAfter = await this.messagingService.getUnreadMessageCount(
       threadId,
       userId,
-    );
-    this.logger.log(
-      `Thread ${threadId} has ${unreadCountAfter} unread messages for user ${userId} after marking as read`,
     );
 
     // Broadcast thread read status only to message senders, not to the reader
@@ -306,9 +258,5 @@ export class MessagingController {
       unreadCount: unreadCountAfter,
       action: 'marked_as_read',
     });
-
-    this.logger.log(
-      `Successfully marked thread ${threadId} as read for user ${userId}. Notified recipients: [${recipientIds.join(', ')}]`,
-    );
   }
 }
