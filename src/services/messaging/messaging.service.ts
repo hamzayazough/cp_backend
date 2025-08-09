@@ -5,10 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  MessageThread,
-  Message,
-} from '../../database/entities/message.entity';
+import { MessageThread, Message } from '../../database/entities/message.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import {
