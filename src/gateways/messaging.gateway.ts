@@ -217,6 +217,7 @@ export class MessagingGateway
       }
 
       // Determine sender type based on user role
+      this.logger.log(`[WebSocket] Determining sender type for user ${client.userId} with role: ${client.userRole}`);
       let senderType: MessageSenderType;
       switch (client.userRole) {
         case UserType.ADVERTISER:
@@ -226,7 +227,9 @@ export class MessagingGateway
           senderType = MessageSenderType.PROMOTER;
           break;
         default:
-          senderType = MessageSenderType.SYSTEM;
+          this.logger.error(`[WebSocket] Invalid user role for messaging: ${String(client.userRole)}. Expected PROMOTER or ADVERTISER.`);
+          client.emit('error', { message: `Invalid user role: ${String(client.userRole)}. Only PROMOTER and ADVERTISER can send messages.` });
+          return;
       }
 
       const request: CreateMessageRequest = {
@@ -240,6 +243,18 @@ export class MessagingGateway
         client.userId,
         request,
       );
+
+      // Automatically mark the thread as read for the sender
+      // (sending a message implies the user has seen previous unread messages)
+      try {
+        this.logger.log(`[WebSocket] Automatically marking thread ${payload.threadId} as read for sender ${client.userId}`);
+        const markAsReadRequest = { threadId: payload.threadId, userId: client.userId };
+        await this.messagingService.markThreadAsRead(markAsReadRequest);
+        this.logger.log(`[WebSocket] Successfully marked thread ${payload.threadId} as read for sender ${client.userId}`);
+      } catch (error) {
+        this.logger.error(`[WebSocket] Failed to automatically mark thread ${payload.threadId} as read for sender ${client.userId}:`, error);
+        // Don't throw error - the message was sent successfully, read marking is a bonus feature
+      }
 
       // Remove user from typing indicators
       const typingSet = this.typingUsers.get(payload.threadId);
@@ -261,7 +276,7 @@ export class MessagingGateway
       });
 
       this.logger.log(
-        `Message sent in thread ${payload.threadId} by user ${client.userId}`,
+        `Message sent via WebSocket - Thread: ${payload.threadId}, Sender: ${client.userId}, Recipients: [${recipientIds.join(', ')}]`,
       );
     } catch (error) {
       this.logger.error(`Error sending message:`, error);
