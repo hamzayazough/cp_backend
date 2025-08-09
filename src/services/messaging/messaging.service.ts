@@ -221,7 +221,10 @@ export class MessagingService {
       .getCount();
   }
 
-  async markMessageAsRead(request: MarkMessageAsReadRequest, userId: string): Promise<void> {
+  async markMessageAsRead(
+    request: MarkMessageAsReadRequest,
+    userId: string,
+  ): Promise<void> {
     // Find the message and verify the user has access to it
     const message = await this.messageRepository.findOne({
       where: { id: request.messageId },
@@ -248,7 +251,9 @@ export class MessagingService {
 
     // Only allow marking messages as read if they were not sent by the current user
     if (message.senderId === userId) {
-      throw new BadRequestException('You cannot mark your own messages as read');
+      throw new BadRequestException(
+        'You cannot mark your own messages as read',
+      );
     }
 
     await this.messageRepository.update(request.messageId, { isRead: true });

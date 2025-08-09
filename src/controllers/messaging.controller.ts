@@ -93,7 +93,8 @@ export class MessagingController {
     }
 
     // Get the database user ID using Firebase UID
-    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+    const userId =
+      await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
 
     if (!userId) {
       throw new Error('Unable to resolve database user ID from Firebase UID');
@@ -122,11 +123,13 @@ export class MessagingController {
 
     // Get thread participants to broadcast only to recipients (not sender)
     const thread = await this.messagingService.getThreadById(threadId);
-    
+
     // Broadcast to recipients only (exclude sender)
-    const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
-    
-    recipientIds.forEach(recipientId => {
+    const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+      (id) => id !== userId,
+    );
+
+    recipientIds.forEach((recipientId) => {
       // Emit to all sockets belonging to each recipient
       this.messagingGateway.server
         .to(`user_${recipientId}`)
@@ -162,7 +165,8 @@ export class MessagingController {
       throw new Error('User not authenticated - Firebase UID is required');
     }
 
-    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+    const userId =
+      await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
 
     if (!userId) {
       throw new Error('Unable to resolve database user ID from Firebase UID');
@@ -174,9 +178,11 @@ export class MessagingController {
     // Broadcast read status only to message sender, not to the reader
     if (threadId) {
       const thread = await this.messagingService.getThreadById(threadId);
-      const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
-      
-      recipientIds.forEach(recipientId => {
+      const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+        (id) => id !== userId,
+      );
+
+      recipientIds.forEach((recipientId) => {
         this.messagingGateway.server
           .to(`user_${recipientId}`)
           .emit('messageRead', {
@@ -197,7 +203,8 @@ export class MessagingController {
       throw new Error('User not authenticated - Firebase UID is required');
     }
 
-    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+    const userId =
+      await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
 
     if (!userId) {
       throw new Error('Unable to resolve database user ID from Firebase UID');
@@ -208,9 +215,11 @@ export class MessagingController {
 
     // Broadcast thread read status only to message senders, not to the reader
     const thread = await this.messagingService.getThreadById(threadId);
-    const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
-    
-    recipientIds.forEach(recipientId => {
+    const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+      (id) => id !== userId,
+    );
+
+    recipientIds.forEach((recipientId) => {
       this.messagingGateway.server
         .to(`user_${recipientId}`)
         .emit('threadRead', {

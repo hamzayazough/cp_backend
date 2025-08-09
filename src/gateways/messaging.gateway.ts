@@ -53,7 +53,9 @@ interface TypingPayload {
   },
   namespace: '/messaging',
 })
-export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessagingGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -72,8 +74,11 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       this.logger.log(`Client attempting to connect: ${client.id}`);
 
       // Extract token from handshake auth
-      const token = (client.handshake.auth?.token || 
-        client.handshake.headers?.authorization?.replace('Bearer ', '')) as string;
+      const token = (client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace(
+          'Bearer ',
+          '',
+        )) as string;
 
       if (!token) {
         this.logger.warn(`No token provided for client: ${client.id}`);
@@ -90,9 +95,13 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       // Get user from database
-      const user = await this.userService.getUserByFirebaseUid(firebaseUser.uid);
+      const user = await this.userService.getUserByFirebaseUid(
+        firebaseUser.uid,
+      );
       if (!user) {
-        this.logger.warn(`User not found for Firebase UID: ${firebaseUser.uid}`);
+        this.logger.warn(
+          `User not found for Firebase UID: ${firebaseUser.uid}`,
+        );
         client.disconnect();
         return;
       }
@@ -116,7 +125,6 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
         role: user.role,
         message: 'Connected to messaging',
       });
-
     } catch (error) {
       this.logger.error(`Connection error for client ${client.id}:`, error);
       client.disconnect();
@@ -126,13 +134,13 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   handleDisconnect(client: AuthenticatedSocket) {
     if (client.userId) {
       this.connectedUsers.delete(client.userId);
-      
+
       // Remove from typing indicators
       this.typingUsers.forEach((userSet, threadId) => {
         if (userSet.has(client.userId!)) {
           userSet.delete(client.userId!);
           this.broadcastTypingStatus(threadId, client.userId!, false);
-          
+
           if (userSet.size === 0) {
             this.typingUsers.delete(threadId);
           }
@@ -155,19 +163,25 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       // Verify user has access to this thread
-      const thread = await this.messagingService.getThreadById(payload.threadId);
-      if (thread.promoterId !== client.userId && thread.advertiserId !== client.userId) {
+      const thread = await this.messagingService.getThreadById(
+        payload.threadId,
+      );
+      if (
+        thread.promoterId !== client.userId &&
+        thread.advertiserId !== client.userId
+      ) {
         client.emit('error', { message: 'Access denied to this thread' });
         return;
       }
 
       // Join the thread room
       await client.join(`thread_${payload.threadId}`);
-      
-      this.logger.log(`User ${client.userId} joined thread ${payload.threadId}`);
-      
-      client.emit('threadJoined', { threadId: payload.threadId });
 
+      this.logger.log(
+        `User ${client.userId} joined thread ${payload.threadId}`,
+      );
+
+      client.emit('threadJoined', { threadId: payload.threadId });
     } catch (error) {
       this.logger.error(`Error joining thread:`, error);
       client.emit('error', { message: 'Failed to join thread' });
@@ -180,7 +194,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() payload: JoinThreadPayload,
   ) {
     void client.leave(`thread_${payload.threadId}`);
-    
+
     // Remove from typing indicators
     const typingSet = this.typingUsers.get(payload.threadId);
     if (typingSet && typingSet.has(client.userId!)) {
@@ -222,7 +236,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       };
 
       // Save message using the messaging service
-      const message = await this.messagingService.sendMessage(client.userId, request);
+      const message = await this.messagingService.sendMessage(
+        client.userId,
+        request,
+      );
 
       // Remove user from typing indicators
       const typingSet = this.typingUsers.get(payload.threadId);
@@ -232,15 +249,20 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       // Broadcast the new message only to recipients (not sender)
-      const thread = await this.messagingService.getThreadById(payload.threadId);
-      const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
-      
-      recipientIds.forEach(recipientId => {
+      const thread = await this.messagingService.getThreadById(
+        payload.threadId,
+      );
+      const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+        (id) => id !== client.userId,
+      );
+
+      recipientIds.forEach((recipientId) => {
         this.server.to(`user_${recipientId}`).emit('newMessage', message);
       });
 
-      this.logger.log(`Message sent in thread ${payload.threadId} by user ${client.userId}`);
-
+      this.logger.log(
+        `Message sent in thread ${payload.threadId} by user ${client.userId}`,
+      );
     } catch (error) {
       this.logger.error(`Error sending message:`, error);
       client.emit('error', { message: 'Failed to send message' });
@@ -260,15 +282,21 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
       if (payload.messageId) {
         // Mark single message as read
-        const request: MarkMessageAsReadRequest = { messageId: payload.messageId };
+        const request: MarkMessageAsReadRequest = {
+          messageId: payload.messageId,
+        };
         await this.messagingService.markMessageAsRead(request, client.userId);
-        
+
         // Get thread to broadcast only to recipients (not the reader)
         if (payload.threadId) {
-          const thread = await this.messagingService.getThreadById(payload.threadId);
-          const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
-          
-          recipientIds.forEach(recipientId => {
+          const thread = await this.messagingService.getThreadById(
+            payload.threadId,
+          );
+          const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+            (id) => id !== client.userId,
+          );
+
+          recipientIds.forEach((recipientId) => {
             this.server.to(`user_${recipientId}`).emit('messageRead', {
               messageId: payload.messageId,
               userId: client.userId,
@@ -276,27 +304,29 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
             });
           });
         }
-
       } else if (payload.threadId) {
         // Mark entire thread as read
-        const request: MarkThreadAsReadRequest = { 
-          threadId: payload.threadId, 
-          userId: client.userId 
+        const request: MarkThreadAsReadRequest = {
+          threadId: payload.threadId,
+          userId: client.userId,
         };
         await this.messagingService.markThreadAsRead(request);
-        
+
         // Get thread to broadcast only to recipients (not the reader)
-        const thread = await this.messagingService.getThreadById(payload.threadId);
-        const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
-        
-        recipientIds.forEach(recipientId => {
+        const thread = await this.messagingService.getThreadById(
+          payload.threadId,
+        );
+        const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+          (id) => id !== client.userId,
+        );
+
+        recipientIds.forEach((recipientId) => {
           this.server.to(`user_${recipientId}`).emit('threadRead', {
             threadId: payload.threadId,
             userId: client.userId,
           });
         });
       }
-
     } catch (error) {
       this.logger.error(`Error marking as read:`, error);
       client.emit('error', { message: 'Failed to mark as read' });
@@ -331,7 +361,11 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.broadcastTypingStatus(threadId, userId, payload.isTyping);
   }
 
-  private broadcastTypingStatus(threadId: string, userId: string, isTyping: boolean) {
+  private broadcastTypingStatus(
+    threadId: string,
+    userId: string,
+    isTyping: boolean,
+  ) {
     // Broadcast to all users in the thread except the typing user
     this.server.to(`thread_${threadId}`).emit('userTyping', {
       threadId,
@@ -351,7 +385,7 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   // Method to get online status of users
   getUsersOnlineStatus(userIds: string[]): Map<string, boolean> {
     const onlineStatus = new Map<string, boolean>();
-    userIds.forEach(userId => {
+    userIds.forEach((userId) => {
       onlineStatus.set(userId, this.connectedUsers.has(userId));
     });
     return onlineStatus;
