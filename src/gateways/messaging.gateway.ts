@@ -217,7 +217,9 @@ export class MessagingGateway
       }
 
       // Determine sender type based on user role
-      this.logger.log(`[WebSocket] Determining sender type for user ${client.userId} with role: ${client.userRole}`);
+      this.logger.log(
+        `[WebSocket] Determining sender type for user ${client.userId} with role: ${client.userRole}`,
+      );
       let senderType: MessageSenderType;
       switch (client.userRole) {
         case UserType.ADVERTISER:
@@ -227,8 +229,12 @@ export class MessagingGateway
           senderType = MessageSenderType.PROMOTER;
           break;
         default:
-          this.logger.error(`[WebSocket] Invalid user role for messaging: ${String(client.userRole)}. Expected PROMOTER or ADVERTISER.`);
-          client.emit('error', { message: `Invalid user role: ${String(client.userRole)}. Only PROMOTER and ADVERTISER can send messages.` });
+          this.logger.error(
+            `[WebSocket] Invalid user role for messaging: ${String(client.userRole)}. Expected PROMOTER or ADVERTISER.`,
+          );
+          client.emit('error', {
+            message: `Invalid user role: ${String(client.userRole)}. Only PROMOTER and ADVERTISER can send messages.`,
+          });
           return;
       }
 
@@ -247,12 +253,22 @@ export class MessagingGateway
       // Automatically mark the thread as read for the sender
       // (sending a message implies the user has seen previous unread messages)
       try {
-        this.logger.log(`[WebSocket] Automatically marking thread ${payload.threadId} as read for sender ${client.userId}`);
-        const markAsReadRequest = { threadId: payload.threadId, userId: client.userId };
+        this.logger.log(
+          `[WebSocket] Automatically marking thread ${payload.threadId} as read for sender ${client.userId}`,
+        );
+        const markAsReadRequest = {
+          threadId: payload.threadId,
+          userId: client.userId,
+        };
         await this.messagingService.markThreadAsRead(markAsReadRequest);
-        this.logger.log(`[WebSocket] Successfully marked thread ${payload.threadId} as read for sender ${client.userId}`);
+        this.logger.log(
+          `[WebSocket] Successfully marked thread ${payload.threadId} as read for sender ${client.userId}`,
+        );
       } catch (error) {
-        this.logger.error(`[WebSocket] Failed to automatically mark thread ${payload.threadId} as read for sender ${client.userId}:`, error);
+        this.logger.error(
+          `[WebSocket] Failed to automatically mark thread ${payload.threadId} as read for sender ${client.userId}:`,
+          error,
+        );
         // Don't throw error - the message was sent successfully, read marking is a bonus feature
       }
 

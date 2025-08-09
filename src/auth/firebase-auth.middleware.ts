@@ -39,8 +39,10 @@ export class FirebaseAuthMiddleware implements NestMiddleware {
 
       // Fetch database user to get additional properties like role
       try {
-        const dbUser = await this.userService.getUserByFirebaseUid(firebaseUser.uid);
-        
+        const dbUser = await this.userService.getUserByFirebaseUid(
+          firebaseUser.uid,
+        );
+
         // Combine Firebase user info with database user properties
         req.user = {
           ...userInfo,
@@ -55,10 +57,9 @@ export class FirebaseAuthMiddleware implements NestMiddleware {
 
       next();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new UnauthorizedException(
-        `Authentication failed: ${errorMessage}`,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new UnauthorizedException(`Authentication failed: ${errorMessage}`);
     }
   }
 }
