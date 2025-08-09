@@ -1,7 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MessageThread, Message, ChatSummary } from '../../database/entities/message.entity';
+import {
+  MessageThread,
+  Message,
+  ChatSummary,
+} from '../../database/entities/message.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
 import {
@@ -32,42 +40,62 @@ export class MessagingService {
     private campaignRepository: Repository<CampaignEntity>,
   ) {}
 
-  async createThread(request: CreateMessageThreadRequest): Promise<MessageThreadResponse> {
+  async getUserIdByFirebaseUid(firebaseUid: string): Promise<string> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      throw new Error(`User not found for Firebase UID: ${firebaseUid}`);
+    }
+
+    return user.id;
+  }
+
+  async createThread(
+    request: CreateMessageThreadRequest,
+  ): Promise<MessageThreadResponse> {
+    // First, get the campaign to extract advertiser ID
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: request.campaignId },
+      relations: ['advertiser'],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const advertiserId = campaign.advertiserId;
+
     // Check if thread already exists
     const existingThread = await this.messageThreadRepository.findOne({
       where: {
         campaignId: request.campaignId,
         promoterId: request.promoterId,
-        advertiserId: request.advertiserId,
+        advertiserId: advertiserId,
       },
     });
 
     if (existingThread) {
-      throw new BadRequestException('Thread already exists for this campaign and users');
+      throw new BadRequestException(
+        'Thread already exists for this campaign and users',
+      );
     }
 
-    // Validate that users and campaign exist
-    const [promoter, advertiser, campaign] = await Promise.all([
-      this.userRepository.findOne({ where: { id: request.promoterId } }),
-      this.userRepository.findOne({ where: { id: request.advertiserId } }),
-      this.campaignRepository.findOne({ where: { id: request.campaignId } }),
-    ]);
+    // Validate that promoter exists
+    const promoter = await this.userRepository.findOne({
+      where: { id: request.promoterId },
+    });
 
     if (!promoter) {
       throw new NotFoundException('Promoter not found');
-    }
-    if (!advertiser) {
-      throw new NotFoundException('Advertiser not found');
-    }
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
     }
 
     const thread = this.messageThreadRepository.create({
       campaignId: request.campaignId,
       promoterId: request.promoterId,
-      advertiserId: request.advertiserId,
-      subject: request.subject,
+      advertiserId: advertiserId,
+      subject: request.subject || campaign.title, // Use campaign title as default subject
     });
 
     const savedThread = await this.messageThreadRepository.save(thread);
@@ -118,7 +146,9 @@ export class MessagingService {
       .orderBy('message.createdAt', 'DESC');
 
     if (request.before) {
-      queryBuilder.andWhere('message.createdAt < :before', { before: request.before });
+      queryBuilder.andWhere('message.createdAt < :before', {
+        before: request.before,
+      });
     }
 
     if (request.limit) {
@@ -134,13 +164,15 @@ export class MessagingService {
     return messages.map((message) => this.mapMessageToResponse(message));
   }
 
-  async getThreads(request: GetThreadsRequest): Promise<MessageThreadResponse[]> {
+  async getThreads(
+    request: GetThreadsRequest,
+  ): Promise<MessageThreadResponse[]> {
     const queryBuilder = this.messageThreadRepository
       .createQueryBuilder('thread')
       .leftJoinAndSelect('thread.campaign', 'campaign')
       .leftJoinAndSelect('thread.promoter', 'promoter')
       .leftJoinAndSelect('thread.advertiser', 'advertiser')
-      .where('thread.promoterId = :userId OR thread.advertiserId = :userId', {
+      .where('(thread.promoterId = :userId OR thread.advertiserId = :userId)', {
         userId: request.userId,
       });
 
@@ -157,14 +189,18 @@ export class MessagingService {
     }
 
     if (request.page && request.limit) {
-      queryBuilder.offset((request.page - 1) * request.limit);
+      const offset = (request.page - 1) * request.limit;
+      queryBuilder.offset(offset);
     }
 
     const threads = await queryBuilder.getMany();
 
     const threadsWithMessages = await Promise.all(
       threads.map(async (thread) => {
-        const unreadCount = await this.getUnreadMessageCount(thread.id, request.userId);
+        const unreadCount = await this.getUnreadMessageCount(
+          thread.id,
+          request.userId,
+        );
         const recentMessages = await this.getMessages({
           threadId: thread.id,
           limit: 1,
@@ -181,7 +217,10 @@ export class MessagingService {
     return threadsWithMessages;
   }
 
-  async getUnreadMessageCount(threadId: string, userId: string): Promise<number> {
+  async getUnreadMessageCount(
+    threadId: string,
+    userId: string,
+  ): Promise<number> {
     return this.messageRepository
       .createQueryBuilder('message')
       .where('message.threadId = :threadId', { threadId })
@@ -205,7 +244,9 @@ export class MessagingService {
       .execute();
   }
 
-  async createChatSummary(request: CreateChatSummaryRequest): Promise<ChatSummaryResponse> {
+  async createChatSummary(
+    request: CreateChatSummaryRequest,
+  ): Promise<ChatSummaryResponse> {
     const summary = this.chatSummaryRepository.create(request);
     const savedSummary = await this.chatSummaryRepository.save(summary);
     return this.mapSummaryToResponse(savedSummary);
@@ -250,11 +291,41 @@ export class MessagingService {
     return thread ? this.mapThreadToResponse(thread) : null;
   }
 
+  async getThreadByCampaignAndUser(
+    campaignId: string,
+    userId: string,
+  ): Promise<MessageThreadResponse | null> {
+    // Try to find thread where user is either promoter or advertiser
+    const thread = await this.messageThreadRepository
+      .createQueryBuilder('thread')
+      .leftJoinAndSelect('thread.campaign', 'campaign')
+      .leftJoinAndSelect('thread.promoter', 'promoter')
+      .leftJoinAndSelect('thread.advertiser', 'advertiser')
+      .where('thread.campaignId = :campaignId', { campaignId })
+      .andWhere(
+        '(thread.promoterId = :userId OR thread.advertiserId = :userId)',
+        { userId },
+      )
+      .getOne();
+
+    return thread ? this.mapThreadToResponse(thread) : null;
+  }
+
   async createThreadForPrivateCampaign(
     campaignId: string,
     promoterId: string,
-    advertiserId: string,
   ): Promise<MessageThreadResponse> {
+    // Get campaign to extract advertiser ID
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    const advertiserId = campaign.advertiserId;
+
     // Check if thread already exists
     const existingThread = await this.getThreadForCampaign(
       campaignId,
@@ -270,8 +341,7 @@ export class MessagingService {
     const createRequest: CreateMessageThreadRequest = {
       campaignId,
       promoterId,
-      advertiserId,
-      subject: 'Campaign Discussion',
+      // No subject specified - will use campaign title as default
     };
 
     return this.createThread(createRequest);
@@ -291,7 +361,6 @@ export class MessagingService {
       sender: message.sender
         ? {
             id: message.sender.id,
-            firebaseUid: message.sender.firebaseUid,
             username: message.sender.name,
             profilePictureUrl: message.sender.avatarUrl,
           }
@@ -319,7 +388,6 @@ export class MessagingService {
       promoter: thread.promoter
         ? {
             id: thread.promoter.id,
-            firebaseUid: thread.promoter.firebaseUid,
             username: thread.promoter.name,
             profilePictureUrl: thread.promoter.avatarUrl,
           }
@@ -327,7 +395,6 @@ export class MessagingService {
       advertiser: thread.advertiser
         ? {
             id: thread.advertiser.id,
-            firebaseUid: thread.advertiser.firebaseUid,
             username: thread.advertiser.name,
             profilePictureUrl: thread.advertiser.avatarUrl,
           }

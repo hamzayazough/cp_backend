@@ -44,19 +44,42 @@ export class MessagingController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('campaignId') campaignId?: string,
-    @User('id') userId?: string,
+    @User('uid') firebaseUid?: string,
   ): Promise<MessageThreadResponse[]> {
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    // Get the database user ID using Firebase UID
+    const userId =
+      await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+
+    if (!userId) {
+      throw new Error('Unable to resolve database user ID from Firebase UID');
+    }
+
     const request: GetThreadsRequest = {
-      userId: userId!,
+      userId: userId,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       campaignId,
     };
+
     return this.messagingService.getThreads(request);
   }
 
+  @Get('campaigns/:campaignId/thread')
+  async getThreadByCampaign(
+    @Param('campaignId') campaignId: string,
+    @User('id') userId: string,
+  ): Promise<MessageThreadResponse | null> {
+    return this.messagingService.getThreadByCampaignAndUser(campaignId, userId);
+  }
+
   @Get('threads/:threadId')
-  async getThread(@Param('threadId') threadId: string): Promise<MessageThreadResponse> {
+  async getThread(
+    @Param('threadId') threadId: string,
+  ): Promise<MessageThreadResponse> {
     return this.messagingService.getThreadById(threadId);
   }
 
@@ -89,7 +112,9 @@ export class MessagingController {
     const message = await this.messagingService.sendMessage(userId, request);
 
     // Broadcast the message to WebSocket clients in real-time
-    this.messagingGateway.server.to(`thread_${threadId}`).emit('newMessage', message);
+    this.messagingGateway.server
+      .to(`thread_${threadId}`)
+      .emit('newMessage', message);
 
     return message;
   }
@@ -121,10 +146,12 @@ export class MessagingController {
 
     // Broadcast read status to WebSocket clients if threadId is provided
     if (threadId && userId) {
-      this.messagingGateway.server.to(`thread_${threadId}`).emit('messageRead', {
-        messageId,
-        userId,
-      });
+      this.messagingGateway.server
+        .to(`thread_${threadId}`)
+        .emit('messageRead', {
+          messageId,
+          userId,
+        });
     }
   }
 
@@ -156,7 +183,9 @@ export class MessagingController {
   }
 
   @Get('threads/:threadId/summaries')
-  async getChatSummaries(@Param('threadId') threadId: string): Promise<ChatSummaryResponse[]> {
+  async getChatSummaries(
+    @Param('threadId') threadId: string,
+  ): Promise<ChatSummaryResponse[]> {
     return this.messagingService.getChatSummaries(threadId);
   }
 

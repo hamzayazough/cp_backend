@@ -1,11 +1,13 @@
 # Messaging System Integration Guide
 
 ## Overview
+
 The messaging system is now fully implemented with both REST API and WebSocket support for real-time communication.
 
 ## Architecture
 
 ### Components
+
 1. **Database Entities**: `MessageThread`, `Message`, `ChatSummary`
 2. **REST API**: `MessagingController` with full CRUD operations
 3. **WebSocket Gateway**: `MessagingGateway` for real-time communication
@@ -14,6 +16,7 @@ The messaging system is now fully implemented with both REST API and WebSocket s
 ## WebSocket Events
 
 ### Client -> Server Events
+
 - `joinThread`: Join a specific message thread
 - `leaveThread`: Leave a message thread
 - `sendMessage`: Send a message to a thread
@@ -21,6 +24,7 @@ The messaging system is now fully implemented with both REST API and WebSocket s
 - `typing`: Indicate typing status
 
 ### Server -> Client Events
+
 - `connected`: Connection established
 - `threadJoined`: Successfully joined thread
 - `threadLeft`: Successfully left thread
@@ -37,14 +41,34 @@ The messaging system is now fully implemented with both REST API and WebSocket s
 POST   /messaging/threads                      - Create message thread
 GET    /messaging/threads                      - Get user's threads
 GET    /messaging/threads/:id                  - Get specific thread
+GET    /messaging/campaigns/:campaignId/thread - Get thread for specific campaign and user
 POST   /messaging/threads/:id/messages         - Send message (with real-time broadcast)
 GET    /messaging/threads/:id/messages         - Get thread messages
 PATCH  /messaging/messages/:id/read            - Mark message as read
 PATCH  /messaging/threads/:id/read             - Mark thread as read
 POST   /messaging/threads/:id/summaries        - Create AI summary
 GET    /messaging/threads/:id/summaries        - Get thread summaries
-GET    /messaging/campaigns/:id/thread         - Get campaign thread
 ```
+
+## ⚠️ Important Notes
+
+### Authentication & User IDs
+
+- **All endpoints use database user IDs automatically** via Firebase authentication
+- **No manual ID conversion needed** - the system handles this internally
+- **promoterId**: Database UUID (handled automatically by auth middleware)
+- **advertiserId**: Automatically retrieved from the campaign entity
+- **subject**: Optional - if not provided, defaults to the campaign title
+
+### New Endpoint: Get Thread by Campaign
+
+```typescript
+GET /api/messaging/campaigns/:campaignId/thread
+```
+
+- Returns the thread for the authenticated user and specified campaign
+- Works for both promoters and advertisers
+- Returns `null` if no thread exists for this combination
 
 ## Data Structures & TypeScript Interfaces
 
@@ -58,7 +82,6 @@ type UserRole = 'ADVERTISER' | 'PROMOTER' | 'ADMIN';
 // User information in messages
 interface UserInfo {
   id: string;
-  firebaseUid: string;
   username: string; // maps to user.name in backend
   profilePictureUrl?: string; // maps to user.avatarUrl in backend
 }
@@ -77,12 +100,11 @@ interface CampaignInfo {
 // Create Thread Request
 interface CreateMessageThreadRequest {
   campaignId: string;
-  promoterId: string;
-  advertiserId: string;
-  subject?: string;
+  promoterId: string; // Database UUID (authenticated user's ID)
+  subject?: string; // Optional - defaults to campaign title if not provided
 }
 
-// Send Message Request  
+// Send Message Request
 interface CreateMessageRequest {
   threadId: string;
   content: string;
@@ -242,110 +264,104 @@ interface ErrorPayload {
 // GET /messaging/threads response
 const threadsResponse: MessageThreadResponse[] = [
   {
-    id: "thread-uuid-1",
-    campaignId: "campaign-uuid-1",
-    promoterId: "promoter-uuid-1", 
-    advertiserId: "advertiser-uuid-1",
-    subject: "Campaign Discussion",
-    lastMessageAt: "2025-08-08T10:30:00Z",
-    createdAt: "2025-08-08T09:00:00Z",
-    updatedAt: "2025-08-08T10:30:00Z",
+    id: 'thread-uuid-1',
+    campaignId: 'campaign-uuid-1',
+    promoterId: 'promoter-uuid-1',
+    advertiserId: 'advertiser-uuid-1',
+    subject: 'Campaign Discussion',
+    lastMessageAt: '2025-08-08T10:30:00Z',
+    createdAt: '2025-08-08T09:00:00Z',
+    updatedAt: '2025-08-08T10:30:00Z',
     unreadCount: 2,
     campaign: {
-      id: "campaign-uuid-1",
-      title: "Summer Fashion Campaign",
-      isPublic: false
+      id: 'campaign-uuid-1',
+      title: 'Summer Fashion Campaign',
+      isPublic: false,
     },
     promoter: {
-      id: "promoter-uuid-1",
-      firebaseUid: "firebase-promoter-uid",
-      username: "John Doe",
-      profilePictureUrl: "https://s3.bucket/avatar1.jpg"
+      id: 'promoter-uuid-1',
+      username: 'John Doe',
+      profilePictureUrl: 'https://s3.bucket/avatar1.jpg',
     },
     advertiser: {
-      id: "advertiser-uuid-1", 
-      firebaseUid: "firebase-advertiser-uid",
-      username: "Fashion Brand Co",
-      profilePictureUrl: "https://s3.bucket/avatar2.jpg"
+      id: 'advertiser-uuid-1',
+      username: 'Fashion Brand Co',
+      profilePictureUrl: 'https://s3.bucket/avatar2.jpg',
     },
     messages: [
       {
-        id: "message-uuid-1",
-        threadId: "thread-uuid-1",
-        senderId: "advertiser-uuid-1",
-        senderType: "ADVERTISER",
-        content: "Hi! Looking forward to working with you on this campaign.",
+        id: 'message-uuid-1',
+        threadId: 'thread-uuid-1',
+        senderId: 'advertiser-uuid-1',
+        senderType: 'ADVERTISER',
+        content: 'Hi! Looking forward to working with you on this campaign.',
         isRead: false,
-        createdAt: "2025-08-08T10:30:00Z",
-        updatedAt: "2025-08-08T10:30:00Z",
+        createdAt: '2025-08-08T10:30:00Z',
+        updatedAt: '2025-08-08T10:30:00Z',
         sender: {
-          id: "advertiser-uuid-1",
-          firebaseUid: "firebase-advertiser-uid", 
-          username: "Fashion Brand Co",
-          profilePictureUrl: "https://s3.bucket/avatar2.jpg"
-        }
-      }
-    ]
-  }
+          id: 'advertiser-uuid-1',
+          username: 'Fashion Brand Co',
+          profilePictureUrl: 'https://s3.bucket/avatar2.jpg',
+        },
+      },
+    ],
+  },
 ];
 
 // GET /messaging/threads/:id/messages response
 const messagesResponse: MessageResponse[] = [
   {
-    id: "message-uuid-1",
-    threadId: "thread-uuid-1", 
-    senderId: "advertiser-uuid-1",
-    senderType: "ADVERTISER",
-    content: "Hi! Looking forward to working with you on this campaign.",
+    id: 'message-uuid-1',
+    threadId: 'thread-uuid-1',
+    senderId: 'advertiser-uuid-1',
+    senderType: 'ADVERTISER',
+    content: 'Hi! Looking forward to working with you on this campaign.',
     isRead: true,
-    createdAt: "2025-08-08T09:15:00Z",
-    updatedAt: "2025-08-08T10:00:00Z",
+    createdAt: '2025-08-08T09:15:00Z',
+    updatedAt: '2025-08-08T10:00:00Z',
     sender: {
-      id: "advertiser-uuid-1",
-      firebaseUid: "firebase-advertiser-uid",
-      username: "Fashion Brand Co", 
-      profilePictureUrl: "https://s3.bucket/avatar2.jpg"
-    }
+      id: 'advertiser-uuid-1',
+      username: 'Fashion Brand Co',
+      profilePictureUrl: 'https://s3.bucket/avatar2.jpg',
+    },
   },
   {
-    id: "message-uuid-2",
-    threadId: "thread-uuid-1",
-    senderId: "promoter-uuid-1", 
-    senderType: "PROMOTER",
-    content: "Absolutely! I have some great ideas for this campaign.",
+    id: 'message-uuid-2',
+    threadId: 'thread-uuid-1',
+    senderId: 'promoter-uuid-1',
+    senderType: 'PROMOTER',
+    content: 'Absolutely! I have some great ideas for this campaign.',
     isRead: false,
-    createdAt: "2025-08-08T10:30:00Z",
-    updatedAt: "2025-08-08T10:30:00Z",
+    createdAt: '2025-08-08T10:30:00Z',
+    updatedAt: '2025-08-08T10:30:00Z',
     sender: {
-      id: "promoter-uuid-1",
-      firebaseUid: "firebase-promoter-uid",
-      username: "John Doe",
-      profilePictureUrl: "https://s3.bucket/avatar1.jpg" 
-    }
-  }
+      id: 'promoter-uuid-1',
+      username: 'John Doe',
+      profilePictureUrl: 'https://s3.bucket/avatar1.jpg',
+    },
+  },
 ];
 
 // POST /messaging/threads/:id/messages request body
 const sendMessageRequest = {
-  content: "That sounds great! Let's discuss the timeline."
+  content: "That sounds great! Let's discuss the timeline.",
 };
 
 // POST /messaging/threads/:id/messages response
 const sendMessageResponse: MessageResponse = {
-  id: "message-uuid-3",
-  threadId: "thread-uuid-1",
-  senderId: "advertiser-uuid-1",
-  senderType: "ADVERTISER", 
+  id: 'message-uuid-3',
+  threadId: 'thread-uuid-1',
+  senderId: 'advertiser-uuid-1',
+  senderType: 'ADVERTISER',
   content: "That sounds great! Let's discuss the timeline.",
   isRead: false,
-  createdAt: "2025-08-08T10:35:00Z",
-  updatedAt: "2025-08-08T10:35:00Z",
+  createdAt: '2025-08-08T10:35:00Z',
+  updatedAt: '2025-08-08T10:35:00Z',
   sender: {
-    id: "advertiser-uuid-1",
-    firebaseUid: "firebase-advertiser-uid",
-    username: "Fashion Brand Co",
-    profilePictureUrl: "https://s3.bucket/avatar2.jpg"
-  }
+    id: 'advertiser-uuid-1',
+    username: 'Fashion Brand Co',
+    profilePictureUrl: 'https://s3.bucket/avatar2.jpg',
+  },
 };
 ```
 
@@ -356,10 +372,10 @@ const sendMessageResponse: MessageResponse = {
 ```typescript
 // In PromoterCampaignInteractionService.acceptContract()
 async acceptContract(
-  firebaseUid: string,
+  userId: string, // Database user ID from auth middleware
   request: AcceptContractRequest,
 ): Promise<AcceptContractResponse> {
-  const promoter = await this.findPromoterByFirebaseUid(firebaseUid);
+  const promoter = await this.findPromoterById(userId);
   const campaign = await this.findActiveCampaign(request.campaignId);
 
   // ... existing validation logic ...
@@ -374,8 +390,7 @@ async acceptContract(
     try {
       await this.messagingService.createThreadForPrivateCampaign(
         campaign.id,
-        promoter.id,
-        campaign.advertiserId,
+        promoter.id, // Database UUID
       );
     } catch (error) {
       // Log error but don't fail the contract acceptance
@@ -395,8 +410,8 @@ import io from 'socket.io-client';
 
 const socket = io('ws://localhost:3000/messaging', {
   auth: {
-    token: 'your-firebase-jwt-token'
-  }
+    token: 'your-firebase-jwt-token',
+  },
 });
 
 // Listen for connection
@@ -410,7 +425,7 @@ socket.emit('joinThread', { threadId: 'thread-uuid' });
 // Send a message
 socket.emit('sendMessage', {
   threadId: 'thread-uuid',
-  content: 'Hello there!'
+  content: 'Hello there!',
 });
 
 // Listen for new messages
@@ -428,16 +443,23 @@ socket.on('userTyping', (data) => {
 ### 3. REST API Usage
 
 ```typescript
+// Get thread for current user and specific campaign
+const thread = await fetch('/messaging/campaigns/campaign-uuid-123/thread', {
+  headers: {
+    Authorization: 'Bearer your-firebase-token',
+  },
+});
+
 // Send message via REST API (also broadcasts via WebSocket)
 const response = await fetch('/messaging/threads/123/messages', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer your-firebase-token'
+    Authorization: 'Bearer your-firebase-token',
   },
   body: JSON.stringify({
-    content: 'Hello from REST API!'
-  })
+    content: 'Hello from REST API!',
+  }),
 });
 
 // Get thread messages with pagination
@@ -479,6 +501,7 @@ const messages = await fetch('/messaging/threads/123/messages?page=1&limit=20');
 ## Error Handling
 
 The system includes comprehensive error handling:
+
 - Invalid tokens result in disconnection
 - Access denied for unauthorized threads
 - Graceful fallback to REST API if WebSocket fails
@@ -487,24 +510,29 @@ The system includes comprehensive error handling:
 ## Testing
 
 ### WebSocket Testing with Postman or Socket.io Client
+
 1. Connect to `ws://localhost:3000/messaging`
 2. Include `auth.token` in connection handshake
 3. Test all events listed above
 
 ### REST API Testing
+
 All endpoints are protected by Firebase auth middleware and can be tested with standard HTTP clients.
 
 ## Frontend Integration Checklist
 
 ### Required Dependencies
+
 ```bash
 npm install socket.io-client
 ```
 
 ### Environment Variables
+
 ```typescript
 // Frontend environment config
-const WEBSOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3000/messaging';
+const WEBSOCKET_URL =
+  process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:3000/messaging';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 ```
 
@@ -526,7 +554,6 @@ interface MessageResponse {
   updatedAt: string;
   sender?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
@@ -548,13 +575,11 @@ interface MessageThreadResponse {
   };
   promoter?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
   advertiser?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
@@ -592,7 +617,7 @@ class MessagingService {
   connect(firebaseToken: string) {
     this.token = firebaseToken;
     this.socket = io('ws://localhost:3000/messaging', {
-      auth: { token: firebaseToken }
+      auth: { token: firebaseToken },
     });
 
     this.socket.on('connected', (data: ConnectedPayload) => {
@@ -614,43 +639,67 @@ class MessagingService {
   }
 
   // REST API Methods
-  async getThreads(page?: number, limit?: number, campaignId?: string): Promise<MessageThreadResponse[]> {
+  async getThreads(
+    page?: number,
+    limit?: number,
+    campaignId?: string,
+  ): Promise<MessageThreadResponse[]> {
     const params = new URLSearchParams();
     if (page) params.append('page', page.toString());
     if (limit) params.append('limit', limit.toString());
     if (campaignId) params.append('campaignId', campaignId);
 
     const response = await fetch(`/messaging/threads?${params}`, {
-      headers: { 'Authorization': `Bearer ${this.token}` }
+      headers: { Authorization: `Bearer ${this.token}` },
     });
     return response.json();
   }
 
-  async getMessages(threadId: string, page?: number, limit?: number): Promise<MessageResponse[]> {
+  async getMessages(
+    threadId: string,
+    page?: number,
+    limit?: number,
+  ): Promise<MessageResponse[]> {
     const params = new URLSearchParams();
     if (page) params.append('page', page.toString());
     if (limit) params.append('limit', limit.toString());
 
-    const response = await fetch(`/messaging/threads/${threadId}/messages?${params}`, {
-      headers: { 'Authorization': `Bearer ${this.token}` }
-    });
+    const response = await fetch(
+      `/messaging/threads/${threadId}/messages?${params}`,
+      {
+        headers: { Authorization: `Bearer ${this.token}` },
+      },
+    );
     return response.json();
   }
 
-  async createThread(campaignId: string, promoterId: string, advertiserId: string, subject?: string): Promise<MessageThreadResponse> {
+  async createThread(
+    campaignId: string,
+    promoterId: string,
+    subject?: string,
+  ): Promise<MessageThreadResponse> {
     const response = await fetch('/messaging/threads', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
+        Authorization: `Bearer ${this.token}`,
       },
       body: JSON.stringify({
         campaignId,
         promoterId,
-        advertiserId,
-        subject
-      })
+        subject,
+      }),
     });
+    return response.json();
+  }
+
+  async getThreadByCampaign(
+    campaignId: string,
+  ): Promise<MessageThreadResponse | null> {
+    const response = await fetch(`/messaging/campaigns/${campaignId}/thread`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (response.status === 404) return null;
     return response.json();
   }
 
@@ -668,14 +717,17 @@ class MessagingService {
   }
 
   // Send message via REST API (also broadcasts via WebSocket)
-  async sendMessageHTTP(threadId: string, content: string): Promise<MessageResponse> {
+  async sendMessageHTTP(
+    threadId: string,
+    content: string,
+  ): Promise<MessageResponse> {
     const response = await fetch(`/messaging/threads/${threadId}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
+        Authorization: `Bearer ${this.token}`,
       },
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content }),
     });
     return response.json();
   }
@@ -734,7 +786,6 @@ interface MessageResponse {
   updatedAt: string;
   sender?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
@@ -769,19 +820,25 @@ export const useMessaging = (firebaseToken: string) => {
 
     // Listen for new messages
     messagingService.onNewMessage((message: MessageResponse) => {
-      setMessages(prev => [...prev, message]);
-      
+      setMessages((prev) => [...prev, message]);
+
       // Update thread's last message
-      setThreads(prev => prev.map(thread => 
-        thread.id === message.threadId 
-          ? { ...thread, lastMessageAt: message.createdAt, messages: [message] }
-          : thread
-      ));
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread.id === message.threadId
+            ? {
+                ...thread,
+                lastMessageAt: message.createdAt,
+                messages: [message],
+              }
+            : thread,
+        ),
+      );
     });
 
     // Listen for typing indicators
     messagingService.onUserTyping(({ userId, isTyping }) => {
-      setTypingUsers(prev => {
+      setTypingUsers((prev) => {
         const newSet = new Set(prev);
         if (isTyping) {
           newSet.add(userId);
@@ -794,17 +851,21 @@ export const useMessaging = (firebaseToken: string) => {
 
     // Listen for read receipts
     messagingService.onMessageRead(({ messageId }) => {
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId ? { ...msg, isRead: true } : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, isRead: true } : msg,
+        ),
+      );
     });
 
     messagingService.onThreadRead(({ threadId, userId }) => {
-      setMessages(prev => prev.map(msg => 
-        msg.threadId === threadId && msg.senderId !== userId 
-          ? { ...msg, isRead: true } 
-          : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.threadId === threadId && msg.senderId !== userId
+            ? { ...msg, isRead: true }
+            : msg,
+        ),
+      );
     });
 
     return () => {
@@ -814,32 +875,65 @@ export const useMessaging = (firebaseToken: string) => {
   }, [firebaseToken]);
 
   // Helper methods
-  const loadThreads = async (page?: number, limit?: number, campaignId?: string) => {
+  const loadThreads = async (
+    page?: number,
+    limit?: number,
+    campaignId?: string,
+  ) => {
     try {
-      const threadsData = await messagingService.getThreads(page, limit, campaignId);
+      const threadsData = await messagingService.getThreads(
+        page,
+        limit,
+        campaignId,
+      );
       setThreads(threadsData);
     } catch (error) {
       console.error('Failed to load threads:', error);
     }
   };
 
-  const loadMessages = async (threadId: string, page?: number, limit?: number) => {
+  const loadMessages = async (
+    threadId: string,
+    page?: number,
+    limit?: number,
+  ) => {
     try {
-      const messagesData = await messagingService.getMessages(threadId, page, limit);
+      const messagesData = await messagingService.getMessages(
+        threadId,
+        page,
+        limit,
+      );
       setMessages(messagesData);
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
   };
 
-  const createThread = async (campaignId: string, promoterId: string, advertiserId: string, subject?: string) => {
+  const createThread = async (
+    campaignId: string,
+    promoterId: string,
+    subject?: string,
+  ) => {
     try {
-      const newThread = await messagingService.createThread(campaignId, promoterId, advertiserId, subject);
-      setThreads(prev => [newThread, ...prev]);
+      const newThread = await messagingService.createThread(
+        campaignId,
+        promoterId,
+        subject,
+      );
+      setThreads((prev) => [newThread, ...prev]);
       return newThread;
     } catch (error) {
       console.error('Failed to create thread:', error);
       throw error;
+    }
+  };
+
+  const getThreadByCampaign = async (campaignId: string) => {
+    try {
+      return await messagingService.getThreadByCampaign(campaignId);
+    } catch (error) {
+      console.error('Failed to get thread:', error);
+      return null;
     }
   };
 
@@ -849,19 +943,20 @@ export const useMessaging = (firebaseToken: string) => {
     messages,
     threads,
     typingUsers,
-    
+
     // WebSocket methods
     sendMessage: messagingService.sendMessage.bind(messagingService),
     joinThread: messagingService.joinThread.bind(messagingService),
     leaveThread: messagingService.leaveThread.bind(messagingService),
     sendTyping: messagingService.sendTyping.bind(messagingService),
     markAsRead: messagingService.markAsRead.bind(messagingService),
-    
+
     // REST API methods
     loadThreads,
     loadMessages,
     createThread,
-    sendMessageHTTP: messagingService.sendMessageHTTP.bind(messagingService)
+    getThreadByCampaign,
+    sendMessageHTTP: messagingService.sendMessageHTTP.bind(messagingService),
   };
 };
 ```
@@ -881,15 +976,15 @@ interface Props {
 export const MessageThread: React.FC<Props> = ({ threadId, firebaseToken }) => {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  
-  const { 
-    isConnected, 
-    messages, 
-    typingUsers, 
-    sendMessage, 
-    joinThread, 
+
+  const {
+    isConnected,
+    messages,
+    typingUsers,
+    sendMessage,
+    joinThread,
     sendTyping,
-    markAsRead 
+    markAsRead,
   } = useMessaging(firebaseToken);
 
   useEffect(() => {
@@ -910,7 +1005,7 @@ export const MessageThread: React.FC<Props> = ({ threadId, firebaseToken }) => {
 
   const handleTyping = (value: string) => {
     setNewMessage(value);
-    
+
     if (value && !isTyping) {
       setIsTyping(true);
       sendTyping(threadId, true);
@@ -925,9 +1020,9 @@ export const MessageThread: React.FC<Props> = ({ threadId, firebaseToken }) => {
       <div className="connection-status">
         {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
       </div>
-      
+
       <div className="messages">
-        {messages.map(message => (
+        {messages.map((message) => (
           <div key={message.id} className="message">
             <strong>{message.sender?.username}:</strong> {message.content}
           </div>
@@ -935,9 +1030,7 @@ export const MessageThread: React.FC<Props> = ({ threadId, firebaseToken }) => {
       </div>
 
       {typingUsers.size > 0 && (
-        <div className="typing-indicator">
-          Someone is typing...
-        </div>
+        <div className="typing-indicator">Someone is typing...</div>
       )}
 
       <div className="message-input">

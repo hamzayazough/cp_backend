@@ -3,7 +3,6 @@ import { MessageSenderType } from '../enums/message-sender-type';
 export interface CreateMessageThreadRequest {
   campaignId: string;
   promoterId: string;
-  advertiserId: string;
   subject?: string;
 }
 
@@ -24,7 +23,6 @@ export interface MessageResponse {
   updatedAt: Date;
   sender?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
@@ -46,13 +44,11 @@ export interface MessageThreadResponse {
   };
   promoter?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
   advertiser?: {
     id: string;
-    firebaseUid: string;
     username: string;
     profilePictureUrl?: string;
   };
@@ -72,6 +68,11 @@ export interface GetThreadsRequest {
   page?: number;
   limit?: number;
   campaignId?: string;
+}
+
+export interface GetThreadByCampaignRequest {
+  campaignId: string;
+  userId: string; // Can be either promoterId or advertiserId
 }
 
 export interface CreateChatSummaryRequest {
