@@ -17,8 +17,6 @@ import {
   MessageThreadResponse,
   GetMessagesRequest,
   GetThreadsRequest,
-  CreateChatSummaryRequest,
-  ChatSummaryResponse,
   MarkMessageAsReadRequest,
   MarkThreadAsReadRequest,
 } from '../interfaces/messaging';
@@ -168,43 +166,5 @@ export class MessagingController {
       threadId,
       userId,
     });
-  }
-
-  @Post('threads/:threadId/summaries')
-  async createChatSummary(
-    @Param('threadId') threadId: string,
-    @Body() body: Omit<CreateChatSummaryRequest, 'threadId'>,
-  ): Promise<ChatSummaryResponse> {
-    const request: CreateChatSummaryRequest = {
-      threadId,
-      ...body,
-    };
-    return this.messagingService.createChatSummary(request);
-  }
-
-  @Get('threads/:threadId/summaries')
-  async getChatSummaries(
-    @Param('threadId') threadId: string,
-  ): Promise<ChatSummaryResponse[]> {
-    return this.messagingService.getChatSummaries(threadId);
-  }
-
-  @Get('campaigns/:campaignId/thread')
-  async getThreadForCampaign(
-    @Param('campaignId') campaignId: string,
-    @Query('promoterId') promoterId: string,
-    @Query('advertiserId') advertiserId: string,
-  ): Promise<MessageThreadResponse | { message: string }> {
-    const thread = await this.messagingService.getThreadForCampaign(
-      campaignId,
-      promoterId,
-      advertiserId,
-    );
-
-    if (!thread) {
-      return { message: 'Thread not found for this campaign' };
-    }
-
-    return thread;
   }
 }

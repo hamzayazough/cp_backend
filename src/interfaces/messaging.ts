@@ -75,25 +75,6 @@ export interface GetThreadByCampaignRequest {
   userId: string; // Can be either promoterId or advertiserId
 }
 
-export interface CreateChatSummaryRequest {
-  threadId: string;
-  summary: string;
-  keyPoints?: string[];
-  actionItems?: string[];
-  sentimentScore?: number;
-}
-
-export interface ChatSummaryResponse {
-  id: string;
-  threadId: string;
-  summary: string;
-  keyPoints: string[];
-  actionItems: string[];
-  sentimentScore?: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface MarkMessageAsReadRequest {
   messageId: string;
 }

@@ -8,7 +8,6 @@ import { Repository } from 'typeorm';
 import {
   MessageThread,
   Message,
-  ChatSummary,
 } from '../../database/entities/message.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
@@ -19,8 +18,6 @@ import {
   MessageThreadResponse,
   GetMessagesRequest,
   GetThreadsRequest,
-  CreateChatSummaryRequest,
-  ChatSummaryResponse,
   MarkMessageAsReadRequest,
   MarkThreadAsReadRequest,
 } from '../../interfaces/messaging';
@@ -32,8 +29,6 @@ export class MessagingService {
     private messageThreadRepository: Repository<MessageThread>,
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
-    @InjectRepository(ChatSummary)
-    private chatSummaryRepository: Repository<ChatSummary>,
     @InjectRepository(UserEntity)
     private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignEntity)
@@ -244,23 +239,6 @@ export class MessagingService {
       .execute();
   }
 
-  async createChatSummary(
-    request: CreateChatSummaryRequest,
-  ): Promise<ChatSummaryResponse> {
-    const summary = this.chatSummaryRepository.create(request);
-    const savedSummary = await this.chatSummaryRepository.save(summary);
-    return this.mapSummaryToResponse(savedSummary);
-  }
-
-  async getChatSummaries(threadId: string): Promise<ChatSummaryResponse[]> {
-    const summaries = await this.chatSummaryRepository.find({
-      where: { threadId },
-      order: { createdAt: 'DESC' },
-    });
-
-    return summaries.map((summary) => this.mapSummaryToResponse(summary));
-  }
-
   async getThreadById(threadId: string): Promise<MessageThreadResponse> {
     const thread = await this.messageThreadRepository.findOne({
       where: { id: threadId },
@@ -274,7 +252,7 @@ export class MessagingService {
     return this.mapThreadToResponse(thread);
   }
 
-  async getThreadForCampaign(
+  private async getThreadForCampaign(
     campaignId: string,
     promoterId: string,
     advertiserId: string,
@@ -399,19 +377,6 @@ export class MessagingService {
             profilePictureUrl: thread.advertiser.avatarUrl,
           }
         : undefined,
-    };
-  }
-
-  private mapSummaryToResponse(summary: ChatSummary): ChatSummaryResponse {
-    return {
-      id: summary.id,
-      threadId: summary.threadId,
-      summary: summary.summary,
-      keyPoints: summary.keyPoints || [],
-      actionItems: summary.actionItems || [],
-      sentimentScore: summary.sentimentScore,
-      createdAt: summary.createdAt,
-      updatedAt: summary.updatedAt,
     };
   }
 }
