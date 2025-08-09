@@ -221,7 +221,36 @@ export class MessagingService {
       .getCount();
   }
 
-  async markMessageAsRead(request: MarkMessageAsReadRequest): Promise<void> {
+  async markMessageAsRead(request: MarkMessageAsReadRequest, userId: string): Promise<void> {
+    // Find the message and verify the user has access to it
+    const message = await this.messageRepository.findOne({
+      where: { id: request.messageId },
+      relations: ['thread'],
+    });
+
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
+    // Get the thread to verify user access
+    const thread = await this.messageThreadRepository.findOne({
+      where: { id: message.threadId },
+    });
+
+    if (!thread) {
+      throw new NotFoundException('Thread not found');
+    }
+
+    // Verify user has access to this thread
+    if (thread.promoterId !== userId && thread.advertiserId !== userId) {
+      throw new BadRequestException('You do not have access to this message');
+    }
+
+    // Only allow marking messages as read if they were not sent by the current user
+    if (message.senderId === userId) {
+      throw new BadRequestException('You cannot mark your own messages as read');
+    }
+
     await this.messageRepository.update(request.messageId, { isRead: true });
   }
 

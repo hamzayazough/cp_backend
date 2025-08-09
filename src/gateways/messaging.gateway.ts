@@ -231,8 +231,13 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
         this.broadcastTypingStatus(payload.threadId, client.userId, false);
       }
 
-      // Broadcast the new message to all users in the thread
-      this.server.to(`thread_${payload.threadId}`).emit('newMessage', message);
+      // Broadcast the new message only to recipients (not sender)
+      const thread = await this.messagingService.getThreadById(payload.threadId);
+      const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
+      
+      recipientIds.forEach(recipientId => {
+        this.server.to(`user_${recipientId}`).emit('newMessage', message);
+      });
 
       this.logger.log(`Message sent in thread ${payload.threadId} by user ${client.userId}`);
 
@@ -256,13 +261,21 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       if (payload.messageId) {
         // Mark single message as read
         const request: MarkMessageAsReadRequest = { messageId: payload.messageId };
-        await this.messagingService.markMessageAsRead(request);
+        await this.messagingService.markMessageAsRead(request, client.userId);
         
-        // Notify thread participants
-        this.server.to(`thread_${payload.threadId}`).emit('messageRead', {
-          messageId: payload.messageId,
-          userId: client.userId,
-        });
+        // Get thread to broadcast only to recipients (not the reader)
+        if (payload.threadId) {
+          const thread = await this.messagingService.getThreadById(payload.threadId);
+          const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
+          
+          recipientIds.forEach(recipientId => {
+            this.server.to(`user_${recipientId}`).emit('messageRead', {
+              messageId: payload.messageId,
+              userId: client.userId,
+              threadId: payload.threadId,
+            });
+          });
+        }
 
       } else if (payload.threadId) {
         // Mark entire thread as read
@@ -272,10 +285,15 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
         };
         await this.messagingService.markThreadAsRead(request);
         
-        // Notify thread participants
-        this.server.to(`thread_${payload.threadId}`).emit('threadRead', {
-          threadId: payload.threadId,
-          userId: client.userId,
+        // Get thread to broadcast only to recipients (not the reader)
+        const thread = await this.messagingService.getThreadById(payload.threadId);
+        const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== client.userId);
+        
+        recipientIds.forEach(recipientId => {
+          this.server.to(`user_${recipientId}`).emit('threadRead', {
+            threadId: payload.threadId,
+            userId: client.userId,
+          });
         });
       }
 

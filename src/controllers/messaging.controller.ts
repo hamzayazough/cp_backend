@@ -85,9 +85,20 @@ export class MessagingController {
   async sendMessage(
     @Param('threadId') threadId: string,
     @Body() body: { content: string },
-    @User('id') userId: string,
+    @User('uid') firebaseUid: string,
     @User('role') userRole: UserType,
   ): Promise<MessageResponse> {
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    // Get the database user ID using Firebase UID
+    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+
+    if (!userId) {
+      throw new Error('Unable to resolve database user ID from Firebase UID');
+    }
+
     // Determine sender type based on user role
     let senderType: MessageSenderType;
     switch (userRole) {
@@ -109,10 +120,18 @@ export class MessagingController {
 
     const message = await this.messagingService.sendMessage(userId, request);
 
-    // Broadcast the message to WebSocket clients in real-time
-    this.messagingGateway.server
-      .to(`thread_${threadId}`)
-      .emit('newMessage', message);
+    // Get thread participants to broadcast only to recipients (not sender)
+    const thread = await this.messagingService.getThreadById(threadId);
+    
+    // Broadcast to recipients only (exclude sender)
+    const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
+    
+    recipientIds.forEach(recipientId => {
+      // Emit to all sockets belonging to each recipient
+      this.messagingGateway.server
+        .to(`user_${recipientId}`)
+        .emit('newMessage', message);
+    });
 
     return message;
   }
@@ -137,34 +156,67 @@ export class MessagingController {
   async markMessageAsRead(
     @Param('messageId') messageId: string,
     @Query('threadId') threadId?: string,
-    @User('id') userId?: string,
+    @User('uid') firebaseUid?: string,
   ): Promise<void> {
-    const request: MarkMessageAsReadRequest = { messageId };
-    await this.messagingService.markMessageAsRead(request);
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
 
-    // Broadcast read status to WebSocket clients if threadId is provided
-    if (threadId && userId) {
-      this.messagingGateway.server
-        .to(`thread_${threadId}`)
-        .emit('messageRead', {
-          messageId,
-          userId,
-        });
+    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+
+    if (!userId) {
+      throw new Error('Unable to resolve database user ID from Firebase UID');
+    }
+
+    const request: MarkMessageAsReadRequest = { messageId };
+    await this.messagingService.markMessageAsRead(request, userId);
+
+    // Broadcast read status only to message sender, not to the reader
+    if (threadId) {
+      const thread = await this.messagingService.getThreadById(threadId);
+      const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
+      
+      recipientIds.forEach(recipientId => {
+        this.messagingGateway.server
+          .to(`user_${recipientId}`)
+          .emit('messageRead', {
+            messageId,
+            userId,
+            threadId,
+          });
+      });
     }
   }
 
   @Patch('threads/:threadId/read')
   async markThreadAsRead(
     @Param('threadId') threadId: string,
-    @User('id') userId: string,
+    @User('uid') firebaseUid: string,
   ): Promise<void> {
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    const userId = await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+
+    if (!userId) {
+      throw new Error('Unable to resolve database user ID from Firebase UID');
+    }
+
     const request: MarkThreadAsReadRequest = { threadId, userId };
     await this.messagingService.markThreadAsRead(request);
 
-    // Broadcast thread read status to WebSocket clients
-    this.messagingGateway.server.to(`thread_${threadId}`).emit('threadRead', {
-      threadId,
-      userId,
+    // Broadcast thread read status only to message senders, not to the reader
+    const thread = await this.messagingService.getThreadById(threadId);
+    const recipientIds = [thread.promoterId, thread.advertiserId].filter(id => id !== userId);
+    
+    recipientIds.forEach(recipientId => {
+      this.messagingGateway.server
+        .to(`user_${recipientId}`)
+        .emit('threadRead', {
+          threadId,
+          userId,
+        });
     });
   }
 }
