@@ -139,7 +139,7 @@ export class MessagingGateway
       this.typingUsers.forEach((userSet, threadId) => {
         if (userSet.has(client.userId!)) {
           userSet.delete(client.userId!);
-          this.broadcastTypingStatus(threadId, client.userId!, false);
+          void this.broadcastTypingStatus(threadId, client.userId!, false);
 
           if (userSet.size === 0) {
             this.typingUsers.delete(threadId);
@@ -199,7 +199,7 @@ export class MessagingGateway
     const typingSet = this.typingUsers.get(payload.threadId);
     if (typingSet && typingSet.has(client.userId!)) {
       typingSet.delete(client.userId!);
-      this.broadcastTypingStatus(payload.threadId, client.userId!, false);
+      void this.broadcastTypingStatus(payload.threadId, client.userId!, false);
     }
 
     client.emit('threadLeft', { threadId: payload.threadId });
@@ -276,7 +276,7 @@ export class MessagingGateway
       const typingSet = this.typingUsers.get(payload.threadId);
       if (typingSet && typingSet.has(client.userId)) {
         typingSet.delete(client.userId);
-        this.broadcastTypingStatus(payload.threadId, client.userId, false);
+        void this.broadcastTypingStatus(payload.threadId, client.userId, false);
       }
 
       // Broadcast the new message only to recipients (not sender)
@@ -389,20 +389,34 @@ export class MessagingGateway
     }
 
     // Broadcast typing status to other users in the thread
-    this.broadcastTypingStatus(threadId, userId, payload.isTyping);
+    void this.broadcastTypingStatus(threadId, userId, payload.isTyping);
   }
 
-  private broadcastTypingStatus(
+  private async broadcastTypingStatus(
     threadId: string,
     userId: string,
     isTyping: boolean,
   ) {
-    // Broadcast to all users in the thread except the typing user
-    this.server.to(`thread_${threadId}`).emit('userTyping', {
-      threadId,
-      userId,
-      isTyping,
-    });
+    try {
+      // Get the thread to find participants
+      const thread = await this.messagingService.getThreadById(threadId);
+      
+      // Get recipient IDs (exclude the typing user)
+      const recipientIds = [thread.promoterId, thread.advertiserId].filter(
+        (id) => id !== userId,
+      );
+
+      // Broadcast typing status only to recipients, not to the typing user
+      recipientIds.forEach((recipientId) => {
+        this.server.to(`user_${recipientId}`).emit('userTyping', {
+          threadId,
+          userId,
+          isTyping,
+        });
+      });
+    } catch (error) {
+      this.logger.error(`Error broadcasting typing status:`, error);
+    }
   }
 
   // Method to broadcast notifications to specific users
