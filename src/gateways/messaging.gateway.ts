@@ -400,7 +400,7 @@ export class MessagingGateway
     try {
       // Get the thread to find participants
       const thread = await this.messagingService.getThreadById(threadId);
-      
+
       // Get recipient IDs (exclude the typing user)
       const recipientIds = [thread.promoterId, thread.advertiserId].filter(
         (id) => id !== userId,
