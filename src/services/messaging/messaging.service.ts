@@ -410,4 +410,34 @@ export class MessagingService {
         : undefined,
     };
   }
+
+  async getNewMessagesStatusForCampaign(
+    campaignId: string,
+    userId: string,
+  ): Promise<{ hasNewMessages: boolean; unreadCount: number }> {
+    try {
+      // First, find the thread for this campaign and user
+      const thread = await this.getThreadByCampaignAndUser(campaignId, userId);
+
+      if (!thread) {
+        // No thread exists for this campaign and user, so no new messages
+        return { hasNewMessages: false, unreadCount: 0 };
+      }
+
+      // Get the unread message count for this thread
+      const unreadCount = await this.getUnreadMessageCount(thread.id, userId);
+
+      return {
+        hasNewMessages: unreadCount > 0,
+        unreadCount,
+      };
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === '22P02') {
+        throw new BadRequestException(
+          `Invalid campaign ID format: ${campaignId}. Expected UUID format.`,
+        );
+      }
+      throw error;
+    }
+  }
 }

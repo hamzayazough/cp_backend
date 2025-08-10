@@ -7,6 +7,7 @@ import {
   Query,
   Patch,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { MessagingService } from '../services/messaging/messaging.service';
 import { MessagingGateway } from '../gateways/messaging.gateway';
@@ -27,11 +28,21 @@ import { UserType } from '../enums/user-type';
 @Controller('messaging')
 export class MessagingController {
   private readonly logger = new Logger(MessagingController.name);
+  private readonly uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   constructor(
     private readonly messagingService: MessagingService,
     private readonly messagingGateway: MessagingGateway,
   ) {}
+
+  private validateUUID(id: string, paramName: string): void {
+    if (!this.uuidRegex.test(id)) {
+      throw new BadRequestException(
+        `Invalid ${paramName} format. Expected UUID format, received: ${id}`,
+      );
+    }
+  }
 
   @Post('threads')
   async createThread(
@@ -49,6 +60,11 @@ export class MessagingController {
   ): Promise<MessageThreadResponse[]> {
     if (!firebaseUid) {
       throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    // Validate campaignId if provided
+    if (campaignId) {
+      this.validateUUID(campaignId, 'campaign ID');
     }
 
     // Get the database user ID using Firebase UID
@@ -74,13 +90,41 @@ export class MessagingController {
     @Param('campaignId') campaignId: string,
     @User('id') userId: string,
   ): Promise<MessageThreadResponse | null> {
+    this.validateUUID(campaignId, 'campaign ID');
     return this.messagingService.getThreadByCampaignAndUser(campaignId, userId);
+  }
+
+  @Get('campaigns/:campaignId/has-new-messages')
+  async hasNewMessagesForCampaign(
+    @Param('campaignId') campaignId: string,
+    @User('uid') firebaseUid: string,
+  ): Promise<{ hasNewMessages: boolean; unreadCount: number }> {
+    this.validateUUID(campaignId, 'campaign ID');
+
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    // Get the database user ID using Firebase UID
+    const userId =
+      await this.messagingService.getUserIdByFirebaseUid(firebaseUid);
+
+    if (!userId) {
+      throw new Error('Unable to resolve database user ID from Firebase UID');
+    }
+
+    const result = await this.messagingService.getNewMessagesStatusForCampaign(
+      campaignId,
+      userId,
+    );
+    return result;
   }
 
   @Get('threads/:threadId')
   async getThread(
     @Param('threadId') threadId: string,
   ): Promise<MessageThreadResponse> {
+    this.validateUUID(threadId, 'thread ID');
     return this.messagingService.getThreadById(threadId);
   }
 
@@ -91,6 +135,8 @@ export class MessagingController {
     @User('uid') firebaseUid: string,
     @User('role') userRole: UserType,
   ): Promise<MessageResponse> {
+    this.validateUUID(threadId, 'thread ID');
+
     if (!firebaseUid) {
       throw new Error('User not authenticated - Firebase UID is required');
     }
@@ -159,6 +205,8 @@ export class MessagingController {
     @Query('limit') limit?: number,
     @Query('before') before?: string,
   ): Promise<MessageResponse[]> {
+    this.validateUUID(threadId, 'thread ID');
+
     const request: GetMessagesRequest = {
       threadId,
       page: page ? Number(page) : undefined,
@@ -174,6 +222,11 @@ export class MessagingController {
     @Query('threadId') threadId?: string,
     @User('uid') firebaseUid?: string,
   ): Promise<void> {
+    this.validateUUID(messageId, 'message ID');
+    if (threadId) {
+      this.validateUUID(threadId, 'thread ID');
+    }
+
     if (!firebaseUid) {
       throw new Error('User not authenticated - Firebase UID is required');
     }
@@ -212,6 +265,8 @@ export class MessagingController {
     @Param('threadId') threadId: string,
     @User('uid') firebaseUid: string,
   ): Promise<void> {
+    this.validateUUID(threadId, 'thread ID');
+
     if (!firebaseUid) {
       throw new Error('User not authenticated - Firebase UID is required');
     }
