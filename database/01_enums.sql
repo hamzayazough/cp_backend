@@ -97,7 +97,7 @@ END $$;
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'message_sender_type') THEN
         CREATE TYPE message_sender_type AS ENUM (
-            'ADVERTISER', 'ADMIN', 'SYSTEM'
+            'ADVERTISER', 'PROMOTER', 'ADMIN', 'SYSTEM'
         );
     END IF;
 END $$;

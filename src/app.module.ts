@@ -19,6 +19,7 @@ import { StripeModule } from './stripe/stripe.module';
 import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 import { CampaignPayoutModule } from './modules/campaign-payout.module';
 import { CampaignManagementModule } from './modules/campaign-management.module';
+import { MessagingModule } from './modules/messaging.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { CampaignManagementModule } from './modules/campaign-management.module';
     ViewsModule,
     CampaignPayoutModule,
     CampaignManagementModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -58,6 +60,7 @@ export class AppModule implements NestModule {
         'promoter/*',
         'advertiser/*',
         'campaign-management/*',
+        'messaging/*',
         'connect/create-account',
         'connect/onboard',
         'connect/onboard/*',

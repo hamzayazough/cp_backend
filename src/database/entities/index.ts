@@ -17,7 +17,7 @@ export { Wallet } from './wallet.entity';
 export { PromoterCampaign } from './promoter-campaign.entity';
 export { CampaignApplicationEntity } from './campaign-applications.entity';
 export { UniqueViewEntity } from './unique-view.entity';
-export { Message, MessageThread } from './message.entity';
+export { Message, MessageThread, ChatSummary } from './message.entity';
 
 // Financial entities
 export { StripeConnectAccount } from './stripe-connect-account.entity';
