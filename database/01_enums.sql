@@ -124,8 +124,19 @@ END $$;
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'deliverable') THEN
         CREATE TYPE deliverable AS ENUM (
-            'PROMOTIONAL_VIDEO', 'SCRIPT', 'CONTENT_PLAN', 'WEEKLY_REPORT',
-            'LIVE_SESSION', 'PRODUCT_REVIEW', 'INSTAGRAM_POST', 'TIKTOK_VIDEO', 'CUSTOM'
+            -- Consultant Deliverables
+            'MARKETING_STRATEGY', 'CONTENT_PLAN', 'SCRIPT', 'MARKET_ANALYSIS',
+            'BRAND_GUIDELINES', 'WEEKLY_REPORT', 'PERFORMANCE_AUDIT', 'LIVE_SESSION',
+            'PRODUCT_FEEDBACK', 'AD_CONCEPTS',
+            
+            -- Seller Deliverables
+            'CREATE_SOCIAL_MEDIA_ACCOUNTS', 'SOCIAL_MEDIA_MANAGEMENT', 'SPAM_PROMOTION',
+            'PROMOTIONAL_VIDEO', 'VIDEO_EDITING', 'INSTAGRAM_POST', 'TIKTOK_VIDEO',
+            'BLOG_ARTICLE', 'EMAIL_CAMPAIGN', 'PAID_ADS_CREATION', 'PRODUCT_REVIEW',
+            'EVENT_PROMOTION', 'DIRECT_OUTREACH',
+            
+            -- Shared
+            'CUSTOM'
         );
     END IF;
 END $$;
