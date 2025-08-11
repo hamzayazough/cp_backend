@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { MessageThread, Message } from '../../database/entities/message.entity';
 import { UserEntity } from '../../database/entities/user.entity';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { User } from '../../interfaces/user';
 import {
   CreateMessageThreadRequest,
   CreateMessageRequest,
@@ -46,24 +47,65 @@ export class MessagingService {
 
   async createThread(
     request: CreateMessageThreadRequest,
+    user: User,
   ): Promise<MessageThreadResponse> {
-    // First, get the campaign to extract advertiser ID
+    // First, get the campaign to extract advertiser ID and check promoter campaigns
     const campaign = await this.campaignRepository.findOne({
       where: { id: request.campaignId },
-      relations: ['advertiser'],
+      relations: ['advertiser', 'promoterCampaigns'],
     });
 
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    const advertiserId = campaign.advertiserId;
+    let promoterId: string;
+    let advertiserId: string;
+
+    // Determine promoterId and advertiserId based on user role
+    if (user.role === 'ADVERTISER') {
+      // If user is advertiser, make sure they own the campaign
+      if (campaign.advertiserId !== user.id) {
+        throw new BadRequestException(
+          'You are not the advertiser for this campaign',
+        );
+      }
+
+      // Get the first promoter from the campaign's promoterCampaigns
+      if (
+        !campaign.promoterCampaigns ||
+        campaign.promoterCampaigns.length === 0
+      ) {
+        throw new BadRequestException('No promoters found for this campaign');
+      }
+
+      promoterId = campaign.promoterCampaigns[0].promoterId;
+      advertiserId = user.id;
+    } else if (user.role === 'PROMOTER') {
+      // If user is promoter, make sure they are part of this campaign
+      const promoterCampaign = campaign.promoterCampaigns?.find(
+        (pc) => pc.promoterId === user.id,
+      );
+
+      if (!promoterCampaign) {
+        throw new BadRequestException(
+          'You are not a promoter for this campaign',
+        );
+      }
+
+      promoterId = user.id;
+      advertiserId = campaign.advertiserId;
+    } else {
+      throw new BadRequestException(
+        'Invalid user role. Only advertisers and promoters can create threads',
+      );
+    }
 
     // Check if thread already exists
     const existingThread = await this.messageThreadRepository.findOne({
       where: {
         campaignId: request.campaignId,
-        promoterId: request.promoterId,
+        promoterId: promoterId,
         advertiserId: advertiserId,
       },
     });
@@ -74,18 +116,9 @@ export class MessagingService {
       );
     }
 
-    // Validate that promoter exists
-    const promoter = await this.userRepository.findOne({
-      where: { id: request.promoterId },
-    });
-
-    if (!promoter) {
-      throw new NotFoundException('Promoter not found');
-    }
-
     const thread = this.messageThreadRepository.create({
       campaignId: request.campaignId,
-      promoterId: request.promoterId,
+      promoterId: promoterId,
       advertiserId: advertiserId,
       subject: request.subject || campaign.title, // Use campaign title as default subject
     });
@@ -346,14 +379,17 @@ export class MessagingService {
       return existingThread;
     }
 
-    // Create new thread for the private campaign
-    const createRequest: CreateMessageThreadRequest = {
+    // Create new thread directly (old logic for private campaigns)
+    const thread = this.messageThreadRepository.create({
       campaignId,
       promoterId,
-      // No subject specified - will use campaign title as default
-    };
+      advertiserId,
+      subject: campaign.title, // Use campaign title as default subject
+    });
 
-    return this.createThread(createRequest);
+    const savedThread = await this.messageThreadRepository.save(thread);
+
+    return this.mapThreadToResponse(savedThread);
   }
 
   // Helper methods for mapping entities to response DTOs
