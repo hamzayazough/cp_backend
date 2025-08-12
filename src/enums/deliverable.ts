@@ -1,11 +1,31 @@
 export enum Deliverable {
-  PROMOTIONAL_VIDEO = 'PROMOTIONAL_VIDEO',
-  SCRIPT = 'SCRIPT',
-  CONTENT_PLAN = 'CONTENT_PLAN',
-  WEEKLY_REPORT = 'WEEKLY_REPORT',
-  LIVE_SESSION = 'LIVE_SESSION',
-  PRODUCT_REVIEW = 'PRODUCT_REVIEW',
-  INSTAGRAM_POST = 'INSTAGRAM_POST',
-  TIKTOK_VIDEO = 'TIKTOK_VIDEO',
-  CUSTOM = 'CUSTOM',
+  // Consultant Deliverables
+  MARKETING_STRATEGY = 'MARKETING_STRATEGY', // Comprehensive promotion plan
+  CONTENT_PLAN = 'CONTENT_PLAN', // Calendar and topic strategy
+  SCRIPT = 'SCRIPT', // Scripts for ads, videos, or pitches
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS', // Competitor and market study
+  BRAND_GUIDELINES = 'BRAND_GUIDELINES', // Tone, style, and visual identity recommendations
+  WEEKLY_REPORT = 'WEEKLY_REPORT', // Progress or performance reports
+  PERFORMANCE_AUDIT = 'PERFORMANCE_AUDIT', // Review of current campaigns
+  LIVE_SESSION = 'LIVE_SESSION', // Coaching or Q&A sessions
+  PRODUCT_FEEDBACK = 'PRODUCT_FEEDBACK', // Review and improvement suggestions
+  AD_CONCEPTS = 'AD_CONCEPTS', // Creative ideas for ad campaigns
+
+  // Seller Deliverables
+  CREATE_SOCIAL_MEDIA_ACCOUNTS = 'CREATE_SOCIAL_MEDIA_ACCOUNTS', // New accounts dedicated to promotion
+  SOCIAL_MEDIA_MANAGEMENT = 'SOCIAL_MEDIA_MANAGEMENT', // Ongoing posting, engagement, growth
+  SPAM_PROMOTION = 'SPAM_PROMOTION', // Mass posting/distribution on multiple channels
+  PROMOTIONAL_VIDEO = 'PROMOTIONAL_VIDEO', // Fully produced promotional video
+  VIDEO_EDITING = 'VIDEO_EDITING', // Editing raw footage for marketing use
+  INSTAGRAM_POST = 'INSTAGRAM_POST', // Image, carousel, or reel
+  TIKTOK_VIDEO = 'TIKTOK_VIDEO', // Short-form video content
+  BLOG_ARTICLE = 'BLOG_ARTICLE', // SEO-friendly written content
+  EMAIL_CAMPAIGN = 'EMAIL_CAMPAIGN', // Designed email blast
+  PAID_ADS_CREATION = 'PAID_ADS_CREATION', // Ads for Facebook, Google, TikTok, etc.
+  PRODUCT_REVIEW = 'PRODUCT_REVIEW', // Written or recorded review
+  EVENT_PROMOTION = 'EVENT_PROMOTION', // Livestreams, giveaways, coverage
+  DIRECT_OUTREACH = 'DIRECT_OUTREACH', // Search for clients via DMs, emails, cold calls, etc.
+
+  // Shared
+  CUSTOM = 'CUSTOM', // Any custom-defined deliverable
 }

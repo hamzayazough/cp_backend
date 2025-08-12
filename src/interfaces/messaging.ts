@@ -2,7 +2,6 @@ import { MessageSenderType } from '../enums/message-sender-type';
 
 export interface CreateMessageThreadRequest {
   campaignId: string;
-  promoterId: string;
   subject?: string;
 }
 

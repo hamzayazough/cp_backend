@@ -10,6 +10,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { MessagingService } from '../services/messaging/messaging.service';
+import { UserService } from '../services/user.service';
 import { MessagingGateway } from '../gateways/messaging.gateway';
 import { User } from '../auth/user.decorator';
 import {
@@ -34,6 +35,7 @@ export class MessagingController {
   constructor(
     private readonly messagingService: MessagingService,
     private readonly messagingGateway: MessagingGateway,
+    private readonly userService: UserService,
   ) {}
 
   private validateUUID(id: string, paramName: string): void {
@@ -47,8 +49,20 @@ export class MessagingController {
   @Post('threads')
   async createThread(
     @Body() request: CreateMessageThreadRequest,
+    @User('uid') firebaseUid: string,
   ): Promise<MessageThreadResponse> {
-    return this.messagingService.createThread(request);
+    if (!firebaseUid) {
+      throw new Error('User not authenticated - Firebase UID is required');
+    }
+
+    // Get the user entity using Firebase UID
+    const user = await this.userService.getUserByFirebaseUid(firebaseUid);
+
+    if (!user) {
+      throw new Error('Unable to resolve user from Firebase UID');
+    }
+
+    return this.messagingService.createThread(request, user);
   }
 
   @Get('threads')
