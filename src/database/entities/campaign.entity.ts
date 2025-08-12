@@ -301,8 +301,8 @@ export class CampaignEntity {
   )
   campaignApplications!: CampaignApplicationEntity[];
 
-  @OneToMany(() => UniqueViewEntity, (uniqueView) => uniqueView.campaign)
-  uniqueViews: UniqueViewEntity[];
+  @OneToMany(() => UniqueViewEntity, 'campaign')
+  uniqueViews!: UniqueViewEntity[];
 
   @OneToMany(() => CampaignEarningsTracking, (earnings) => earnings.campaign)
   earningsTracking: CampaignEarningsTracking[];
