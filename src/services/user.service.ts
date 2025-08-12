@@ -304,12 +304,21 @@ export class UserService {
     // Create Discord channel for the advertiser using Firebase UID
     let discordChannelId: string | null = null;
     try {
+      console.log(
+        `Creating Discord channel for advertiser: ${advertiserData.companyName}, Firebase UID: ${user.firebaseUid}`,
+      );
       discordChannelId = await this.discordService.createAdvertiserChannel(
         advertiserData.companyName,
         user.firebaseUid, // Use Firebase UID instead of Discord user ID
       );
+      console.log(
+        `Successfully created Discord channel with ID: ${discordChannelId}`,
+      );
     } catch (error) {
-      console.error('Failed to create Discord channel:', error);
+      console.error(
+        `Failed to create Discord channel for advertiser ${advertiserData.companyName} (Firebase UID: ${user.firebaseUid}):`,
+        error,
+      );
       // Continue with advertiser creation even if Discord fails
     }
 
@@ -614,7 +623,11 @@ export class UserService {
         companyName: userEntity.advertiserDetails.companyName,
         companyWebsite: userEntity.advertiserDetails.companyWebsite,
         verified: userEntity.advertiserDetails.verified,
-        discordChannelUrl: userEntity.advertiserDetails.discordChannelId ? this.generateDiscordChannelUrl(userEntity.advertiserDetails.discordChannelId) : undefined,
+        discordChannelUrl: userEntity.advertiserDetails.discordChannelId
+          ? this.generateDiscordChannelUrl(
+              userEntity.advertiserDetails.discordChannelId,
+            )
+          : undefined,
         advertiserTypes:
           userEntity.advertiserDetails.advertiserTypeMappings?.map(
             (mapping: AdvertiserTypeMappingEntity) => mapping.advertiserType,

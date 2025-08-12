@@ -68,7 +68,7 @@ export class FundCampaignDto {
 }
 
 export class UpdateBudgetDto {
-  newBudget: number; // in cents
+  additionalBudget: number; // in cents
 }
 
 export class TransactionQueryDto {
@@ -689,21 +689,44 @@ export class AdvertiserController {
     @Param('campaignId') campaignId: string,
     @Body() dto: UpdateBudgetDto,
   ) {
-    if (dto.newBudget <= 0) {
-      throw new BadRequestException('Budget must be greater than 0');
+    console.log('=== UPDATE CAMPAIGN BUDGET ENDPOINT ===');
+    console.log('Firebase UID:', req.user.uid);
+    console.log('Campaign ID:', campaignId);
+    console.log('Request DTO:', dto);
+    console.log('Additional Budget (cents):', dto.additionalBudget);
+    console.log('Additional Budget (dollars):', dto.additionalBudget / 100);
+
+    if (dto.additionalBudget <= 0) {
+      console.log(
+        '❌ Validation failed: Additional budget must be greater than 0',
+      );
+      throw new BadRequestException('Additional budget must be greater than 0');
     }
 
-    const result = await this.advertiserPaymentService.updateCampaignBudget(
-      req.user.uid,
-      campaignId,
-      dto,
-    );
+    console.log('✅ Validation passed, calling campaign service...');
 
-    return {
-      success: true,
-      data: result,
-      message: 'Campaign budget updated successfully',
-    };
+    try {
+      const result = await this.campaignService.updateCampaignBudget(
+        req.user.uid,
+        campaignId,
+        dto.additionalBudget,
+      );
+
+      console.log('✅ Campaign service returned result:', result);
+
+      return {
+        success: true,
+        data: result,
+        message: 'Campaign budget updated successfully',
+      };
+    } catch (error) {
+      console.error('❌ Error in updateCampaignBudget:', error);
+      console.error(
+        'Error stack:',
+        error instanceof Error ? error.stack : 'No stack trace',
+      );
+      throw error;
+    }
   }
 
   @Post('campaigns/funding-check')

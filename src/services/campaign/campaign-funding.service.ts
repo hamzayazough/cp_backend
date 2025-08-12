@@ -167,36 +167,6 @@ export class CampaignFundingService {
     };
   }
 
-  async updateCampaignBudget(
-    firebaseUid: string,
-    campaignId: string,
-    dto: UpdateBudgetDto,
-  ): Promise<BudgetUpdateResult> {
-    const user = await this.findUserByFirebaseUid(firebaseUid);
-
-    const campaign = await this.campaignRepo.findOne({
-      where: { id: campaignId, advertiserId: user.id },
-    });
-
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    const newBudgetDollars = dto.newBudget / 100;
-    const currentBudget = campaign.maxBudget || 0;
-    const additionalFunding = Math.max(0, newBudgetDollars - currentBudget);
-
-    // Update campaign budget
-    campaign.maxBudget = newBudgetDollars;
-    await this.campaignRepo.save(campaign);
-
-    return {
-      requiresAdditionalFunding: additionalFunding > 0,
-      additionalFundingAmount:
-        additionalFunding > 0 ? Math.round(additionalFunding * 100) : undefined,
-    };
-  }
-
   /**
    * Check if advertiser has sufficient funds for a new campaign
    */

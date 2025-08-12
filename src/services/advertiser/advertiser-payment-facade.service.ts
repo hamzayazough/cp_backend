@@ -8,7 +8,6 @@ import {
   AddPaymentMethodDto,
   AddFundsDto,
   FundCampaignDto,
-  UpdateBudgetDto,
   TransactionQueryDto,
   WithdrawFundsDto,
   CheckCampaignFundingDto,
@@ -120,18 +119,6 @@ export class AdvertiserPaymentService {
     return this.campaignFundingService.getCampaignFundingStatus(
       firebaseUid,
       campaignId,
-    );
-  }
-
-  async updateCampaignBudget(
-    firebaseUid: string,
-    campaignId: string,
-    dto: UpdateBudgetDto,
-  ) {
-    return this.campaignFundingService.updateCampaignBudget(
-      firebaseUid,
-      campaignId,
-      dto,
     );
   }
 
