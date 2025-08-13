@@ -60,7 +60,6 @@ export interface PromoterDetails {
   verified?: boolean;
   isBusiness?: boolean;
   businessName?: string; // Optional business name if isBusiness is TRUE
-
   // Statistics
   totalSales?: number;
   numberOfCampaignDone?: number;

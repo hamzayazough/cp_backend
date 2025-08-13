@@ -602,6 +602,7 @@ export class UserService {
     const user: User = {
       id: userEntity.id,
       email: userEntity.email,
+      phoneNumber: userEntity.phoneNumber,
       name: userEntity.name,
       role: userEntity.role,
       createdAt: userEntity.createdAt.toISOString(),
@@ -663,6 +664,13 @@ export class UserService {
           : 0,
         numberOfCampaignDone:
           userEntity.promoterDetails.numberOfCampaignDone || 0,
+        numberOfVisibilityCampaignDone:
+          userEntity.numberOfVisibilityCampaignDone || 0,
+        numberOfSellerCampaignDone: userEntity.numberOfSellerCampaignDone || 0,
+        numberOfSalesmanCampaignDone:
+          userEntity.numberOfSalesmanCampaignDone || 0,
+        numberOfConsultantCampaignDone:
+          userEntity.numberOfConsultantCampaignDone || 0,
         totalViewsGenerated: userEntity.promoterDetails.totalViewsGenerated
           ? parseInt(userEntity.promoterDetails.totalViewsGenerated.toString())
           : 0,
