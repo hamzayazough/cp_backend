@@ -240,6 +240,13 @@ export class UserService {
     return !!user;
   }
 
+  async checkCompanyNameExists(companyName: string): Promise<boolean> {
+    const advertiserDetails = await this.advertiserDetailsRepository.findOne({
+      where: { companyName },
+    });
+    return !!advertiserDetails;
+  }
+
   async getUserByFirebaseUid(firebaseUid: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { firebaseUid },
