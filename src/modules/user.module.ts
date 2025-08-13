@@ -15,6 +15,7 @@ import {
   PromoterSkillEntity,
   FollowerEstimateEntity,
   PromoterWorkEntity,
+  UniqueViewEntity,
 } from '../database/entities';
 
 @Module({
@@ -29,6 +30,7 @@ import {
       PromoterSkillEntity,
       FollowerEstimateEntity,
       PromoterWorkEntity,
+      UniqueViewEntity,
     ]),
   ],
   controllers: [AuthController, UserController],
