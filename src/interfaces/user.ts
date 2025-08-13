@@ -9,6 +9,7 @@ export type UserRole = 'ADVERTISER' | 'PROMOTER' | 'ADMIN';
 export interface User {
   id: string;
   email: string;
+  phoneNumber?: string;
   name: string;
   role: UserRole;
   createdAt: string;
@@ -74,6 +75,8 @@ export interface PromoterDetails {
 export interface CreateUserDto {
   firebaseUid: string;
   email: string;
+  phoneNumber?: string;
+
   name: string;
   bio: string;
   role: UserRole | null;
@@ -120,6 +123,7 @@ export interface PromoterWorkDto {
 export interface Promoter {
   id: string;
   email: string;
+  phoneNumber?: string;
   name: string;
   createdAt: string;
 

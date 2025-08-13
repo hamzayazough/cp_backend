@@ -84,6 +84,7 @@ export class UserService {
       firebaseUid: createUserDto.firebaseUid,
       isSetupDone: false,
       email: createUserDto.email,
+      phoneNumber: createUserDto.phoneNumber,
       name: createUserDto.name,
       role: createUserDto.role,
       bio: createUserDto.bio,
@@ -181,6 +182,7 @@ export class UserService {
 
     // Update user basic info
     existingUser.name = createUserDto.name;
+    existingUser.phoneNumber = createUserDto.phoneNumber;
     existingUser.role = createUserDto.role;
     existingUser.bio = createUserDto.bio;
     existingUser.tiktokUrl = createUserDto.tiktokUrl;

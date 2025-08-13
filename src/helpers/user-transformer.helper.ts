@@ -5,6 +5,7 @@ export function transformUserToPromoter(user: UserEntity): Promoter {
   return {
     id: user.id,
     email: user.email,
+    phoneNumber: user.phoneNumber,
     name: user.name,
     createdAt: user.createdAt.toISOString(),
     avatarUrl: user.avatarUrl,

@@ -29,6 +29,9 @@ export class UserEntity {
   @Column({ unique: true })
   email: string;
 
+  @Column({ name: 'phone_number', nullable: true })
+  phoneNumber?: string;
+
   @Column({ name: 'is_setup_done', default: false })
   isSetupDone: boolean;
 
