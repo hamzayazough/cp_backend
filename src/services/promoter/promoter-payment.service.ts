@@ -713,8 +713,15 @@ export class PromoterPaymentService {
         status: TransactionStatus.COMPLETED,
       })
       .getRawOne();
+    const totalEarnings = Number(result?.total || 0);
 
-    return Number(result?.total || 0);
+    // Update the promoter campaign earnings with the calculated total
+    await this.promoterCampaignRepo.update(
+      { campaignId, promoterId },
+      { earnings: totalEarnings },
+    );
+
+    return totalEarnings;
   }
 
   /**
