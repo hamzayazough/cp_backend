@@ -240,6 +240,13 @@ export class UserService {
     return !!user;
   }
 
+  async checkCompanyNameExists(companyName: string): Promise<boolean> {
+    const advertiserDetails = await this.advertiserDetailsRepository.findOne({
+      where: { companyName },
+    });
+    return !!advertiserDetails;
+  }
+
   async getUserByFirebaseUid(firebaseUid: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { firebaseUid },
@@ -614,7 +621,11 @@ export class UserService {
         companyName: userEntity.advertiserDetails.companyName,
         companyWebsite: userEntity.advertiserDetails.companyWebsite,
         verified: userEntity.advertiserDetails.verified,
-        discordChannelUrl: userEntity.advertiserDetails.discordChannelId ? this.generateDiscordChannelUrl(userEntity.advertiserDetails.discordChannelId) : undefined,
+        discordChannelUrl: userEntity.advertiserDetails.discordChannelId
+          ? this.generateDiscordChannelUrl(
+              userEntity.advertiserDetails.discordChannelId,
+            )
+          : undefined,
         advertiserTypes:
           userEntity.advertiserDetails.advertiserTypeMappings?.map(
             (mapping: AdvertiserTypeMappingEntity) => mapping.advertiserType,
