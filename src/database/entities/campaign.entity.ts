@@ -24,6 +24,15 @@ import { UniqueViewEntity } from './unique-view.entity';
 import { CampaignEarningsTracking } from './financial/campaign-earnings-tracking.entity';
 import { CampaignMedia } from './campaign-media.entity';
 
+// Transformer to handle PostgreSQL DECIMAL to JavaScript number conversion
+const DecimalTransformer = {
+  to: (value: number): number => Number(value) || 0,
+  from: (value: string): number => {
+    const parsed = parseFloat(value);
+    return isFinite(parsed) ? parsed : 0;
+  },
+};
+
 @Entity('campaigns')
 export class CampaignEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -80,6 +89,7 @@ export class CampaignEntity {
     type: 'decimal',
     precision: 10,
     scale: 2,
+    transformer: DecimalTransformer,
   })
   budgetAllocated: number;
 
@@ -89,6 +99,7 @@ export class CampaignEntity {
     precision: 10,
     scale: 2,
     nullable: true,
+    transformer: DecimalTransformer,
   })
   maxBudget?: number; // Required for CONSULTANT and SELLER campaigns
 
@@ -98,6 +109,7 @@ export class CampaignEntity {
     precision: 10,
     scale: 2,
     nullable: true,
+    transformer: DecimalTransformer,
   })
   minBudget?: number; // Required for CONSULTANT and SELLER campaigns
 
@@ -111,6 +123,7 @@ export class CampaignEntity {
     precision: 7,
     scale: 2,
     nullable: true,
+    transformer: DecimalTransformer,
   })
   cpv?: number; // Required for VISIBILITY campaigns
 
@@ -179,6 +192,7 @@ export class CampaignEntity {
     precision: 5,
     scale: 2,
     nullable: true,
+    transformer: DecimalTransformer,
   })
   commissionPerSale?: number; // Required for SALESMAN campaigns
 
@@ -287,8 +301,8 @@ export class CampaignEntity {
   )
   campaignApplications!: CampaignApplicationEntity[];
 
-  @OneToMany(() => UniqueViewEntity, (uniqueView) => uniqueView.campaign)
-  uniqueViews: UniqueViewEntity[];
+  @OneToMany(() => UniqueViewEntity, 'campaign')
+  uniqueViews!: UniqueViewEntity[];
 
   @OneToMany(() => CampaignEarningsTracking, (earnings) => earnings.campaign)
   earningsTracking: CampaignEarningsTracking[];

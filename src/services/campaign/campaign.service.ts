@@ -393,6 +393,132 @@ export class CampaignService {
   }
 
   /**
+   * Update campaign budget by adding additional funding
+   */
+  async updateCampaignBudget(
+    firebaseUid: string,
+    campaignId: string,
+    additionalBudgetCents: number,
+  ): Promise<{
+    campaignId: string;
+    previousBudgetCents: number;
+    additionalBudgetCents: number;
+    newBudgetCents: number;
+  }> {
+    try {
+      // Convert cents to dollars for internal calculations
+      const additionalBudgetDollars = additionalBudgetCents / 100;
+
+      // Get and validate user
+      const user = await this.getUserByFirebaseUid(firebaseUid);
+      const validatedUser = CAMPAIGN_VALIDATORS.validateUserExists(user);
+
+      // Get and validate campaign ownership
+      const campaign = await this.getCampaignByIdAndOwner(
+        campaignId,
+        validatedUser.id,
+      );
+      const validatedCampaign = CAMPAIGN_VALIDATORS.validateCampaignOwnership(
+        campaign,
+        validatedUser.id,
+      );
+
+      // Store previous budget values and ensure they are numbers
+      const previousBudgetDollars = Number(validatedCampaign.budgetAllocated);
+      const previousMaxBudget = Number(validatedCampaign.maxBudget || 0);
+
+      // Handle budget allocation (wallet validation and fund holding)
+      await this.handleBudgetAllocation(
+        validatedUser.id,
+        additionalBudgetDollars,
+      );
+
+      // Calculate new budget values (ensure numeric addition)
+      const newBudgetDollars = previousBudgetDollars + additionalBudgetDollars;
+      let newMaxBudget = previousMaxBudget;
+
+      // Update campaign budget fields
+      validatedCampaign.budgetAllocated = newBudgetDollars;
+
+      // For CONSULTANT and SELLER campaigns, also update maxBudget
+      if (
+        validatedCampaign.type === CampaignType.CONSULTANT ||
+        validatedCampaign.type === CampaignType.SELLER
+      ) {
+        newMaxBudget = previousMaxBudget + additionalBudgetDollars;
+        validatedCampaign.maxBudget = newMaxBudget;
+      }
+
+      // Save updated campaign
+      const updatedCampaign =
+        await this.campaignRepository.save(validatedCampaign);
+
+      // Update budget tracking record
+      await this.updateBudgetTrackingRecord(campaignId, additionalBudgetCents);
+
+      // Create additional budget allocation transaction
+      await this.createAdditionalBudgetTransaction(
+        validatedUser.id,
+        campaignId,
+        additionalBudgetDollars,
+      );
+
+      return {
+        campaignId: updatedCampaign.id,
+        previousBudgetCents: Math.round(previousBudgetDollars * 100),
+        additionalBudgetCents,
+        newBudgetCents: Math.round(newBudgetDollars * 100),
+      };
+    } catch (error) {
+      this.handleCampaignError(error, 'Failed to update campaign budget');
+    }
+  }
+
+  /**
+   * Update budget tracking record with additional allocation
+   */
+  private async updateBudgetTrackingRecord(
+    campaignId: string,
+    additionalBudgetCents: number,
+  ): Promise<void> {
+    const budgetTracking = await this.campaignBudgetTrackingRepository.findOne({
+      where: { campaignId },
+    });
+
+    if (!budgetTracking) {
+      throw new NotFoundException(
+        'Budget tracking record not found for campaign',
+      );
+    }
+
+    // Add to allocated budget
+    budgetTracking.allocatedBudgetCents += additionalBudgetCents;
+
+    await this.campaignBudgetTrackingRepository.save(budgetTracking);
+  }
+
+  /**
+   * Create transaction record for additional budget allocation
+   */
+  private async createAdditionalBudgetTransaction(
+    advertiserId: string,
+    campaignId: string,
+    budgetDollars: number,
+  ): Promise<void> {
+    const transaction =
+      CAMPAIGN_ENTITY_BUILDERS.buildBudgetAllocationTransaction(
+        advertiserId,
+        budgetDollars,
+      );
+
+    // Add campaign ID to the transaction for additional budget allocation
+    transaction.campaignId = campaignId;
+    transaction.description = `Additional budget allocation for campaign`;
+
+    await this.transactionRepository.save(transaction);
+  }
+
+  /**
    * Helper method to get user by Firebase UID
    */
   private async getUserByFirebaseUid(
