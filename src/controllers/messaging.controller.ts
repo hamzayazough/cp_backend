@@ -25,6 +25,12 @@ import {
 } from '../interfaces/messaging';
 import { MessageSenderType } from '../enums/message-sender-type';
 import { UserType } from '../enums/user-type';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../services/notification-delivery.service';
+import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationType } from '../enums/notification-type';
 
 @Controller('messaging')
 export class MessagingController {
@@ -36,6 +42,8 @@ export class MessagingController {
     private readonly messagingService: MessagingService,
     private readonly messagingGateway: MessagingGateway,
     private readonly userService: UserService,
+    private readonly notificationHelperService: NotificationHelperService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   private validateUUID(id: string, paramName: string): void {
@@ -202,12 +210,36 @@ export class MessagingController {
       (id) => id !== userId,
     );
 
-    recipientIds.forEach((recipientId) => {
-      // Emit to all sockets belonging to each recipient
-      this.messagingGateway.server
-        .to(`user_${recipientId}`)
-        .emit('newMessage', message);
-    });
+    // Check online status and handle notifications for offline users
+    const onlineStatus =
+      this.messagingGateway.getUsersOnlineStatus(recipientIds);
+
+    for (const recipientId of recipientIds) {
+      const isOnline = onlineStatus.get(recipientId);
+
+      if (isOnline) {
+        // User is online, send real-time message via WebSocket
+        this.messagingGateway.server
+          .to(`user_${recipientId}`)
+          .emit('newMessage', message);
+      } else {
+        // User is offline, send notification
+        try {
+          await this.sendOfflineMessageNotification(
+            recipientId,
+            message,
+            thread,
+            userId,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to send notification to offline user ${recipientId}:`,
+            error,
+          );
+          // Don't throw error - continue processing
+        }
+      }
+    }
 
     return message;
   }
@@ -327,5 +359,70 @@ export class MessagingController {
       unreadCount: unreadCountAfter,
       action: 'marked_as_read',
     });
+  }
+
+  /**
+   * Send notification to offline users when they receive a new message
+   */
+  private async sendOfflineMessageNotification(
+    recipientId: string,
+    message: MessageResponse,
+    thread: MessageThreadResponse,
+    senderId: string,
+  ): Promise<void> {
+    try {
+      // Get notification delivery methods for the recipient
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          recipientId,
+          NotificationType.NEW_MESSAGE,
+        );
+
+      if (deliveryMethods.length === 0) {
+        return; // User has disabled notifications for new messages
+      }
+
+      // Get sender information
+      const sender = await this.userService.getUserById(senderId);
+      if (!sender) {
+        this.logger.error(`Sender not found: ${senderId}`);
+        return;
+      }
+
+      // Use campaign title from thread if available, otherwise use fallback
+      const campaignTitle = thread.campaign?.title || 'Campaign';
+
+      // Prepare notification data
+      const notificationData: NotificationDeliveryData = {
+        userId: recipientId,
+        notificationType: NotificationType.NEW_MESSAGE,
+        title: '💬 New Message!',
+        message: `${sender.name || sender.email} sent you a message about "${campaignTitle}"`,
+        deliveryMethods,
+        metadata: {
+          messageId: message.id,
+          threadId: thread.id,
+          campaignId: thread.campaignId,
+          campaignTitle,
+          senderName: sender.name || sender.email || 'Someone',
+          senderRole: sender.role,
+          messageContent:
+            message.content && message.content.length > 100
+              ? `${message.content.substring(0, 100)}...`
+              : message.content || '',
+          sentAt: message.createdAt,
+        },
+        campaignId: thread.campaignId,
+        conversationId: thread.id,
+      };
+
+      // Send notifications
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      this.logger.error(`Error sending offline message notification:`, error);
+      throw error;
+    }
   }
 }
