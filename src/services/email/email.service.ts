@@ -158,6 +158,8 @@ export class EmailService {
         '💰 Campaign Budget Increased',
       [NotificationType.CAMPAIGN_DEADLINE_EXTENDED]:
         '📅 Campaign Deadline Extended',
+      [NotificationType.PROMOTER_JOINED_CAMPAIGN]:
+        '🎉 New Promoter Joined Your Campaign',
 
       // Payment notifications
       [NotificationType.PAYMENT_RECEIVED]: '💰 Payment Received',
@@ -262,6 +264,7 @@ export class EmailService {
       [NotificationType.CAMPAIGN_ENDED]: 'Campaign Completed',
       [NotificationType.CAMPAIGN_BUDGET_INCREASED]: 'Budget Update',
       [NotificationType.CAMPAIGN_DEADLINE_EXTENDED]: 'Deadline Extended',
+      [NotificationType.PROMOTER_JOINED_CAMPAIGN]: 'New Promoter',
       [NotificationType.PAYMENT_RECEIVED]: 'Payment Notification',
       [NotificationType.PAYMENT_SENT]: 'Payment Confirmation',
       [NotificationType.PAYMENT_FAILED]: 'Payment Alert',

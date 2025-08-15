@@ -130,6 +130,8 @@ export class PhoneService {
         '📋 Your campaign application status updated.',
       [NotificationType.CAMPAIGN_WORK_APPROVED]:
         '✅ Your work has been approved and completed!',
+      [NotificationType.PROMOTER_JOINED_CAMPAIGN]:
+        '🎉 A new promoter joined your campaign!',
       [NotificationType.PAYMENT_RECEIVED]: '💰 Payment received successfully!',
       [NotificationType.PAYMENT_FAILED]:
         '❌ Payment failed. Please check your account.',

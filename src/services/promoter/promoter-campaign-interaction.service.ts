@@ -67,13 +67,20 @@ export class PromoterCampaignInteractionService {
     request: SendApplicationRequest,
   ): Promise<SendApplicationResponse> {
     const promoter = await this.findPromoterByFirebaseUid(firebaseUid);
-    await this.findActiveCampaign(request.campaignId);
+    const campaign = await this.findActiveCampaign(request.campaignId);
 
     await this.validateNoExistingApplication(promoter.id, request.campaignId);
 
     const savedApplication = await this.createCampaignApplication(
       promoter.id,
       request.campaignId,
+      request.applicationMessage,
+    );
+
+    // Send notification to advertiser about new application
+    await this.sendNewApplicationNotification(
+      campaign,
+      promoter,
       request.applicationMessage,
     );
 
@@ -98,6 +105,9 @@ export class PromoterCampaignInteractionService {
       request.campaignId,
     );
 
+    // Send notification to advertiser about new promoter joining
+    await this.sendPromoterJoinedNotification(campaign, promoter);
+
     return RESPONSE_BUILDERS.buildContractResponse(savedContract);
   }
 
@@ -116,10 +126,23 @@ export class PromoterCampaignInteractionService {
       await this.validatePromoterCampaignAccess(promoter.id, campaignId);
 
       const deliverable = await this.findDeliverable(deliverableId, campaignId);
-      await this.createWork(deliverableId, promoterLink, description);
+      const newWork = await this.createWork(
+        deliverableId,
+        promoterLink,
+        description,
+      );
 
       await this.markDeliverableAsSubmitted(deliverable);
       const allWork = await this.getAllWorkForDeliverable(deliverableId);
+
+      // Send notification to advertiser about new work submission
+      await this.sendWorkSubmittedNotification(
+        campaignId,
+        deliverableId,
+        promoter,
+        newWork,
+        deliverable,
+      );
 
       return RESPONSE_BUILDERS.buildSuccessResponse(
         INTERACTION_SUCCESS_MESSAGES.WORK_ADDED,
@@ -155,6 +178,16 @@ export class PromoterCampaignInteractionService {
         campaignId,
       );
       await this.updateWork(existingWork, promoterLink, description);
+      const deliverable = await this.findDeliverable(deliverableId, campaignId);
+
+      // Send notification to advertiser about work update
+      await this.sendWorkUpdatedNotification(
+        campaignId,
+        deliverableId,
+        promoter,
+        existingWork,
+        deliverable,
+      );
 
       const allWork = await this.getAllWorkForDeliverable(deliverableId);
 
@@ -223,12 +256,31 @@ export class PromoterCampaignInteractionService {
       await this.validatePromoterCampaignAccess(promoter.id, campaignId);
       await this.validateDeliverableAndWork(deliverableId, campaignId, workId);
 
+      const work = await this.findWorkWithValidation(
+        workId,
+        deliverableId,
+        campaignId,
+      );
+      const deliverable = await this.findDeliverable(deliverableId, campaignId);
+
       await this.createComment(
         workId,
         commentMessage,
         promoter.id,
         promoter.name || promoter.email,
       );
+
+      // Send notification to advertiser about new comment from promoter
+      await this.sendPromoterCommentNotification(
+        campaignId,
+        deliverableId,
+        workId,
+        promoter,
+        work,
+        deliverable,
+        commentMessage,
+      );
+
       const allWorks = await this.getAllWorkForDeliverable(deliverableId);
 
       return RESPONSE_BUILDERS.buildSuccessResponse(
@@ -726,6 +778,315 @@ export class PromoterCampaignInteractionService {
     } catch (error) {
       // Log error but don't fail the main operation
       console.error('Failed to send deliverable finished notification:', error);
+    }
+  }
+
+  /**
+   * Send notification to advertiser when they receive a new application
+   */
+  private async sendNewApplicationNotification(
+    campaign: CampaignEntity,
+    promoter: UserEntity,
+    applicationMessage: string,
+  ): Promise<void> {
+    try {
+      // Get advertiser user details
+      const advertiser = await this.userRepository.findOne({
+        where: { id: campaign.advertiserId },
+      });
+
+      if (!advertiser) {
+        console.error('Advertiser not found for notification');
+        return;
+      }
+
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+        );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+        title: '📝 New Campaign Application!',
+        message: `You've received a new application from ${promoter.name || 'a promoter'} for your campaign "${campaign.title}". Review their application to get started.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          promoterId: promoter.id,
+          promoterName: promoter.name || promoter.email,
+          applicationMessage,
+          appliedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send new application notification:', error);
+    }
+  }
+
+  /**
+   * Send notification to advertiser when a new promoter joins their campaign
+   */
+  private async sendPromoterJoinedNotification(
+    campaign: CampaignEntity,
+    promoter: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get advertiser user details
+      const advertiser = await this.userRepository.findOne({
+        where: { id: campaign.advertiserId },
+      });
+
+      if (!advertiser) {
+        console.error('Advertiser not found for notification');
+        return;
+      }
+
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.PROMOTER_JOINED_CAMPAIGN,
+        );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.PROMOTER_JOINED_CAMPAIGN,
+        title: '🎉 New Promoter Joined!',
+        message: `Great news! ${promoter.name || 'A promoter'} has joined your campaign "${campaign.title}". Your campaign is now live and ready to start generating results.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          promoterId: promoter.id,
+          promoterName: promoter.name || promoter.email,
+          joinedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send promoter joined notification:', error);
+    }
+  }
+
+  /**
+   * Send notification to advertiser when new work is submitted
+   */
+  private async sendWorkSubmittedNotification(
+    campaignId: string,
+    deliverableId: string,
+    promoter: UserEntity,
+    work: CampaignWorkEntity,
+    deliverable: CampaignDeliverableEntity,
+  ): Promise<void> {
+    try {
+      // Get campaign details
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        console.error('Campaign not found for notification');
+        return;
+      }
+
+      // Get advertiser user details
+      const advertiser = await this.userRepository.findOne({
+        where: { id: campaign.advertiserId },
+      });
+
+      if (!advertiser) {
+        console.error('Advertiser not found for notification');
+        return;
+      }
+
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.CAMPAIGN_WORK_SUBMITTED,
+        );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.CAMPAIGN_WORK_SUBMITTED,
+        title: '📝 New Work Submitted!',
+        message: `${promoter.name || 'A promoter'} has submitted new work for deliverable "${deliverable.deliverable}" in your campaign "${campaign.title}". Review their submission and provide feedback.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          deliverableId,
+          deliverableName: deliverable.deliverable,
+          workId: work.id,
+          promoterId: promoter.id,
+          promoterName: promoter.name || promoter.email,
+          promoterLink: work.promoterLink,
+          workDescription: work.description || null,
+          submittedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send work submitted notification:', error);
+    }
+  }
+
+  /**
+   * Send notification to advertiser when work is updated
+   */
+  private async sendWorkUpdatedNotification(
+    campaignId: string,
+    deliverableId: string,
+    promoter: UserEntity,
+    work: CampaignWorkEntity,
+    deliverable: CampaignDeliverableEntity,
+  ): Promise<void> {
+    try {
+      // Get campaign details
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        console.error('Campaign not found for notification');
+        return;
+      }
+
+      // Get advertiser user details
+      const advertiser = await this.userRepository.findOne({
+        where: { id: campaign.advertiserId },
+      });
+
+      if (!advertiser) {
+        console.error('Advertiser not found for notification');
+        return;
+      }
+
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.CAMPAIGN_WORK_SUBMITTED,
+        );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.CAMPAIGN_WORK_SUBMITTED,
+        title: '🔄 Work Updated!',
+        message: `${promoter.name || 'A promoter'} has updated their work for deliverable "${deliverable.deliverable}" in your campaign "${campaign.title}". Review the updated submission.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          deliverableId,
+          deliverableName: deliverable.deliverable,
+          workId: work.id,
+          promoterId: promoter.id,
+          promoterName: promoter.name || promoter.email,
+          promoterLink: work.promoterLink,
+          workDescription: work.description || null,
+          updatedAt: new Date().toISOString(),
+          isUpdate: true,
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send work updated notification:', error);
+    }
+  }
+
+  /**
+   * Send notification to advertiser when promoter adds a comment to work
+   */
+  private async sendPromoterCommentNotification(
+    campaignId: string,
+    deliverableId: string,
+    workId: string,
+    promoter: UserEntity,
+    work: CampaignWorkEntity,
+    deliverable: CampaignDeliverableEntity,
+    commentMessage: string,
+  ): Promise<void> {
+    try {
+      // Get campaign details
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        console.error('Campaign not found for notification');
+        return;
+      }
+
+      // Get advertiser user details
+      const advertiser = await this.userRepository.findOne({
+        where: { id: campaign.advertiserId },
+      });
+
+      if (!advertiser) {
+        console.error('Advertiser not found for notification');
+        return;
+      }
+
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.NEW_MESSAGE,
+        );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.NEW_MESSAGE,
+        title: '💬 New Comment on Work!',
+        message: `${promoter.name || 'A promoter'} left a comment on their work for deliverable "${deliverable.deliverable}" in your campaign "${campaign.title}": "${commentMessage.length > 100 ? commentMessage.substring(0, 100) + '...' : commentMessage}"`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          deliverableId,
+          deliverableName: deliverable.deliverable,
+          workId: work.id,
+          promoterId: promoter.id,
+          promoterName: promoter.name || promoter.email,
+          commentMessage,
+          commentedAt: new Date().toISOString(),
+          isFromPromoter: true,
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send promoter comment notification:', error);
     }
   }
 
