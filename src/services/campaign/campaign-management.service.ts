@@ -68,9 +68,11 @@ export class CampaignCompletionService {
   /**
    * Complete a single campaign and update all related entities
    * @param campaignId - ID of the campaign to complete
+   * @param isExpiration - Whether this completion is due to campaign expiration (default: false)
    */
   async completeCampaign(
     campaignId: string,
+    isExpiration: boolean = false,
   ): Promise<CampaignCompletionResult> {
     this.logger.log(
       CAMPAIGN_COMPLETION_MESSAGES.GENERAL.COMPLETION_STARTING(campaignId),
@@ -132,7 +134,11 @@ export class CampaignCompletionService {
 
       // 6. Send notifications to all campaign participants about completion
       try {
-        await this.notifyCampaignParticipants(campaign, promoterCampaigns);
+        await this.notifyCampaignParticipants(
+          campaign,
+          promoterCampaigns,
+          isExpiration,
+        );
       } catch (notificationError) {
         this.logger.error(
           `Failed to send campaign completion notifications for campaign ${campaignId}:`,
@@ -173,9 +179,11 @@ export class CampaignCompletionService {
   /**
    * Complete multiple campaigns in batch
    * @param campaignIds - Array of campaign IDs to complete
+   * @param isExpiration - Whether these completions are due to campaign expiration (default: false)
    */
   async completeCampaignsBatch(
     campaignIds: string[],
+    isExpiration: boolean = false,
   ): Promise<CampaignCompletionResult[]> {
     this.logger.log(
       CAMPAIGN_COMPLETION_MESSAGES.GENERAL.BATCH_STARTING(campaignIds.length),
@@ -185,7 +193,7 @@ export class CampaignCompletionService {
 
     for (const campaignId of campaignIds) {
       try {
-        const result = await this.completeCampaign(campaignId);
+        const result = await this.completeCampaign(campaignId, isExpiration);
         results.push(result);
       } catch (error) {
         this.logger.error(
@@ -704,10 +712,14 @@ export class CampaignCompletionService {
 
   /**
    * Notify all campaign participants about campaign completion and request reviews
+   * @param campaign - The completed campaign
+   * @param promoterCampaigns - Array of promoter campaigns
+   * @param isExpiration - Whether this completion is due to campaign expiration
    */
   private async notifyCampaignParticipants(
     campaign: CampaignEntity,
     promoterCampaigns: PromoterCampaign[],
+    isExpiration: boolean = false,
   ): Promise<void> {
     this.logger.log(
       `Notifying participants for completed campaign: ${campaign.id}`,
@@ -738,27 +750,37 @@ export class CampaignCompletionService {
     for (const participant of participants) {
       try {
         // Get notification delivery methods for this participant
+        const notificationType = isExpiration
+          ? NotificationType.CAMPAIGN_EXPIRED
+          : NotificationType.CAMPAIGN_ENDED;
+
         const deliveryMethods =
           await this.notificationHelperService.getNotificationMethods(
             participant.id,
-            NotificationType.CAMPAIGN_ENDED,
+            notificationType,
           );
 
         if (deliveryMethods.length === 0) {
           this.logger.log(
-            `User ${participant.id} has disabled campaign ended notifications`,
+            `User ${participant.id} has disabled ${isExpiration ? 'campaign expiration' : 'campaign completion'} notifications`,
           );
-          continue; // User has disabled notifications for campaign endings
+          continue; // User has disabled notifications for campaign endings/expirations
         }
 
         // Prepare notification data
         const notificationData: NotificationDeliveryData = {
           userId: participant.id,
-          notificationType: NotificationType.CAMPAIGN_ENDED,
-          title: '🎉 Campaign Completed!',
+          notificationType,
+          title: isExpiration
+            ? '⏰ Campaign Expired'
+            : '🎉 Campaign Completed!',
           message: participant.isAdvertiser
-            ? `Your campaign "${campaign.title}" has been completed! Please review your promoters' work and leave feedback.`
-            : `The campaign "${campaign.title}" you participated in has been completed! Please leave a review about your experience.`,
+            ? isExpiration
+              ? `Your campaign "${campaign.title}" has expired and been automatically completed. Please review your promoters' work and leave feedback.`
+              : `Your campaign "${campaign.title}" has been completed! Please review your promoters' work and leave feedback.`
+            : isExpiration
+              ? `The campaign "${campaign.title}" you participated in has expired and been completed. Please leave a review about your experience.`
+              : `The campaign "${campaign.title}" you participated in has been completed! Please leave a review about your experience.`,
           deliveryMethods,
           metadata: {
             campaignId: campaign.id,
@@ -773,6 +795,8 @@ export class CampaignCompletionService {
             reviewUrl: participant.isAdvertiser
               ? `/advertiser/campaigns/${campaign.id}/reviews`
               : `/promoter/campaigns/${campaign.id}/review`,
+            completionReason: isExpiration ? 'expired' : 'manual',
+            isExpiration,
           },
           campaignId: campaign.id,
         };

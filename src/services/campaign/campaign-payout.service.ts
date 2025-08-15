@@ -7,7 +7,13 @@ import { PromoterPaymentService } from '../promoter/promoter-payment.service';
 import { CampaignEarningsService } from './campaign-earnings.service';
 import { getCachedFxRate } from '../../helpers/currency.helper';
 import { TransactionType } from '../../database/entities/transaction.entity';
+import { NotificationType } from '../../enums/notification-type';
 import { CAMPAIGN_MANAGEMENT_CONSTANTS } from 'src/constants/campaign-management.constants';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationHelperService } from '../notification-helper.service';
 
 /**
  * Automated campaign-based payout processing service
@@ -23,6 +29,8 @@ export class CampaignPayoutService {
     private readonly dataSource: DataSource,
     private readonly promoterPaymentService: PromoterPaymentService,
     private readonly campaignEarningsService: CampaignEarningsService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
+    private readonly notificationHelperService: NotificationHelperService,
   ) {}
 
   /**
@@ -264,6 +272,21 @@ export class CampaignPayoutService {
       );
       this.logger.log(`✅ Database updated successfully`);
 
+      // Send additional payout processed notification for campaign earnings
+      try {
+        await this.sendCampaignEarningsPayoutNotification(
+          earnings,
+          netEarningsCents,
+          paymentResult.paymentId,
+        );
+      } catch (notificationError) {
+        this.logger.error(
+          `Failed to send payout processed notification to promoter ${earnings.promoterId}:`,
+          notificationError,
+        );
+        // Don't throw error - payment was successful, notification is optional
+      }
+
       this.logger.log(
         `🎉 Successfully processed campaign payout for promoter ${earnings.promoterId} in campaign ${earnings.campaignId} - Payment ID: ${paymentResult.paymentId}`,
       );
@@ -311,5 +334,80 @@ export class CampaignPayoutService {
     }
 
     this.logger.log(`Completed payout processing for promoter ${promoterId}`);
+  }
+
+  /**
+   * Send campaign earnings payout notification to promoter
+   * This is sent in addition to the PAYMENT_RECEIVED notification to provide
+   * more context about the automated earnings payout
+   */
+  private async sendCampaignEarningsPayoutNotification(
+    earnings: CampaignEarningsTracking,
+    netEarningsCents: number,
+    paymentId: string,
+  ): Promise<void> {
+    this.logger.log(
+      `📧 Sending campaign earnings payout notification to promoter: ${earnings.promoterId}`,
+    );
+
+    try {
+      // Get notification delivery methods for this promoter
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          earnings.promoterId,
+          NotificationType.PAYOUT_PROCESSED,
+        );
+
+      if (deliveryMethods.length === 0) {
+        this.logger.log(
+          `Promoter ${earnings.promoterId} has disabled payout processed notifications`,
+        );
+        return; // User has disabled notifications for payouts
+      }
+
+      const netEarningsDollars = (netEarningsCents / 100).toFixed(2);
+      const campaignCurrency = earnings.campaign.currency;
+
+      // Prepare notification data
+      const notificationData: NotificationDeliveryData = {
+        userId: earnings.promoterId,
+        notificationType: NotificationType.PAYOUT_PROCESSED,
+        title: '🏦 Campaign Earnings Payout Processed',
+        message: `Great news! Your campaign earnings payout of $${netEarningsDollars} ${campaignCurrency} has been processed for campaign "${earnings.campaign.title}". You generated ${earnings.viewsGenerated} views during ${earnings.earningsMonth}/${earnings.earningsYear}. The payment has been sent to your connected payment account and should arrive within 2-7 business days.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: earnings.campaignId,
+          campaignTitle: earnings.campaign.title,
+          campaignCurrency: campaignCurrency,
+          payoutAmount: netEarningsCents,
+          payoutAmountDollars: netEarningsDollars,
+          paymentId: paymentId,
+          viewsGenerated: earnings.viewsGenerated,
+          grossEarningsCents: earnings.grossEarningsCents,
+          platformFeeCents: earnings.platformFeeCents,
+          netEarningsCents: earnings.netEarningsCents,
+          payoutType: 'automated_campaign_earnings',
+          processedAt: new Date().toISOString(),
+          earningsMonth: earnings.earningsMonth,
+          earningsYear: earnings.earningsYear,
+        },
+        campaignId: earnings.campaignId,
+      };
+
+      // Send notification
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+
+      this.logger.log(
+        `Campaign earnings payout notification sent to promoter: ${earnings.promoterId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send campaign earnings payout notification to promoter ${earnings.promoterId}:`,
+        error,
+      );
+      throw error;
+    }
   }
 }

@@ -154,6 +154,7 @@ export class EmailService {
         '📝 Campaign Details Updated',
       [NotificationType.CAMPAIGN_ENDING_SOON]: '⏰ Campaign Ending Soon',
       [NotificationType.CAMPAIGN_ENDED]: '🏁 Campaign Completed',
+      [NotificationType.CAMPAIGN_EXPIRED]: '⏰ Campaign Expired',
       [NotificationType.CAMPAIGN_BUDGET_INCREASED]:
         '💰 Campaign Budget Increased',
       [NotificationType.CAMPAIGN_DEADLINE_EXTENDED]:
@@ -262,6 +263,7 @@ export class EmailService {
       [NotificationType.CAMPAIGN_DETAILS_CHANGED]: 'Campaign Update',
       [NotificationType.CAMPAIGN_ENDING_SOON]: 'Campaign Reminder',
       [NotificationType.CAMPAIGN_ENDED]: 'Campaign Completed',
+      [NotificationType.CAMPAIGN_EXPIRED]: 'Campaign Expired',
       [NotificationType.CAMPAIGN_BUDGET_INCREASED]: 'Budget Update',
       [NotificationType.CAMPAIGN_DEADLINE_EXTENDED]: 'Deadline Extended',
       [NotificationType.PROMOTER_JOINED_CAMPAIGN]: 'New Promoter',

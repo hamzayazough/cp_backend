@@ -11,10 +11,17 @@ import { Repository } from 'typeorm';
 import { CampaignNotificationService } from './campaign-notification.service';
 import { CampaignCompletionService } from './campaign-management.service';
 import { CampaignEntity } from '../../database/entities/campaign.entity';
+import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
 import { UserEntity } from '../../database/entities';
 import { CampaignStatus } from '../../enums/campaign-status';
+import { NotificationType } from '../../enums/notification-type';
 import { CAMPAIGN_MANAGEMENT_CONSTANTS } from '../../constants/campaign-management.constants';
 import { CampaignExpirationCheckResult } from '../../interfaces/campaign-management';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationHelperService } from '../notification-helper.service';
 
 /**
  * Main service that orchestrates campaign expiration checks and completion
@@ -28,10 +35,14 @@ export class CampaignExpirationService {
   constructor(
     @InjectRepository(CampaignEntity)
     private readonly campaignRepository: Repository<CampaignEntity>,
+    @InjectRepository(PromoterCampaign)
+    private readonly promoterCampaignRepository: Repository<PromoterCampaign>,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly campaignNotificationService: CampaignNotificationService,
     private readonly campaignCompletionService: CampaignCompletionService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
+    private readonly notificationHelperService: NotificationHelperService,
   ) {}
 
   /**
@@ -163,6 +174,7 @@ export class CampaignExpirationService {
           const completionResults =
             await this.campaignCompletionService.completeCampaignsBatch(
               campaignIds,
+              true, // isExpiration = true for automatically expired campaigns
             );
 
           this.logger.log(
@@ -336,6 +348,21 @@ export class CampaignExpirationService {
         `✅ Campaign ${campaignId} deadline extended by user ${user.email} from ${currentDeadline.toISOString()} to ${newDeadline.toISOString()}`,
       );
 
+      // Notify promoters about the deadline extension
+      try {
+        await this.notifyPromotersOfDeadlineExtension(
+          campaign,
+          newDeadline,
+          additionalDays,
+        );
+      } catch (notificationError) {
+        this.logger.error(
+          `Failed to send deadline extension notifications for campaign ${campaignId}:`,
+          notificationError,
+        );
+        // Don't throw error - deadline extension was successful, notifications are optional
+      }
+
       return {
         success: true,
         message: `Campaign "${campaign.title}" deadline extended by ${additionalDays} days`,
@@ -359,5 +386,95 @@ export class CampaignExpirationService {
         `Failed to extend campaign deadline: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  /**
+   * Notify all promoters related to a campaign about deadline extension
+   * @param campaign - The campaign that had its deadline extended
+   * @param newDeadline - The new deadline date
+   * @param additionalDays - Number of days added
+   */
+  private async notifyPromotersOfDeadlineExtension(
+    campaign: CampaignEntity,
+    newDeadline: Date,
+    additionalDays: number,
+  ): Promise<void> {
+    this.logger.log(
+      `📧 Notifying promoters about deadline extension for campaign: ${campaign.id}`,
+    );
+
+    // Get all promoters associated with this campaign
+    const promoterCampaigns = await this.promoterCampaignRepository.find({
+      where: { campaignId: campaign.id },
+      relations: ['promoter'],
+    });
+
+    if (promoterCampaigns.length === 0) {
+      this.logger.log(`No promoters found for campaign: ${campaign.id}`);
+      return;
+    }
+
+    this.logger.log(
+      `Found ${promoterCampaigns.length} promoters to notify for campaign: ${campaign.id}`,
+    );
+
+    // Send notifications to all promoters
+    for (const promoterCampaign of promoterCampaigns) {
+      try {
+        // Get notification delivery methods for this promoter
+        const deliveryMethods =
+          await this.notificationHelperService.getNotificationMethods(
+            promoterCampaign.promoterId,
+            NotificationType.CAMPAIGN_DEADLINE_EXTENDED,
+          );
+
+        if (deliveryMethods.length === 0) {
+          this.logger.log(
+            `Promoter ${promoterCampaign.promoterId} has disabled deadline extension notifications`,
+          );
+          continue; // User has disabled notifications for deadline extensions
+        }
+
+        // Prepare notification data
+        const notificationData: NotificationDeliveryData = {
+          userId: promoterCampaign.promoterId,
+          notificationType: NotificationType.CAMPAIGN_DEADLINE_EXTENDED,
+          title: '⏰ Campaign Deadline Extended',
+          message: `Good news! The deadline for campaign "${campaign.title}" has been extended by ${additionalDays} day${additionalDays > 1 ? 's' : ''}. You now have until ${newDeadline.toLocaleDateString()} to complete your work.`,
+          deliveryMethods,
+          metadata: {
+            campaignId: campaign.id,
+            campaignTitle: campaign.title,
+            originalDeadline: campaign.deadline?.toISOString(),
+            newDeadline: newDeadline.toISOString(),
+            additionalDays,
+            extendedAt: new Date().toISOString(),
+            campaignType: campaign.type,
+            actionRequired: false,
+            urgency: 'low',
+          },
+          campaignId: campaign.id,
+        };
+
+        // Send notification
+        await this.notificationDeliveryService.deliverNotification(
+          notificationData,
+        );
+
+        this.logger.log(
+          `Deadline extension notification sent to promoter: ${promoterCampaign.promoterId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send notification to promoter ${promoterCampaign.promoterId}:`,
+          error,
+        );
+        // Continue with other promoters even if one fails
+      }
+    }
+
+    this.logger.log(
+      `Completed sending deadline extension notifications for campaign: ${campaign.id}`,
+    );
   }
 }

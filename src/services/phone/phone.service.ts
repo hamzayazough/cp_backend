@@ -132,6 +132,10 @@ export class PhoneService {
         '✅ Your work has been approved and completed!',
       [NotificationType.CAMPAIGN_ENDED]:
         '🏁 Campaign completed! Please leave a review.',
+      [NotificationType.CAMPAIGN_EXPIRED]:
+        '⏰ Campaign expired! Please leave a review.',
+      [NotificationType.CAMPAIGN_DEADLINE_EXTENDED]:
+        '⏰ Campaign deadline has been extended!',
       [NotificationType.PROMOTER_JOINED_CAMPAIGN]:
         '🎉 A new promoter joined your campaign!',
       [NotificationType.NEW_CONVERSATION]:
