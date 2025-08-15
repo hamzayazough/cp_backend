@@ -29,6 +29,12 @@ import { CampaignStatus } from '../../enums/campaign-status';
 import { UserType } from '../../enums/user-type';
 import { PayPromoterDto } from '../../controllers/advertiser.controller';
 import { getCachedFxRate } from '../../helpers/currency.helper';
+import { NotificationHelperService } from '../notification-helper.service';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationType } from '../../enums/notification-type';
 
 export interface PayPromoterResult {
   paymentId: string;
@@ -61,6 +67,8 @@ export class PromoterPaymentService {
     private readonly promoterCampaignRepo: Repository<PromoterCampaign>,
     @InjectRepository(PaymentRecord)
     private readonly paymentRecordRepo: Repository<PaymentRecord>,
+    private readonly notificationHelperService: NotificationHelperService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   /**
@@ -162,6 +170,15 @@ export class PromoterPaymentService {
       netPaymentDollars,
       advertiserCurrency,
       promoterCurrency,
+    );
+
+    // Send payment notification to promoter
+    await this.sendPaymentReceivedNotification(
+      dto.promoterId,
+      dto.amount,
+      campaign,
+      user,
+      dto.description,
     );
 
     return {
@@ -791,6 +808,53 @@ export class PromoterPaymentService {
       transactionCount: Number(stats?.count || 0),
       lastPaymentDate: stats?.lastPayment || null,
     };
+  }
+
+  /**
+   * Send notification to promoter when they receive a payment
+   */
+  private async sendPaymentReceivedNotification(
+    promoterId: string,
+    amountCents: number,
+    campaign: CampaignEntity,
+    advertiser: UserEntity,
+    description?: string,
+  ): Promise<void> {
+    try {
+      // Get delivery methods for the promoter
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          promoterId,
+          NotificationType.PAYMENT_RECEIVED,
+        );
+
+      const amountDollars = (amountCents / 100).toFixed(2);
+      const notificationData: NotificationDeliveryData = {
+        userId: promoterId,
+        notificationType: NotificationType.PAYMENT_RECEIVED,
+        title: '💰 Payment Received!',
+        message: `You've received a payment of $${amountDollars} from ${advertiser.name || 'the advertiser'} for your work on campaign "${campaign.title}".${description ? ` Note: ${description}` : ''}`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          paymentAmount: amountCents,
+          paymentAmountDollars: amountDollars,
+          advertiserId: advertiser.id,
+          advertiserName: advertiser.name || advertiser.email,
+          description: description || null,
+          paidAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main payment operation
+      this.logger.error('Failed to send payment received notification:', error);
+    }
   }
 
   private async findUserByFirebaseUid(

@@ -13,12 +13,18 @@ import { CampaignEntity } from '../database/entities/campaign.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { StripeConnectAccount } from '../database/entities/stripe-connect-account.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
+import { NotificationEntity } from '../database/entities/notification.entity';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
 
 // Services
 import { PaymentMethodService } from '../stripe/services/payment-method.service';
 import { WalletService } from '../services/wallet.service';
 import { CampaignFundingService } from '../services/campaign/campaign-funding.service';
 import { PromoterPaymentService } from '../services/promoter/promoter-payment.service';
+import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationDeliveryService } from '../services/notification-delivery.service';
+import { EmailService } from '../services/email/email.service';
+import { PhoneService } from '../services/phone/phone.service';
 
 @Module({
   imports: [
@@ -33,6 +39,8 @@ import { PromoterPaymentService } from '../services/promoter/promoter-payment.se
       CampaignBudgetTracking,
       StripeConnectAccount,
       PromoterCampaign,
+      NotificationEntity,
+      UserNotificationPreferenceEntity,
     ]),
     StripeModule,
   ],
@@ -41,12 +49,20 @@ import { PromoterPaymentService } from '../services/promoter/promoter-payment.se
     WalletService,
     CampaignFundingService,
     PromoterPaymentService,
+    NotificationHelperService,
+    NotificationDeliveryService,
+    EmailService,
+    PhoneService,
   ],
   exports: [
     PaymentMethodService,
     WalletService,
     CampaignFundingService,
     PromoterPaymentService,
+    NotificationHelperService,
+    NotificationDeliveryService,
+    EmailService,
+    PhoneService,
   ],
 })
 export class PaymentModule {}

@@ -10,6 +10,7 @@ import { CampaignEntity } from 'src/database/entities/campaign.entity';
 import { UserEntity } from 'src/database/entities';
 import { CampaignDeliverableEntity } from 'src/database/entities/campaign-deliverable.entity';
 import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
+import { PromoterCampaign } from 'src/database/entities/promoter-campaign.entity';
 import { Wallet } from 'src/database/entities/wallet.entity';
 import { Transaction } from 'src/database/entities/transaction.entity';
 import { S3Service, S3FileType } from '../s3.service';
@@ -18,7 +19,6 @@ import { CampaignType } from 'src/enums/campaign-type';
 import { Deliverable } from 'src/enums/deliverable';
 import { UserType } from 'src/enums/user-type';
 import { NotificationType } from 'src/enums/notification-type';
-import { NotificationDeliveryMethod } from 'src/enums/notification-delivery-method';
 import {
   NotificationDeliveryService,
   NotificationDeliveryData,
@@ -65,6 +65,8 @@ export class CampaignService {
     private deliverableRepository: Repository<CampaignDeliverableEntity>,
     @InjectRepository(CampaignBudgetTracking)
     private campaignBudgetTrackingRepository: Repository<CampaignBudgetTracking>,
+    @InjectRepository(PromoterCampaign)
+    private promoterCampaignRepository: Repository<PromoterCampaign>,
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
@@ -478,6 +480,14 @@ export class CampaignService {
         additionalBudgetDollars,
       );
 
+      // Send budget update notifications to associated promoters
+      await this.sendBudgetUpdateNotifications(
+        campaignId,
+        validatedCampaign.title,
+        additionalBudgetCents,
+        validatedUser,
+      );
+
       return {
         campaignId: updatedCampaign.id,
         previousBudgetCents: Math.round(previousBudgetDollars * 100),
@@ -715,11 +725,12 @@ export class CampaignService {
     advertiser: UserEntity,
   ): Promise<void> {
     try {
-      // Get delivery methods first
-      const deliveryMethods = await this.getNotificationMethods(
-        advertiser.id,
-        NotificationType.CAMPAIGN_CREATED,
-      );
+      // Get delivery methods using helper service
+      const deliveryMethods =
+        await this.notificationHelperService.getNotificationMethods(
+          advertiser.id,
+          NotificationType.CAMPAIGN_CREATED,
+        );
 
       const notificationData: NotificationDeliveryData = {
         userId: advertiser.id,
@@ -748,16 +759,72 @@ export class CampaignService {
   }
 
   /**
-   * Get user's preferred notification delivery methods for a specific notification type
+   * Send budget update notifications to all promoters associated with a campaign
    */
-  private async getNotificationMethods(
-    userId: string,
-    notificationType: NotificationType,
-  ): Promise<NotificationDeliveryMethod[]> {
-    return this.notificationHelperService.getNotificationMethods(
-      userId,
-      notificationType,
-    );
+  private async sendBudgetUpdateNotifications(
+    campaignId: string,
+    campaignTitle: string,
+    additionalBudgetCents: number,
+    advertiser: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get all promoters associated with this campaign
+      const promoterCampaigns = await this.promoterCampaignRepository.find({
+        where: { campaignId },
+        relations: ['promoter'],
+      });
+
+      if (promoterCampaigns.length === 0) {
+        return; // No promoters to notify
+      }
+
+      const additionalBudgetDollars = additionalBudgetCents / 100;
+
+      // Send notification to each promoter using helper service
+      const notificationPromises = promoterCampaigns.map(
+        async (promoterCampaign) => {
+          if (!promoterCampaign.promoter) {
+            return; // Skip if promoter relation is not loaded
+          }
+
+          const promoter = promoterCampaign.promoter;
+
+          // Get delivery methods using helper service
+          const deliveryMethods =
+            await this.notificationHelperService.getNotificationMethods(
+              promoter.id,
+              NotificationType.CAMPAIGN_BUDGET_INCREASED,
+            );
+
+          const notificationData: NotificationDeliveryData = {
+            userId: promoter.id,
+            notificationType: NotificationType.CAMPAIGN_BUDGET_INCREASED,
+            title: '💰 Campaign Budget Increased!',
+            message: `Great news! The budget for campaign "${campaignTitle}" has been increased by $${additionalBudgetDollars.toFixed(2)}. This means more opportunities and potential earnings for this campaign.`,
+            deliveryMethods,
+            metadata: {
+              campaignId,
+              campaignTitle,
+              additionalBudgetCents,
+              additionalBudgetDollars,
+              advertiserName: advertiser.name || advertiser.email,
+              advertiserId: advertiser.id,
+              updatedAt: new Date().toISOString(),
+            },
+            campaignId,
+          };
+
+          await this.notificationDeliveryService.deliverNotification(
+            notificationData,
+          );
+        },
+      );
+
+      await Promise.all(notificationPromises);
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send budget update notifications:', error);
+    }
   }
 
   // ============================================================================

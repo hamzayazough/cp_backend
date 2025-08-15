@@ -7,7 +7,6 @@ import {
   CompletePaymentSetupDto,
   AddPaymentMethodDto,
   AddFundsDto,
-  FundCampaignDto,
   TransactionQueryDto,
   WithdrawFundsDto,
   CheckCampaignFundingDto,
@@ -99,19 +98,6 @@ export class AdvertiserPaymentService {
       userId,
       netAmountCents,
       paymentRecord,
-    );
-  }
-
-  // === Campaign Funding ===
-  async fundCampaign(
-    firebaseUid: string,
-    campaignId: string,
-    dto: FundCampaignDto,
-  ) {
-    return this.campaignFundingService.fundCampaign(
-      firebaseUid,
-      campaignId,
-      dto,
     );
   }
 

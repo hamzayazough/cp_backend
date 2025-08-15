@@ -61,12 +61,6 @@ export class AddFundsDto {
   description?: string;
 }
 
-export class FundCampaignDto {
-  amount: number; // in cents
-  source: 'wallet' | 'direct';
-  paymentMethodId?: string;
-}
-
 export class UpdateBudgetDto {
   additionalBudget: number; // in cents
 }
@@ -633,36 +627,6 @@ export class AdvertiserController {
   }
 
   // Campaign Funding Endpoints
-
-  @Post('campaigns/:campaignId/fund')
-  @HttpCode(HttpStatus.OK)
-  async fundCampaign(
-    @Request() req: { user: FirebaseUser },
-    @Param('campaignId') campaignId: string,
-    @Body() dto: FundCampaignDto,
-  ) {
-    if (dto.amount <= 0) {
-      throw new BadRequestException('Amount must be greater than 0');
-    }
-
-    if (dto.source === 'direct' && !dto.paymentMethodId) {
-      throw new BadRequestException(
-        'Payment method ID is required for direct payments',
-      );
-    }
-
-    const result = await this.advertiserPaymentService.fundCampaign(
-      req.user.uid,
-      campaignId,
-      dto,
-    );
-
-    return {
-      success: true,
-      data: result,
-      message: 'Campaign funded successfully',
-    };
-  }
 
   @Get('campaigns/:campaignId/funding-status')
   @HttpCode(HttpStatus.OK)

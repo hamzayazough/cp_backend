@@ -15,6 +15,12 @@ import { Transaction } from '../database/entities/transaction.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { StripeModule } from '../stripe/stripe.module';
+import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationDeliveryService } from '../services/notification-delivery.service';
+import { EmailService } from '../services/email/email.service';
+import { PhoneService } from '../services/phone/phone.service';
+import { NotificationEntity } from '../database/entities/notification.entity';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
 
 @Module({
   imports: [
@@ -30,6 +36,8 @@ import { StripeModule } from '../stripe/stripe.module';
       Transaction,
       PromoterCampaign,
       PaymentRecord,
+      NotificationEntity,
+      UserNotificationPreferenceEntity,
     ]),
     StripeModule,
   ],
@@ -37,6 +45,10 @@ import { StripeModule } from '../stripe/stripe.module';
     CampaignPayoutService,
     CampaignEarningsService,
     PromoterPaymentService,
+    NotificationHelperService,
+    NotificationDeliveryService,
+    EmailService,
+    PhoneService,
   ],
   exports: [CampaignPayoutService, CampaignEarningsService],
 })

@@ -219,12 +219,6 @@ export interface AdvertiserDashboardSummary {
   }[];
 }
 
-export interface FundCampaignRequest {
-  campaignId: string;
-  amount: number;
-  stripePaymentMethodId: string;
-}
-
 export interface ReviewPromoterApplicationRequest {
   campaignId: string;
   promoterId: string;
