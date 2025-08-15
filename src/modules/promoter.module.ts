@@ -24,6 +24,7 @@ import { DiscordService } from '../services/discord.service';
 import { NotificationDeliveryService } from '../services/notification-delivery.service';
 import { EmailService } from '../services/email/email.service';
 import { PhoneService } from '../services/phone/phone.service';
+import { NotificationHelperService } from '../services/notification-helper.service';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { PhoneService } from '../services/phone/phone.service';
     NotificationDeliveryService,
     EmailService,
     PhoneService,
+    NotificationHelperService,
   ],
   exports: [PromoterService],
 })

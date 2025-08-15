@@ -138,7 +138,7 @@ export class NotificationDeliveryService {
         results.push({
           method,
           success: false,
-          error: error.message,
+          error: error.message as string,
         });
       }
     }
@@ -188,7 +188,7 @@ export class NotificationDeliveryService {
         return {
           method,
           success: false,
-          error: `Unsupported delivery method: ${method}`,
+          error: `Unsupported delivery method: ${method as string}`,
         };
     }
   }

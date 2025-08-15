@@ -12,7 +12,6 @@ import { CampaignDeliverableEntity } from 'src/database/entities/campaign-delive
 import { CampaignBudgetTracking } from 'src/database/entities/campaign-budget-tracking.entity';
 import { Wallet } from 'src/database/entities/wallet.entity';
 import { Transaction } from 'src/database/entities/transaction.entity';
-import { UserNotificationPreferenceEntity } from 'src/database/entities/user-notification-preference.entity';
 import { S3Service, S3FileType } from '../s3.service';
 import { Campaign } from 'src/interfaces/campaign';
 import { CampaignType } from 'src/enums/campaign-type';
@@ -24,6 +23,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../notification-delivery.service';
+import { NotificationHelperService } from '../notification-helper.service';
 
 // Helpers
 import { FileValidationHelper } from 'src/helpers/file-validation.helper';
@@ -69,12 +69,11 @@ export class CampaignService {
     private walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private transactionRepository: Repository<Transaction>,
-    @InjectRepository(UserNotificationPreferenceEntity)
-    private userNotificationPreferenceRepository: Repository<UserNotificationPreferenceEntity>,
     private s3Service: S3Service,
     private campaignMediaService: CampaignMediaService,
     private discordService: DiscordService,
     private notificationDeliveryService: NotificationDeliveryService,
+    private notificationHelperService: NotificationHelperService,
   ) {}
 
   async uploadCampaignFile(
@@ -755,57 +754,15 @@ export class CampaignService {
     userId: string,
     notificationType: NotificationType,
   ): Promise<NotificationDeliveryMethod[]> {
-    try {
-      // Get user's notification preferences
-      const preference =
-        await this.userNotificationPreferenceRepository.findOne({
-          where: { userId, notificationType },
-        });
-
-      const methods: NotificationDeliveryMethod[] = [];
-
-      if (preference) {
-        // Use user's specific preferences
-        if (preference.emailEnabled) {
-          methods.push(NotificationDeliveryMethod.EMAIL);
-        }
-        if (preference.smsEnabled) {
-          methods.push(NotificationDeliveryMethod.SMS);
-        }
-        if (preference.pushEnabled) {
-          methods.push(NotificationDeliveryMethod.PUSH);
-        }
-        if (preference.inAppEnabled) {
-          methods.push(NotificationDeliveryMethod.IN_APP);
-        }
-      } else {
-        // No specific preference found, use defaults for this notification type
-        const isImportant = [
-          NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
-          NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
-          NotificationType.CAMPAIGN_APPLICATION_REJECTED,
-          NotificationType.PAYMENT_RECEIVED,
-          NotificationType.PAYOUT_PROCESSED,
-          NotificationType.SECURITY_ALERT,
-        ].includes(notificationType);
-
-        // Default delivery methods
-        methods.push(NotificationDeliveryMethod.EMAIL); // Always include email
-        methods.push(NotificationDeliveryMethod.PUSH); // Always include push
-        methods.push(NotificationDeliveryMethod.IN_APP); // Always include in-app
-
-        // Only include SMS for important notifications
-        if (isImportant) {
-          methods.push(NotificationDeliveryMethod.SMS);
-        }
-      }
-
-      return methods.length > 0 ? methods : [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
-    } catch (error) {
-      console.error('Failed to get notification methods:', error);
-      return [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
-    }
+    return this.notificationHelperService.getNotificationMethods(
+      userId,
+      notificationType,
+    );
   }
+
+  // ============================================================================
+  // ERROR HANDLING
+  // ============================================================================
 
   // ============================================================================
   // ERROR HANDLING

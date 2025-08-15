@@ -29,7 +29,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../notification-delivery.service';
-import { UserNotificationPreferenceEntity } from '../../database/entities/user-notification-preference.entity';
+import { NotificationHelperService } from '../notification-helper.service';
 import { NotificationType } from '../../enums/notification-type';
 import { NotificationDeliveryMethod } from '../../enums/notification-delivery-method';
 import { CAMPAIGN_MANAGEMENT_BUILDERS } from './advertiser-campaign-helper.constants';
@@ -49,8 +49,6 @@ export class AdvertiserService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(PromoterCampaign)
     private promoterCampaignRepository: Repository<PromoterCampaign>,
-    @InjectRepository(UserNotificationPreferenceEntity)
-    private userNotificationPreferenceRepository: Repository<UserNotificationPreferenceEntity>,
     private campaignService: AdvertiserCampaignService,
     private walletService: AdvertiserWalletService,
     private statsService: AdvertiserStatsService,
@@ -58,6 +56,7 @@ export class AdvertiserService {
     private messageService: AdvertiserMessageService,
     private readonly s3Service: S3Service,
     private readonly notificationDeliveryService: NotificationDeliveryService,
+    private readonly notificationHelperService: NotificationHelperService,
   ) {}
 
   async getDashboardData(
@@ -441,55 +440,9 @@ export class AdvertiserService {
     userId: string,
     notificationType: NotificationType,
   ): Promise<NotificationDeliveryMethod[]> {
-    try {
-      // Get user's notification preferences
-      const preference =
-        await this.userNotificationPreferenceRepository.findOne({
-          where: { userId, notificationType },
-        });
-
-      const methods: NotificationDeliveryMethod[] = [];
-
-      if (preference) {
-        // Use user's specific preferences
-        if (preference.emailEnabled) {
-          methods.push(NotificationDeliveryMethod.EMAIL);
-        }
-        if (preference.smsEnabled) {
-          methods.push(NotificationDeliveryMethod.SMS);
-        }
-        if (preference.pushEnabled) {
-          methods.push(NotificationDeliveryMethod.PUSH);
-        }
-        if (preference.inAppEnabled) {
-          methods.push(NotificationDeliveryMethod.IN_APP);
-        }
-      } else {
-        // No specific preference found, use defaults for this notification type
-        const isImportant = [
-          NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
-          NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
-          NotificationType.CAMPAIGN_APPLICATION_REJECTED,
-          NotificationType.PAYMENT_RECEIVED,
-          NotificationType.PAYOUT_PROCESSED,
-          NotificationType.SECURITY_ALERT,
-        ].includes(notificationType);
-
-        // Default delivery methods
-        methods.push(NotificationDeliveryMethod.EMAIL); // Always include email
-        methods.push(NotificationDeliveryMethod.PUSH); // Always include push
-        methods.push(NotificationDeliveryMethod.IN_APP); // Always include in-app
-
-        // Only include SMS for important notifications
-        if (isImportant) {
-          methods.push(NotificationDeliveryMethod.SMS);
-        }
-      }
-
-      return methods.length > 0 ? methods : [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
-    } catch (error) {
-      console.error('Failed to get notification methods:', error);
-      return [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
-    }
+    return this.notificationHelperService.getNotificationMethods(
+      userId,
+      notificationType,
+    );
   }
 }
