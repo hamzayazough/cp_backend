@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     firebase_uid VARCHAR(255) UNIQUE NOT NULL, -- Firebase UID for authentication
     email VARCHAR(255) UNIQUE NOT NULL,
     phone_number VARCHAR(20), -- Phone number (optional)
+    phone_verified BOOLEAN DEFAULT FALSE, -- Whether phone number is verified for SMS
     name VARCHAR(255), -- Nullable initially, filled during account completion
     role user_role, -- Nullable initially, filled during account completion
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -37,7 +38,14 @@ CREATE TABLE IF NOT EXISTS users (
     number_of_seller_campaign_done INTEGER DEFAULT 0 CHECK (number_of_seller_campaign_done >= 0),
     number_of_salesman_campaign_done INTEGER DEFAULT 0 CHECK (number_of_salesman_campaign_done >= 0),
     number_of_consultant_campaign_done INTEGER DEFAULT 0 CHECK (number_of_consultant_campaign_done >= 0),
-    country VARCHAR(100) DEFAULT 'CA'
+    country VARCHAR(100) DEFAULT 'CA',
+    
+    -- Notification preferences
+    email_notifications_enabled BOOLEAN DEFAULT TRUE,
+    push_token TEXT, -- FCM/APNS push notification token
+    timezone VARCHAR(50) DEFAULT 'America/Toronto', -- User's timezone for scheduling notifications
+    notification_quiet_hours_start TIME, -- Start of quiet hours (no notifications)
+    notification_quiet_hours_end TIME -- End of quiet hours
 
 );
 

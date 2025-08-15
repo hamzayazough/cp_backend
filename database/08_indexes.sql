@@ -80,9 +80,9 @@ CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_promoter_id ON promoter_campai
 CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_status ON promoter_campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_promoter_campaigns_joined_at ON promoter_campaigns(joined_at);
 
--- Campaign Budget Allocations indexes
-CREATE INDEX IF NOT EXISTS idx_budget_allocations_campaign_id ON campaign_budget_allocations(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_budget_allocations_status ON campaign_budget_allocations(status);
+-- Campaign Budget Allocations indexes (table was replaced/removed)
+-- CREATE INDEX IF NOT EXISTS idx_budget_allocations_campaign_id ON campaign_budget_allocations(campaign_id);
+-- CREATE INDEX IF NOT EXISTS idx_budget_allocations_status ON campaign_budget_allocations(status);
 
 -- ========================================
 -- FINANCIAL TABLE INDEXES
@@ -97,7 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_a
 CREATE INDEX IF NOT EXISTS idx_transactions_processed_at ON transactions(processed_at);
 
 -- Wallets indexes
-CREATE INDEX IF NOT EXISTS idx_wallets_promoter_id ON wallets(promoter_id);
+CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
 CREATE INDEX IF NOT EXISTS idx_wallets_current_balance ON wallets(current_balance);
 CREATE INDEX IF NOT EXISTS idx_wallets_last_payout_date ON wallets(last_payout_date);
 

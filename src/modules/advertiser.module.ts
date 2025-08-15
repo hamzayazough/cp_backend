@@ -28,8 +28,13 @@ import { SalesRecordEntity } from '../database/entities/sales-record.entity';
 import { CampaignBudgetTracking } from '../database/entities/campaign-budget-tracking.entity';
 import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from 'src/database/entities';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
+import { NotificationEntity } from '../database/entities/notification.entity';
 import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 import { DiscordService } from '../services/discord.service';
+import { NotificationDeliveryService } from '../services/notification-delivery.service';
+import { EmailService } from '../services/email/email.service';
+import { PhoneService } from '../services/phone/phone.service';
 
 @Module({
   imports: [
@@ -51,6 +56,8 @@ import { DiscordService } from '../services/discord.service';
       SalesRecordEntity,
       CampaignBudgetTracking, // Added back for AdvertiserStatsService
       UniqueViewEntity,
+      UserNotificationPreferenceEntity,
+      NotificationEntity,
     ]),
     PromoterModule,
     PaymentModule, // Import the payment module instead of individual services
@@ -68,6 +75,9 @@ import { DiscordService } from '../services/discord.service';
     CampaignMediaService,
     S3Service,
     DiscordService,
+    NotificationDeliveryService,
+    EmailService,
+    PhoneService,
   ],
   exports: [AdvertiserService, CampaignService, DiscordService],
 })

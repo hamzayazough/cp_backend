@@ -15,6 +15,8 @@ import { PromoterSkillEntity } from '../database/entities/promoter-skill.entity'
 import { FollowerEstimateEntity } from '../database/entities/follower-estimate.entity';
 import { PromoterWorkEntity } from '../database/entities/promoter-work.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
+import { NotificationEntity } from '../database/entities/notification.entity';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
 import {
   AdvertiserDetailsDto,
   CreateUserDto,
@@ -24,6 +26,7 @@ import {
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { AdvertiserType } from 'src/enums/advertiser-type';
 import { Language } from 'src/enums/language';
+import { NotificationType } from '../enums/notification-type';
 import { S3Service } from './s3.service';
 import { DiscordService } from './discord.service';
 
@@ -50,6 +53,10 @@ export class UserService {
     private readonly promoterWorkRepository: Repository<PromoterWorkEntity>,
     @InjectRepository(UniqueViewEntity)
     private readonly uniqueViewRepository: Repository<UniqueViewEntity>,
+    @InjectRepository(NotificationEntity)
+    private readonly notificationRepository: Repository<NotificationEntity>,
+    @InjectRepository(UserNotificationPreferenceEntity)
+    private readonly userNotificationPreferenceRepository: Repository<UserNotificationPreferenceEntity>,
     private readonly s3Service: S3Service,
     private readonly discordService: DiscordService,
   ) {}
@@ -146,6 +153,10 @@ export class UserService {
     });
 
     const savedUser = await this.userRepository.save(user);
+
+    // Initialize basic notification preferences for new user
+    await this.initializeNotificationPreferences(savedUser.id);
+
     return await this.mapEntityToUser(savedUser);
   }
 
@@ -234,6 +245,12 @@ export class UserService {
         );
       }
     }
+
+    // Initialize notification preferences for the user
+    await this.initializeNotificationPreferences(savedUser.id);
+
+    // Send welcome notification based on user role
+    await this.sendWelcomeNotification(savedUser.id, createUserDto.role);
 
     return this.getUserByFirebaseUid(firebaseUid);
   }
@@ -1079,5 +1096,669 @@ export class UserService {
       console.error('Error calculating total views generated:', error);
       return 0;
     }
+  }
+
+  /**
+   * Initialize default notification preferences for a new user
+   */
+  private async initializeNotificationPreferences(
+    userId: string,
+  ): Promise<void> {
+    try {
+      // Check if user already has notification preferences
+      const existingPreferencesCount =
+        await this.userNotificationPreferenceRepository.count({
+          where: { userId },
+        });
+
+      if (existingPreferencesCount > 0) {
+        console.log(
+          `User ${userId} already has notification preferences, skipping initialization`,
+        );
+        return;
+      }
+
+      const defaultPreferences = [
+        // Critical notifications - enabled by default
+        {
+          type: NotificationType.PAYMENT_RECEIVED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.PAYMENT_FAILED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.SECURITY_ALERT,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // Campaign notifications
+        {
+          type: NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_APPLICATION_REJECTED,
+          email: true,
+          sms: false,
+          push: false,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_WORK_APPROVED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_WORK_REJECTED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_WORK_SUBMITTED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_ENDING_SOON,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_ENDED,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_DETAILS_CHANGED,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_BUDGET_INCREASED,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.CAMPAIGN_DEADLINE_EXTENDED,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // Messaging notifications
+        {
+          type: NotificationType.NEW_MESSAGE,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.NEW_CONVERSATION,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // Meeting notifications
+        {
+          type: NotificationType.MEETING_SCHEDULED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.MEETING_REMINDER,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.MEETING_CANCELLED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.MEETING_RESCHEDULED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // Payment notifications
+        {
+          type: NotificationType.PAYMENT_SENT,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.PAYOUT_PROCESSED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.STRIPE_ACCOUNT_VERIFIED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.STRIPE_ACCOUNT_ISSUE,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.WALLET_BALANCE_LOW,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // Account notifications
+        {
+          type: NotificationType.ACCOUNT_VERIFIED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.ACCOUNT_VERIFICATION_REQUIRED,
+          email: true,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+        {
+          type: NotificationType.PROFILE_INCOMPLETE,
+          email: false,
+          sms: false,
+          push: true,
+          inApp: true,
+        },
+
+        // System notifications
+        {
+          type: NotificationType.FEATURE_ANNOUNCEMENT,
+          email: false,
+          sms: false,
+          push: false,
+          inApp: true,
+        },
+        {
+          type: NotificationType.SYSTEM_MAINTENANCE,
+          email: true,
+          sms: false,
+          push: false,
+          inApp: true,
+        },
+      ];
+
+      // Use upsert approach to handle potential conflicts
+      const preferences = defaultPreferences.map((pref) =>
+        this.userNotificationPreferenceRepository.create({
+          userId,
+          notificationType: pref.type,
+          emailEnabled: pref.email,
+          smsEnabled: pref.sms,
+          pushEnabled: pref.push,
+          inAppEnabled: pref.inApp,
+        }),
+      );
+
+      // Save preferences in batches to handle potential constraint violations
+      await this.userNotificationPreferenceRepository.save(preferences);
+      console.log(
+        `Successfully initialized ${preferences.length} notification preferences for user ${userId}`,
+      );
+    } catch (error) {
+      console.error('Error initializing notification preferences:', error);
+
+      // Try to create preferences one by one if batch insert fails
+      console.log('Attempting to create preferences individually...');
+      await this.createPreferencesIndividually(userId);
+    }
+  }
+
+  /**
+   * Fallback method to create notification preferences one by one
+   */
+  private async createPreferencesIndividually(userId: string): Promise<void> {
+    const allNotificationTypes = Object.values(NotificationType);
+    let createdCount = 0;
+
+    for (const notificationType of allNotificationTypes) {
+      try {
+        // Check if this specific preference already exists
+        const existing =
+          await this.userNotificationPreferenceRepository.findOne({
+            where: { userId, notificationType },
+          });
+
+        if (!existing) {
+          // Set default values based on notification type
+          const isImportant = [
+            NotificationType.PAYMENT_RECEIVED,
+            NotificationType.PAYMENT_FAILED,
+            NotificationType.SECURITY_ALERT,
+            NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
+            NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+            NotificationType.CAMPAIGN_WORK_APPROVED,
+            NotificationType.CAMPAIGN_WORK_SUBMITTED,
+            NotificationType.ACCOUNT_VERIFIED,
+            NotificationType.MEETING_SCHEDULED,
+            NotificationType.MEETING_REMINDER,
+          ].includes(notificationType);
+
+          const preference = this.userNotificationPreferenceRepository.create({
+            userId,
+            notificationType,
+            emailEnabled: isImportant,
+            smsEnabled: false, // SMS disabled by default
+            pushEnabled: true, // Push enabled for most notifications
+            inAppEnabled: true, // In-app always enabled
+          });
+
+          await this.userNotificationPreferenceRepository.save(preference);
+          createdCount++;
+        }
+      } catch (individualError) {
+        console.warn(
+          `Failed to create preference for ${notificationType}:`,
+          individualError,
+        );
+        // Continue with other preferences
+      }
+    }
+
+    console.log(
+      `Created ${createdCount} notification preferences individually for user ${userId}`,
+    );
+  }
+
+  /**
+   * Public method to manually ensure notification preferences exist for a user
+   * Useful for existing users or when preferences need to be reset
+   */
+  async ensureNotificationPreferences(firebaseUid: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.initializeNotificationPreferences(user.id);
+  }
+
+  /**
+   * Get user's notification preferences - creates them if they don't exist
+   */
+  async getUserNotificationPreferences(
+    firebaseUid: string,
+  ): Promise<UserNotificationPreferenceEntity[]> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if preferences exist
+    const preferences = await this.userNotificationPreferenceRepository.find({
+      where: { userId: user.id },
+      order: { notificationType: 'ASC' },
+    });
+
+    // If no preferences exist, create them
+    if (preferences.length === 0) {
+      console.log(
+        `No notification preferences found for user ${user.id}, creating defaults...`,
+      );
+      await this.initializeNotificationPreferences(user.id);
+
+      // Fetch the newly created preferences
+      return this.userNotificationPreferenceRepository.find({
+        where: { userId: user.id },
+        order: { notificationType: 'ASC' },
+      });
+    }
+
+    return preferences;
+  }
+
+  /**
+   * Send welcome notification to newly setup user
+   */
+  private async sendWelcomeNotification(
+    userId: string,
+    role: string,
+  ): Promise<void> {
+    try {
+      const isAdvertiser = role === 'ADVERTISER';
+      const title = `Welcome to CrowdProp!`;
+      const message = isAdvertiser
+        ? `Welcome to CrowdProp! Your advertiser account is now set up. You can start creating campaigns and connecting with promoters to grow your business.`
+        : `Welcome to CrowdProp! Your promoter account is now set up. You can start browsing campaigns and applying to promote products you love.`;
+
+      const notification = this.notificationRepository.create({
+        userId,
+        notificationType: NotificationType.ACCOUNT_VERIFIED,
+        title,
+        message,
+        metadata: {
+          accountType: role,
+          isWelcomeMessage: true,
+          setupCompletedAt: new Date().toISOString(),
+        },
+      });
+
+      await this.notificationRepository.save(notification);
+      console.log(
+        `Sent welcome notification to user ${userId} with role ${role}`,
+      );
+    } catch (error) {
+      console.error('Error sending welcome notification:', error);
+      // Don't throw error - this is not critical for user setup
+    }
+  }
+
+  // ============================================================================
+  // NOTIFICATION PREFERENCE MANAGEMENT METHODS
+  // ============================================================================
+
+  /**
+   * Get notification preferences by user ID
+   */
+  async getNotificationPreferences(
+    userId: string,
+  ): Promise<UserNotificationPreferenceEntity[]> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if preferences exist
+    const preferences = await this.userNotificationPreferenceRepository.find({
+      where: { userId },
+      order: { notificationType: 'ASC' },
+    });
+
+    // If no preferences exist, create them
+    if (preferences.length === 0) {
+      await this.initializeNotificationPreferences(userId);
+      return this.userNotificationPreferenceRepository.find({
+        where: { userId },
+        order: { notificationType: 'ASC' },
+      });
+    }
+
+    return preferences;
+  }
+
+  /**
+   * Update a specific notification preference
+   */
+  async updateNotificationPreference(
+    userId: string,
+    notificationType: NotificationType,
+    updates: {
+      emailEnabled?: boolean;
+      smsEnabled?: boolean;
+      pushEnabled?: boolean;
+      inAppEnabled?: boolean;
+    },
+  ): Promise<UserNotificationPreferenceEntity> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Find existing preference or create new one
+    let preference = await this.userNotificationPreferenceRepository.findOne({
+      where: { userId, notificationType },
+    });
+
+    if (!preference) {
+      // Create new preference with default values
+      preference = this.userNotificationPreferenceRepository.create({
+        userId,
+        notificationType,
+        emailEnabled: updates.emailEnabled ?? true,
+        smsEnabled: updates.smsEnabled ?? false,
+        pushEnabled: updates.pushEnabled ?? true,
+        inAppEnabled: updates.inAppEnabled ?? true,
+      });
+    } else {
+      // Update existing preference
+      if (updates.emailEnabled !== undefined) {
+        preference.emailEnabled = updates.emailEnabled;
+      }
+      if (updates.smsEnabled !== undefined) {
+        preference.smsEnabled = updates.smsEnabled;
+      }
+      if (updates.pushEnabled !== undefined) {
+        preference.pushEnabled = updates.pushEnabled;
+      }
+      if (updates.inAppEnabled !== undefined) {
+        preference.inAppEnabled = updates.inAppEnabled;
+      }
+    }
+
+    return this.userNotificationPreferenceRepository.save(preference);
+  }
+
+  /**
+   * Update multiple notification preferences at once
+   */
+  async updateMultipleNotificationPreferences(
+    userId: string,
+    preferences: Array<{
+      notificationType: NotificationType;
+      emailEnabled?: boolean;
+      smsEnabled?: boolean;
+      pushEnabled?: boolean;
+      inAppEnabled?: boolean;
+    }>,
+  ): Promise<UserNotificationPreferenceEntity[]> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updatedPreferences: UserNotificationPreferenceEntity[] = [];
+
+    for (const prefUpdate of preferences) {
+      const updated = await this.updateNotificationPreference(
+        userId,
+        prefUpdate.notificationType,
+        {
+          emailEnabled: prefUpdate.emailEnabled,
+          smsEnabled: prefUpdate.smsEnabled,
+          pushEnabled: prefUpdate.pushEnabled,
+          inAppEnabled: prefUpdate.inAppEnabled,
+        },
+      );
+      updatedPreferences.push(updated);
+    }
+
+    return updatedPreferences;
+  }
+
+  /**
+   * Reset notification preferences to default values
+   */
+  async resetNotificationPreferences(
+    userId: string,
+  ): Promise<UserNotificationPreferenceEntity[]> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Delete existing preferences
+    await this.userNotificationPreferenceRepository.delete({ userId });
+
+    // Recreate with default values
+    await this.initializeNotificationPreferences(userId);
+
+    // Return the new preferences
+    return this.userNotificationPreferenceRepository.find({
+      where: { userId },
+      order: { notificationType: 'ASC' },
+    });
+  }
+
+  /**
+   * Get user's general notification settings
+   */
+  async getNotificationSettings(userId: string): Promise<{
+    emailNotificationsEnabled: boolean;
+    pushToken?: string;
+    timezone: string;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
+  }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: [
+        'emailNotificationsEnabled',
+        'pushToken',
+        'timezone',
+        'notificationQuietHoursStart',
+        'notificationQuietHoursEnd',
+      ],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      emailNotificationsEnabled: user.emailNotificationsEnabled,
+      pushToken: user.pushToken,
+      timezone: user.timezone,
+      quietHoursStart: user.notificationQuietHoursStart,
+      quietHoursEnd: user.notificationQuietHoursEnd,
+    };
+  }
+
+  /**
+   * Update user's general notification settings
+   */
+  async updateNotificationSettings(
+    userId: string,
+    updates: {
+      emailNotificationsEnabled?: boolean;
+      pushToken?: string;
+      timezone?: string;
+      quietHoursStart?: string;
+      quietHoursEnd?: string;
+    },
+  ): Promise<{
+    emailNotificationsEnabled: boolean;
+    pushToken?: string;
+    timezone: string;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
+  }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Update the user entity
+    if (updates.emailNotificationsEnabled !== undefined) {
+      user.emailNotificationsEnabled = updates.emailNotificationsEnabled;
+    }
+    if (updates.pushToken !== undefined) {
+      user.pushToken = updates.pushToken;
+    }
+    if (updates.timezone !== undefined) {
+      user.timezone = updates.timezone;
+    }
+    if (updates.quietHoursStart !== undefined) {
+      user.notificationQuietHoursStart = updates.quietHoursStart;
+    }
+    if (updates.quietHoursEnd !== undefined) {
+      user.notificationQuietHoursEnd = updates.quietHoursEnd;
+    }
+
+    await this.userRepository.save(user);
+
+    return {
+      emailNotificationsEnabled: user.emailNotificationsEnabled,
+      pushToken: user.pushToken,
+      timezone: user.timezone,
+      quietHoursStart: user.notificationQuietHoursStart,
+      quietHoursEnd: user.notificationQuietHoursEnd,
+    };
   }
 }

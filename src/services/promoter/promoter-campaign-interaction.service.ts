@@ -14,6 +14,13 @@ import {
 import { CampaignWorkEntity } from '../../database/entities/campaign-work.entity';
 import { CampaignWorkCommentEntity } from '../../database/entities/campaign-work-comment.entity';
 import { CampaignDeliverableEntity } from '../../database/entities/campaign-deliverable.entity';
+import { UserNotificationPreferenceEntity } from '../../database/entities/user-notification-preference.entity';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationType } from '../../enums/notification-type';
+import { NotificationDeliveryMethod } from '../../enums/notification-delivery-method';
 import {
   SendApplicationRequest,
   SendApplicationResponse,
@@ -48,6 +55,9 @@ export class PromoterCampaignInteractionService {
     private commentRepository: Repository<CampaignWorkCommentEntity>,
     @InjectRepository(CampaignDeliverableEntity)
     private deliverableRepository: Repository<CampaignDeliverableEntity>,
+    @InjectRepository(UserNotificationPreferenceEntity)
+    private userNotificationPreferenceRepository: Repository<UserNotificationPreferenceEntity>,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   /**
@@ -256,6 +266,16 @@ export class PromoterCampaignInteractionService {
         advertiser.id,
         advertiser.name || advertiser.email,
       );
+
+      // Send notification to promoter about the comment
+      await this.sendWorkCommentNotification(
+        campaignId,
+        deliverableId,
+        workId,
+        commentMessage,
+        advertiser,
+      );
+
       const allWorks = await this.getAllWorkForDeliverable(deliverableId);
 
       return RESPONSE_BUILDERS.buildSuccessResponse(
@@ -288,6 +308,13 @@ export class PromoterCampaignInteractionService {
 
       const updatedDeliverable =
         await this.markDeliverableFinished(deliverable);
+
+      // Send notification to promoter about deliverable completion
+      await this.sendDeliverableFinishedNotification(
+        campaignId,
+        deliverableId,
+        advertiser,
+      );
 
       return RESPONSE_BUILDERS.buildSuccessResponse(
         INTERACTION_SUCCESS_MESSAGES.DELIVERABLE_FINISHED,
@@ -554,5 +581,211 @@ export class PromoterCampaignInteractionService {
   ): Promise<CampaignDeliverableEntity> {
     deliverable.isFinished = true;
     return await this.deliverableRepository.save(deliverable);
+  }
+
+  // ============================================================================
+  // NOTIFICATION HELPER METHODS
+  // ============================================================================
+
+  /**
+   * Send notification when advertiser comments on promoter's work
+   */
+  private async sendWorkCommentNotification(
+    campaignId: string,
+    deliverableId: string,
+    workId: string,
+    commentMessage: string,
+    advertiser: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get the work entity to find the promoter
+      const work = await this.workRepository.findOne({
+        where: { id: workId },
+        relations: ['deliverable', 'deliverable.campaign'],
+      });
+
+      if (!work || !work.deliverable || !work.deliverable.campaign) {
+        console.error(
+          'Work, deliverable, or campaign not found for notification',
+        );
+        return;
+      }
+
+      // Get the promoter campaign to find the promoter
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: { campaignId: campaignId },
+        relations: ['promoter'],
+      });
+
+      if (!promoterCampaign || !promoterCampaign.promoter) {
+        console.error(
+          'Promoter campaign or promoter not found for notification',
+        );
+        return;
+      }
+
+      const campaign = work.deliverable.campaign;
+      const promoter = promoterCampaign.promoter;
+
+      // Get delivery methods
+      const deliveryMethods = await this.getNotificationMethods(
+        promoter.id,
+        NotificationType.NEW_MESSAGE,
+      );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: promoter.id,
+        notificationType: NotificationType.NEW_MESSAGE,
+        title: '💬 New Comment on Your Work',
+        message: `${advertiser.name || 'The advertiser'} left a comment on your work for "${campaign.title}": "${commentMessage.length > 100 ? commentMessage.substring(0, 100) + '...' : commentMessage}"`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          deliverableId: deliverableId,
+          workId: workId,
+          commentMessage: commentMessage,
+          advertiserName: advertiser.name || advertiser.email,
+          advertiserId: advertiser.id,
+          commentedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send work comment notification:', error);
+    }
+  }
+
+  /**
+   * Send notification when deliverable is marked as finished
+   */
+  private async sendDeliverableFinishedNotification(
+    campaignId: string,
+    deliverableId: string,
+    advertiser: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get the deliverable entity with campaign information
+      const deliverable = await this.deliverableRepository.findOne({
+        where: { id: deliverableId },
+        relations: ['campaign'],
+      });
+
+      if (!deliverable || !deliverable.campaign) {
+        console.error('Deliverable or campaign not found for notification');
+        return;
+      }
+
+      // Get the promoter campaign to find the promoter
+      const promoterCampaign = await this.promoterCampaignRepository.findOne({
+        where: { campaignId: campaignId },
+        relations: ['promoter'],
+      });
+
+      if (!promoterCampaign || !promoterCampaign.promoter) {
+        console.error(
+          'Promoter campaign or promoter not found for notification',
+        );
+        return;
+      }
+
+      const campaign = deliverable.campaign;
+      const promoter = promoterCampaign.promoter;
+
+      // Get delivery methods
+      const deliveryMethods = await this.getNotificationMethods(
+        promoter.id,
+        NotificationType.CAMPAIGN_WORK_APPROVED,
+      );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: promoter.id,
+        notificationType: NotificationType.CAMPAIGN_WORK_APPROVED,
+        title: '✅ Deliverable Completed!',
+        message: `Great job! Your deliverable "${deliverable.deliverable}" for campaign "${campaign.title}" has been marked as finished by ${advertiser.name || 'the advertiser'}. This means your work has been approved and completed successfully.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          deliverableId: deliverable.id,
+          deliverableType: deliverable.deliverable,
+          advertiserName: advertiser.name || advertiser.email,
+          advertiserId: advertiser.id,
+          finishedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send deliverable finished notification:', error);
+    }
+  }
+
+  /**
+   * Get user's preferred notification delivery methods for a specific notification type
+   */
+  private async getNotificationMethods(
+    userId: string,
+    notificationType: NotificationType,
+  ): Promise<NotificationDeliveryMethod[]> {
+    try {
+      // Get user's notification preferences
+      const preference =
+        await this.userNotificationPreferenceRepository.findOne({
+          where: { userId, notificationType },
+        });
+
+      const methods: NotificationDeliveryMethod[] = [];
+
+      if (preference) {
+        // Use user's specific preferences
+        if (preference.emailEnabled) {
+          methods.push(NotificationDeliveryMethod.EMAIL);
+        }
+        if (preference.smsEnabled) {
+          methods.push(NotificationDeliveryMethod.SMS);
+        }
+        if (preference.pushEnabled) {
+          methods.push(NotificationDeliveryMethod.PUSH);
+        }
+        if (preference.inAppEnabled) {
+          methods.push(NotificationDeliveryMethod.IN_APP);
+        }
+      } else {
+        // No specific preference found, use defaults for this notification type
+        const isImportant = [
+          NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+          NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
+          NotificationType.CAMPAIGN_APPLICATION_REJECTED,
+          NotificationType.PAYMENT_RECEIVED,
+          NotificationType.PAYOUT_PROCESSED,
+          NotificationType.SECURITY_ALERT,
+        ].includes(notificationType);
+
+        // Default delivery methods
+        methods.push(NotificationDeliveryMethod.EMAIL); // Always include email
+        methods.push(NotificationDeliveryMethod.PUSH); // Always include push
+        methods.push(NotificationDeliveryMethod.IN_APP); // Always include in-app
+
+        // Only include SMS for important notifications
+        if (isImportant) {
+          methods.push(NotificationDeliveryMethod.SMS);
+        }
+      }
+
+      return methods.length > 0 ? methods : [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
+    } catch (error) {
+      console.error('Failed to get notification methods:', error);
+      return [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
+    }
   }
 }

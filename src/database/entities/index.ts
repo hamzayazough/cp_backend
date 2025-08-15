@@ -33,3 +33,9 @@ export { StripePaymentIntent } from './stripe-payment-intent.entity';
 export { StripeTransfer } from './stripe-transfer.entity';
 export { CampaignPaymentConfig } from './campaign-payment-config.entity';
 export { StripeWebhookEvent } from './stripe-webhook-event.entity';
+
+// Notification entities
+export { NotificationEntity } from './notification.entity';
+export { UserNotificationPreferenceEntity } from './user-notification-preference.entity';
+export { NotificationTemplateEntity } from './notification-template.entity';
+export { NotificationSettingEntity } from './notification-setting.entity';

@@ -16,6 +16,8 @@ import {
   FollowerEstimateEntity,
   PromoterWorkEntity,
   UniqueViewEntity,
+  NotificationEntity,
+  UserNotificationPreferenceEntity,
 } from '../database/entities';
 
 @Module({
@@ -31,6 +33,8 @@ import {
       FollowerEstimateEntity,
       PromoterWorkEntity,
       UniqueViewEntity,
+      NotificationEntity,
+      UserNotificationPreferenceEntity,
     ]),
   ],
   controllers: [AuthController, UserController],

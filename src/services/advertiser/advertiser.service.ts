@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from 'src/database/entities';
+import { CampaignEntity } from 'src/database/entities/campaign.entity';
 import { PromoterCampaign } from '../../database/entities/promoter-campaign.entity';
 import {
   CampaignApplicationEntity,
@@ -24,6 +25,13 @@ import { AdvertiserTransactionService } from './advertiser-transaction.service';
 import { AdvertiserMessageService } from './advertiser-message.service';
 import { ReviewCampaignApplicationResult } from '../../interfaces/review-campaign-application-result';
 import { S3Service } from '../s3.service';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { UserNotificationPreferenceEntity } from '../../database/entities/user-notification-preference.entity';
+import { NotificationType } from '../../enums/notification-type';
+import { NotificationDeliveryMethod } from '../../enums/notification-delivery-method';
 import { CAMPAIGN_MANAGEMENT_BUILDERS } from './advertiser-campaign-helper.constants';
 import {
   ADVERTISER_RELATIONS,
@@ -41,12 +49,15 @@ export class AdvertiserService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(PromoterCampaign)
     private promoterCampaignRepository: Repository<PromoterCampaign>,
+    @InjectRepository(UserNotificationPreferenceEntity)
+    private userNotificationPreferenceRepository: Repository<UserNotificationPreferenceEntity>,
     private campaignService: AdvertiserCampaignService,
     private walletService: AdvertiserWalletService,
     private statsService: AdvertiserStatsService,
     private transactionService: AdvertiserTransactionService,
     private messageService: AdvertiserMessageService,
     private readonly s3Service: S3Service,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   async getDashboardData(
@@ -148,6 +159,13 @@ export class AdvertiserService {
       );
     }
 
+    // Send notifications about the application review
+    await this.sendApplicationReviewNotification(
+      validatedCampaign,
+      validatedApplication,
+      status,
+    );
+
     return CAMPAIGN_MANAGEMENT_BUILDERS.buildApplicationReviewResult(
       validatedApplication.id,
       status,
@@ -199,6 +217,12 @@ export class AdvertiserService {
       await this.userRepository.manager.transaction(async (manager) => {
         await manager.delete('campaigns', campaignId);
       });
+
+      // Send notification to advertiser about campaign deletion
+      await this.sendCampaignDeletedNotification(
+        validatedCampaign,
+        validatedAdvertiser,
+      );
 
       return ADVERTISER_SERVICE_BUILDERS.buildCampaignDeletionResponse(
         true,
@@ -295,6 +319,177 @@ export class AdvertiserService {
     } catch (err) {
       // Log error but continue with campaign deletion
       console.error(ADVERTISER_SERVICE_MESSAGES.S3_DELETION_ERROR, err);
+    }
+  }
+
+  // ============================================================================
+  // NOTIFICATION HELPER METHODS
+  // ============================================================================
+
+  /**
+   * Send notification when a campaign is deleted
+   */
+  private async sendCampaignDeletedNotification(
+    campaign: CampaignEntity,
+    advertiser: UserEntity,
+  ): Promise<void> {
+    try {
+      // Get delivery methods first
+      const deliveryMethods = await this.getNotificationMethods(
+        advertiser.id,
+        NotificationType.CAMPAIGN_ENDED,
+      );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: advertiser.id,
+        notificationType: NotificationType.CAMPAIGN_ENDED,
+        title: 'Campaign Deleted',
+        message: `Your campaign "${campaign.title}" has been successfully deleted. All associated data has been removed from the system.`,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          campaignType: campaign.type,
+          deletedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send campaign deletion notification:', error);
+    }
+  }
+
+  /**
+   * Send notification when a campaign application is reviewed
+   */
+  private async sendApplicationReviewNotification(
+    campaign: CampaignEntity,
+    application: CampaignApplicationEntity,
+    status: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED,
+  ): Promise<void> {
+    try {
+      // Get the promoter who applied
+      const promoter = await this.userRepository.findOne({
+        where: { id: application.promoterId },
+      });
+
+      if (!promoter) {
+        console.error(
+          'Promoter not found for notification:',
+          application.promoterId,
+        );
+        return;
+      }
+
+      // Determine notification type and message based on status
+      const notificationType =
+        status === ApplicationStatus.ACCEPTED
+          ? NotificationType.CAMPAIGN_APPLICATION_ACCEPTED
+          : NotificationType.CAMPAIGN_APPLICATION_REJECTED;
+
+      const title =
+        status === ApplicationStatus.ACCEPTED
+          ? '🎉 Application Accepted!'
+          : '📋 Application Update';
+
+      const message =
+        status === ApplicationStatus.ACCEPTED
+          ? `Congratulations! Your application for "${campaign.title}" has been accepted. You can now start working on this campaign.`
+          : `Your application for "${campaign.title}" was not selected this time. Don't worry, there are many other opportunities available!`;
+
+      // Get delivery methods
+      const deliveryMethods = await this.getNotificationMethods(
+        promoter.id,
+        notificationType,
+      );
+
+      const notificationData: NotificationDeliveryData = {
+        userId: promoter.id,
+        notificationType,
+        title,
+        message,
+        deliveryMethods,
+        metadata: {
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          campaignType: campaign.type,
+          applicationId: application.id,
+          applicationStatus: status,
+          reviewedAt: new Date().toISOString(),
+        },
+        campaignId: campaign.id,
+      };
+
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      // Log error but don't fail the main operation
+      console.error('Failed to send application review notification:', error);
+    }
+  }
+
+  /**
+   * Get user's preferred notification delivery methods for a specific notification type
+   */
+  private async getNotificationMethods(
+    userId: string,
+    notificationType: NotificationType,
+  ): Promise<NotificationDeliveryMethod[]> {
+    try {
+      // Get user's notification preferences
+      const preference =
+        await this.userNotificationPreferenceRepository.findOne({
+          where: { userId, notificationType },
+        });
+
+      const methods: NotificationDeliveryMethod[] = [];
+
+      if (preference) {
+        // Use user's specific preferences
+        if (preference.emailEnabled) {
+          methods.push(NotificationDeliveryMethod.EMAIL);
+        }
+        if (preference.smsEnabled) {
+          methods.push(NotificationDeliveryMethod.SMS);
+        }
+        if (preference.pushEnabled) {
+          methods.push(NotificationDeliveryMethod.PUSH);
+        }
+        if (preference.inAppEnabled) {
+          methods.push(NotificationDeliveryMethod.IN_APP);
+        }
+      } else {
+        // No specific preference found, use defaults for this notification type
+        const isImportant = [
+          NotificationType.CAMPAIGN_APPLICATION_RECEIVED,
+          NotificationType.CAMPAIGN_APPLICATION_ACCEPTED,
+          NotificationType.CAMPAIGN_APPLICATION_REJECTED,
+          NotificationType.PAYMENT_RECEIVED,
+          NotificationType.PAYOUT_PROCESSED,
+          NotificationType.SECURITY_ALERT,
+        ].includes(notificationType);
+
+        // Default delivery methods
+        methods.push(NotificationDeliveryMethod.EMAIL); // Always include email
+        methods.push(NotificationDeliveryMethod.PUSH); // Always include push
+        methods.push(NotificationDeliveryMethod.IN_APP); // Always include in-app
+
+        // Only include SMS for important notifications
+        if (isImportant) {
+          methods.push(NotificationDeliveryMethod.SMS);
+        }
+      }
+
+      return methods.length > 0 ? methods : [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
+    } catch (error) {
+      console.error('Failed to get notification methods:', error);
+      return [NotificationDeliveryMethod.IN_APP]; // Fallback to in-app only
     }
   }
 }

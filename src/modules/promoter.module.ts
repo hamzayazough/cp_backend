@@ -18,7 +18,12 @@ import { CampaignWorkCommentEntity } from '../database/entities/campaign-work-co
 import { CampaignDeliverableEntity } from '../database/entities/campaign-deliverable.entity';
 import { CampaignMedia } from '../database/entities/campaign-media.entity';
 import { UniqueViewEntity } from '../database/entities/unique-view.entity';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
+import { NotificationEntity } from '../database/entities/notification.entity';
 import { DiscordService } from '../services/discord.service';
+import { NotificationDeliveryService } from '../services/notification-delivery.service';
+import { EmailService } from '../services/email/email.service';
+import { PhoneService } from '../services/phone/phone.service';
 
 @Module({
   imports: [
@@ -36,6 +41,8 @@ import { DiscordService } from '../services/discord.service';
       CampaignWorkCommentEntity,
       CampaignDeliverableEntity,
       UniqueViewEntity,
+      UserNotificationPreferenceEntity,
+      NotificationEntity,
     ]),
   ],
   controllers: [PromoterController],
@@ -46,6 +53,9 @@ import { DiscordService } from '../services/discord.service';
     PromoterMyCampaignService,
     PromoterCampaignInteractionService,
     DiscordService,
+    NotificationDeliveryService,
+    EmailService,
+    PhoneService,
   ],
   exports: [PromoterService],
 })

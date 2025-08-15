@@ -17,6 +17,8 @@ import { CampaignApplicationEntity } from './campaign-applications.entity';
 import { Wallet } from './wallet.entity';
 import { CampaignEntity } from './campaign.entity';
 import { StripeConnectAccount } from './stripe-connect-account.entity';
+import { NotificationEntity } from './notification.entity';
+import { UserNotificationPreferenceEntity } from './user-notification-preference.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -31,6 +33,9 @@ export class UserEntity {
 
   @Column({ name: 'phone_number', nullable: true })
   phoneNumber?: string;
+
+  @Column({ name: 'phone_verified', default: false })
+  phoneVerified: boolean;
 
   @Column({ name: 'is_setup_done', default: false })
   isSetupDone: boolean;
@@ -134,6 +139,35 @@ export class UserEntity {
   @Column({ name: 'country', type: 'varchar', length: 100, default: 'CA' })
   country: string;
 
+  // Notification preferences
+  @Column({ name: 'email_notifications_enabled', default: true })
+  emailNotificationsEnabled: boolean;
+
+  @Column({ name: 'push_token', type: 'text', nullable: true })
+  pushToken?: string;
+
+  @Column({
+    name: 'timezone',
+    type: 'varchar',
+    length: 50,
+    default: 'America/Toronto',
+  })
+  timezone: string;
+
+  @Column({
+    name: 'notification_quiet_hours_start',
+    type: 'time',
+    nullable: true,
+  })
+  notificationQuietHoursStart?: string;
+
+  @Column({
+    name: 'notification_quiet_hours_end',
+    type: 'time',
+    nullable: true,
+  })
+  notificationQuietHoursEnd?: string;
+
   // Relations
   @OneToOne(() => AdvertiserDetailsEntity, (advertiser) => advertiser.user, {
     cascade: true,
@@ -171,4 +205,14 @@ export class UserEntity {
 
   @OneToOne(() => StripeConnectAccount, (stripeAccount) => stripeAccount.user)
   stripeConnectAccount?: StripeConnectAccount;
+
+  // Notification relations
+  @OneToMany(() => NotificationEntity, (notification) => notification.user)
+  notifications?: NotificationEntity[];
+
+  @OneToMany(
+    () => UserNotificationPreferenceEntity,
+    (preference) => preference.user,
+  )
+  notificationPreferences?: UserNotificationPreferenceEntity[];
 }
