@@ -16,6 +16,11 @@ import { CampaignExpirationService } from '../services/campaign/campaign-expirat
 import { CampaignManagementController } from '../controllers/campaign-management.controller';
 import { PaymentModule } from './payment.module';
 import { AdvertiserModule } from './advertiser.module';
+import { NotificationDeliveryService } from '../services/notification-delivery.service';
+import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationEntity } from '../database/entities/notification.entity';
+import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
+import { PhoneService } from '../services/phone/phone.service';
 
 @Module({
   imports: [
@@ -31,20 +36,28 @@ import { AdvertiserModule } from './advertiser.module';
       UniqueViewEntity,
       Wallet,
       Transaction,
+      NotificationEntity,
+      UserNotificationPreferenceEntity,
     ]),
   ],
   controllers: [CampaignManagementController],
   providers: [
     EmailService,
+    PhoneService,
     CampaignNotificationService,
     CampaignCompletionService,
     CampaignExpirationService,
+    NotificationDeliveryService,
+    NotificationHelperService,
   ],
   exports: [
     EmailService,
+    PhoneService,
     CampaignNotificationService,
     CampaignCompletionService,
     CampaignExpirationService,
+    NotificationDeliveryService,
+    NotificationHelperService,
   ],
 })
 export class CampaignManagementModule {}

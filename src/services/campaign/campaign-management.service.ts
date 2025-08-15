@@ -32,6 +32,12 @@ import {
   CAMPAIGN_MANAGEMENT_ERROR_MESSAGES,
   CAMPAIGN_COMPLETION_STATUS,
 } from './campaign-management-helper.constants';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationType } from '../../enums/notification-type';
 
 /**
  * Service responsible for completing campaigns and updating related entities
@@ -55,6 +61,8 @@ export class CampaignCompletionService {
     private readonly transactionRepository: Repository<Transaction>,
     private readonly dataSource: DataSource,
     private readonly promoterPaymentService: PromoterPaymentService,
+    private readonly notificationHelperService: NotificationHelperService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   /**
@@ -121,6 +129,17 @@ export class CampaignCompletionService {
       // 5. Process budget reconciliation for CONSULTANT and SELLER campaigns
       // This is done after transaction commit to avoid payment failures affecting campaign completion
       await this.processBudgetReconciliation(campaign, promoterCampaigns);
+
+      // 6. Send notifications to all campaign participants about completion
+      try {
+        await this.notifyCampaignParticipants(campaign, promoterCampaigns);
+      } catch (notificationError) {
+        this.logger.error(
+          `Failed to send campaign completion notifications for campaign ${campaignId}:`,
+          notificationError,
+        );
+        // Don't throw error - campaign completion was successful, notifications are a bonus feature
+      }
 
       const result: CampaignCompletionResult = {
         campaignId,
@@ -681,5 +700,102 @@ export class CampaignCompletionService {
       .andWhere('campaign.deadline IS NOT NULL')
       .andWhere('campaign.deadline <= :today', { today })
       .getMany();
+  }
+
+  /**
+   * Notify all campaign participants about campaign completion and request reviews
+   */
+  private async notifyCampaignParticipants(
+    campaign: CampaignEntity,
+    promoterCampaigns: PromoterCampaign[],
+  ): Promise<void> {
+    this.logger.log(
+      `Notifying participants for completed campaign: ${campaign.id}`,
+    );
+
+    // Collect all participant IDs
+    const participants: Array<{ id: string; isAdvertiser: boolean }> = [];
+
+    // Add advertiser
+    participants.push({
+      id: campaign.advertiserId,
+      isAdvertiser: true,
+    });
+
+    // Add all promoters who participated in the campaign
+    promoterCampaigns.forEach((promoterCampaign) => {
+      participants.push({
+        id: promoterCampaign.promoterId,
+        isAdvertiser: false,
+      });
+    });
+
+    this.logger.log(
+      `Found ${participants.length} participants to notify for campaign: ${campaign.id}`,
+    );
+
+    // Send notifications to all participants
+    for (const participant of participants) {
+      try {
+        // Get notification delivery methods for this participant
+        const deliveryMethods =
+          await this.notificationHelperService.getNotificationMethods(
+            participant.id,
+            NotificationType.CAMPAIGN_ENDED,
+          );
+
+        if (deliveryMethods.length === 0) {
+          this.logger.log(
+            `User ${participant.id} has disabled campaign ended notifications`,
+          );
+          continue; // User has disabled notifications for campaign endings
+        }
+
+        // Prepare notification data
+        const notificationData: NotificationDeliveryData = {
+          userId: participant.id,
+          notificationType: NotificationType.CAMPAIGN_ENDED,
+          title: '🎉 Campaign Completed!',
+          message: participant.isAdvertiser
+            ? `Your campaign "${campaign.title}" has been completed! Please review your promoters' work and leave feedback.`
+            : `The campaign "${campaign.title}" you participated in has been completed! Please leave a review about your experience.`,
+          deliveryMethods,
+          metadata: {
+            campaignId: campaign.id,
+            campaignTitle: campaign.title,
+            campaignType: campaign.type,
+            completedAt: new Date().toISOString(),
+            participantRole: participant.isAdvertiser
+              ? 'advertiser'
+              : 'promoter',
+            totalPromoters: promoterCampaigns.length,
+            requestAction: 'leave_review',
+            reviewUrl: participant.isAdvertiser
+              ? `/advertiser/campaigns/${campaign.id}/reviews`
+              : `/promoter/campaigns/${campaign.id}/review`,
+          },
+          campaignId: campaign.id,
+        };
+
+        // Send notification
+        await this.notificationDeliveryService.deliverNotification(
+          notificationData,
+        );
+
+        this.logger.log(
+          `Campaign completion notification sent to ${participant.isAdvertiser ? 'advertiser' : 'promoter'}: ${participant.id}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send notification to participant ${participant.id}:`,
+          error,
+        );
+        // Continue with other participants even if one fails
+      }
+    }
+
+    this.logger.log(
+      `Completed sending campaign completion notifications for campaign: ${campaign.id}`,
+    );
   }
 }
