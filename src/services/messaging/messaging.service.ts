@@ -19,6 +19,12 @@ import {
   MarkMessageAsReadRequest,
   MarkThreadAsReadRequest,
 } from '../../interfaces/messaging';
+import {
+  NotificationDeliveryService,
+  NotificationDeliveryData,
+} from '../notification-delivery.service';
+import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationType } from '../../enums/notification-type';
 
 @Injectable()
 export class MessagingService {
@@ -31,6 +37,8 @@ export class MessagingService {
     private userRepository: Repository<UserEntity>,
     @InjectRepository(CampaignEntity)
     private campaignRepository: Repository<CampaignEntity>,
+    private readonly notificationHelperService: NotificationHelperService,
+    private readonly notificationDeliveryService: NotificationDeliveryService,
   ) {}
 
   async getUserIdByFirebaseUid(firebaseUid: string): Promise<string> {
@@ -124,6 +132,20 @@ export class MessagingService {
     });
 
     const savedThread = await this.messageThreadRepository.save(thread);
+
+    // Notify the other participant about the new conversation thread
+    try {
+      const recipientId = user.id === promoterId ? advertiserId : promoterId;
+      await this.sendNewConversationNotification(
+        savedThread,
+        user,
+        recipientId,
+        campaign,
+      );
+    } catch (error) {
+      console.error('Failed to send new conversation notification:', error);
+      // Don't throw error - thread creation was successful, notification is a bonus feature
+    }
 
     return this.mapThreadToResponse(savedThread);
   }
@@ -474,6 +496,57 @@ export class MessagingService {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * Send notification to the other participant when a new conversation thread is created
+   */
+  private async sendNewConversationNotification(
+    thread: MessageThread,
+    creator: User,
+    recipientId: string,
+    campaign: CampaignEntity,
+  ): Promise<void> {
+    // Get notification delivery methods for the recipient
+    const deliveryMethods =
+      await this.notificationHelperService.getNotificationMethods(
+        recipientId,
+        NotificationType.NEW_CONVERSATION,
+      );
+
+    if (deliveryMethods.length === 0) {
+      return; // User has disabled notifications for new conversations
+    }
+
+    // Prepare notification data
+    const notificationData: NotificationDeliveryData = {
+      userId: recipientId,
+      notificationType: NotificationType.NEW_CONVERSATION,
+      title: '💬 New Conversation Started!',
+      message: `${creator.name || creator.email} started a new conversation about "${campaign.title}"`,
+      deliveryMethods,
+      metadata: {
+        threadId: thread.id,
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        creatorName: creator.name || creator.email || 'Someone',
+        creatorRole: creator.role,
+        subject: thread.subject,
+        createdAt: thread.createdAt,
+      },
+      campaignId: campaign.id,
+      conversationId: thread.id,
+    };
+
+    // Send notifications
+    try {
+      await this.notificationDeliveryService.deliverNotification(
+        notificationData,
+      );
+    } catch (error) {
+      console.error('Failed to send new conversation notification:', error);
+      // Don't throw error - thread creation was successful, notification is a bonus feature
     }
   }
 }
