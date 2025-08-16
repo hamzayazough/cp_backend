@@ -16,6 +16,8 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { IsOptional, IsInt, Min, Max, IsEnum } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AdvertiserService } from '../services/advertiser/advertiser.service';
 import { AdvertiserPaymentService } from 'src/services/advertiser/advertiser-payment-facade.service';
 import { PromoterService } from 'src/services/promoter/promoter.service';
@@ -61,8 +63,21 @@ export class UpdateBudgetDto {
 }
 
 export class TransactionQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number = 10;
+
+  @IsOptional()
+  @IsEnum(TransactionType)
   type?: TransactionType;
 }
 
@@ -596,15 +611,6 @@ export class AdvertiserController {
     @Request() req: { user: FirebaseUser },
     @Query() query: TransactionQueryDto,
   ) {
-    // Validate pagination parameters
-    if (query.limit && (query.limit < 1 || query.limit > 100)) {
-      throw new BadRequestException('Limit must be between 1 and 100');
-    }
-
-    if (query.page && query.page < 1) {
-      throw new BadRequestException('Page must be greater than 0');
-    }
-
     const transactions = await this.advertiserPaymentService.getTransactions(
       req.user.uid,
       query,
