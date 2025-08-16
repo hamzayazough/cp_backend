@@ -16,6 +16,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, Not } from 'typeorm';
 import { NotificationEntity } from '../database/entities/notification.entity';
+import { UserEntity } from '../database/entities/user.entity';
 import { FirebaseUser } from '../interfaces/firebase-user.interface';
 import { NotificationType } from '../enums/notification-type';
 
@@ -30,7 +31,25 @@ export class NotificationController {
   constructor(
     @InjectRepository(NotificationEntity)
     private readonly notificationRepository: Repository<NotificationEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
   ) {}
+
+  /**
+   * Helper method to get database user ID from Firebase UID
+   */
+  private async getUserId(firebaseUid: string): Promise<string> {
+    const user = await this.userRepository.findOne({
+      where: { firebaseUid },
+      select: ['id'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user.id;
+  }
 
   /**
    * Get user's notifications with pagination and filtering
@@ -45,92 +64,101 @@ export class NotificationController {
     @Query('type') notificationType?: NotificationType,
     @Query('campaignId') campaignId?: string,
   ) {
-    const userId = req.user.uid;
-    const offset = (page - 1) * limit;
+    try {
+      const userId = await this.getUserId(req.user.uid);
+      const offset = (page - 1) * limit;
 
-    // Build query conditions
-    const whereConditions: Partial<NotificationEntity> = { userId };
+      // Build query conditions
+      const whereConditions: Partial<NotificationEntity> = { userId };
 
-    if (unread === 'true') {
-      whereConditions.readAt = undefined;
-    }
+      if (unread === 'true') {
+        whereConditions.readAt = undefined;
+      }
 
-    if (notificationType) {
-      whereConditions.notificationType = notificationType;
-    }
+      if (notificationType) {
+        whereConditions.notificationType = notificationType;
+      }
 
-    if (campaignId) {
-      whereConditions.campaignId = campaignId;
-    }
+      if (campaignId) {
+        whereConditions.campaignId = campaignId;
+      }
 
-    // Get notifications with pagination
-    const queryBuilder = this.notificationRepository
-      .createQueryBuilder('notification')
-      .leftJoinAndSelect('notification.campaign', 'campaign')
-      .where('notification.userId = :userId', { userId });
+      // Get notifications with pagination
+      const queryBuilder = this.notificationRepository
+        .createQueryBuilder('notification')
+        .leftJoinAndSelect('notification.campaign', 'campaign')
+        .where('notification.userId = :userId', { userId });
 
-    if (unread === 'true') {
-      queryBuilder.andWhere('notification.readAt IS NULL');
-    }
+      if (unread === 'true') {
+        queryBuilder.andWhere('notification.readAt IS NULL');
+      }
 
-    if (notificationType) {
-      queryBuilder.andWhere(
-        'notification.notificationType = :notificationType',
-        { notificationType },
+      if (notificationType) {
+        queryBuilder.andWhere(
+          'notification.notificationType = :notificationType',
+          { notificationType },
+        );
+      }
+
+      if (campaignId) {
+        queryBuilder.andWhere('notification.campaignId = :campaignId', {
+          campaignId,
+        });
+      }
+
+      const [notifications, total] = await queryBuilder
+        .orderBy('notification.createdAt', 'DESC')
+        .take(limit)
+        .skip(offset)
+        .getManyAndCount();
+
+      // Calculate pagination info
+      const totalPages = Math.ceil(total / limit);
+      const hasNext = page < totalPages;
+      const hasPrev = page > 1;
+
+      return {
+        notifications: notifications.map((notification) => ({
+          id: notification.id,
+          type: notification.notificationType,
+          title: notification.title,
+          message: notification.message,
+          isUnread: notification.isUnread,
+          createdAt: notification.createdAt,
+          readAt: notification.readAt,
+          clickedAt: notification.clickedAt,
+          dismissedAt: notification.dismissedAt,
+          campaignId: notification.campaignId,
+          campaignTitle: notification.campaign?.title,
+          metadata: notification.metadata,
+          // Don't expose sensitive delivery tracking info to frontend
+        })),
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems: total,
+          itemsPerPage: limit,
+          hasNext,
+          hasPrev,
+        },
+        summary: {
+          totalUnread: await this.notificationRepository.count({
+            where: {
+              userId,
+              readAt: IsNull(),
+            },
+          }),
+          totalAll: total,
+        },
+      };
+    } catch (error) {
+      console.error('Error getting notifications:', error);
+      this.logger.error(
+        `Failed to get notifications for user ${req.user?.uid}:`,
+        error,
       );
+      throw new InternalServerErrorException('Failed to get notifications');
     }
-
-    if (campaignId) {
-      queryBuilder.andWhere('notification.campaignId = :campaignId', {
-        campaignId,
-      });
-    }
-
-    const [notifications, total] = await queryBuilder
-      .orderBy('notification.createdAt', 'DESC')
-      .take(limit)
-      .skip(offset)
-      .getManyAndCount();
-
-    // Calculate pagination info
-    const totalPages = Math.ceil(total / limit);
-    const hasNext = page < totalPages;
-    const hasPrev = page > 1;
-
-    return {
-      notifications: notifications.map((notification) => ({
-        id: notification.id,
-        type: notification.notificationType,
-        title: notification.title,
-        message: notification.message,
-        isUnread: notification.isUnread,
-        createdAt: notification.createdAt,
-        readAt: notification.readAt,
-        clickedAt: notification.clickedAt,
-        dismissedAt: notification.dismissedAt,
-        campaignId: notification.campaignId,
-        campaignTitle: notification.campaign?.title,
-        metadata: notification.metadata,
-        // Don't expose sensitive delivery tracking info to frontend
-      })),
-      pagination: {
-        currentPage: page,
-        totalPages,
-        totalItems: total,
-        itemsPerPage: limit,
-        hasNext,
-        hasPrev,
-      },
-      summary: {
-        totalUnread: await this.notificationRepository.count({
-          where: {
-            userId,
-            readAt: IsNull(),
-          },
-        }),
-        totalAll: total,
-      },
-    };
   }
 
   /**
@@ -140,7 +168,8 @@ export class NotificationController {
   @Get('unread-count')
   async getUnreadCount(@Request() req: { user: FirebaseUser }) {
     try {
-      const userId = req.user.uid;
+      const userId = await this.getUserId(req.user.uid);
+
       const count = await this.notificationRepository.count({
         where: {
           userId,
@@ -149,7 +178,12 @@ export class NotificationController {
       });
 
       return { count };
-    } catch {
+    } catch (error) {
+      console.error('Error getting unread count:', error);
+      this.logger.error(
+        `Failed to get unread count for user ${req.user?.uid}:`,
+        error,
+      );
       throw new InternalServerErrorException('Failed to get unread count');
     }
   }
@@ -163,8 +197,9 @@ export class NotificationController {
     @Param('id', ParseUUIDPipe) id: string,
     @Request() req: { user: FirebaseUser },
   ) {
+    const userId = await this.getUserId(req.user.uid);
     const notification = await this.notificationRepository.findOne({
-      where: { id, userId: req.user.uid },
+      where: { id, userId },
       relations: ['campaign'],
     });
 
@@ -198,7 +233,7 @@ export class NotificationController {
     @Request() req: { user: FirebaseUser },
   ) {
     const notification = await this.notificationRepository.findOne({
-      where: { id, userId: req.user.uid },
+      where: { id, userId: await this.getUserId(req.user.uid) },
     });
 
     if (!notification) {
@@ -227,7 +262,7 @@ export class NotificationController {
     @Request() req: { user: FirebaseUser },
   ) {
     const notification = await this.notificationRepository.findOne({
-      where: { id, userId: req.user.uid },
+      where: { id, userId: await this.getUserId(req.user.uid) },
     });
 
     if (!notification) {
@@ -260,7 +295,7 @@ export class NotificationController {
     @Request() req: { user: FirebaseUser },
   ) {
     const notification = await this.notificationRepository.findOne({
-      where: { id, userId: req.user.uid },
+      where: { id, userId: await this.getUserId(req.user.uid) },
     });
 
     if (!notification) {
@@ -289,7 +324,7 @@ export class NotificationController {
    */
   @Patch('mark-all-read')
   async markAllAsRead(@Request() req: { user: FirebaseUser }) {
-    const userId = req.user.uid;
+    const userId = await this.getUserId(req.user.uid);
 
     const result = await this.notificationRepository.update(
       { userId, readAt: IsNull() },
@@ -317,7 +352,7 @@ export class NotificationController {
     @Request() req: { user: FirebaseUser },
   ) {
     const notification = await this.notificationRepository.findOne({
-      where: { id, userId: req.user.uid },
+      where: { id, userId: await this.getUserId(req.user.uid) },
     });
 
     if (!notification) {
@@ -340,7 +375,7 @@ export class NotificationController {
    */
   @Delete('dismissed')
   async deleteDismissedNotifications(@Request() req: { user: FirebaseUser }) {
-    const userId = req.user.uid;
+    const userId = await this.getUserId(req.user.uid);
 
     const result = await this.notificationRepository.delete({
       userId,

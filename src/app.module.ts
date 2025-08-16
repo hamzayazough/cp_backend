@@ -20,6 +20,8 @@ import { FirebaseAuthMiddleware } from './auth/firebase-auth.middleware';
 import { CampaignPayoutModule } from './modules/campaign-payout.module';
 import { CampaignManagementModule } from './modules/campaign-management.module';
 import { MessagingModule } from './modules/messaging.module';
+import { NotificationModule } from './modules/notification.module';
+import { NotificationController } from './controllers/notification.controller';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { MessagingModule } from './modules/messaging.module';
     CampaignPayoutModule,
     CampaignManagementModule,
     MessagingModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
@@ -61,6 +64,7 @@ export class AppModule implements NestModule {
         'advertiser/*',
         'campaign-management/*',
         'messaging/*',
+        NotificationController,
         'connect/create-account',
         'connect/onboard',
         'connect/onboard/*',
