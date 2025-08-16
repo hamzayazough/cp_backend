@@ -21,7 +21,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../notification-delivery.service';
-import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationHelperService } from '../notifications/notification-helper.service';
 
 /**
  * Main service that orchestrates campaign expiration checks and completion

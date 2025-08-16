@@ -29,7 +29,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../services/notification-delivery.service';
-import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationHelperService } from 'src/services/notifications/notification-helper.service';
 import { NotificationType } from '../enums/notification-type';
 
 @Controller('messaging')

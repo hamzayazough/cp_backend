@@ -13,7 +13,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../notification-delivery.service';
-import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationHelperService } from '../notifications/notification-helper.service';
 
 /**
  * Automated campaign-based payout processing service

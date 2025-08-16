@@ -36,7 +36,7 @@ import {
   NotificationDeliveryService,
   NotificationDeliveryData,
 } from '../notification-delivery.service';
-import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationHelperService } from '../notifications/notification-helper.service';
 import { NotificationType } from '../../enums/notification-type';
 
 /**

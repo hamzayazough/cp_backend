@@ -21,7 +21,7 @@ import { PaymentMethodService } from '../stripe/services/payment-method.service'
 import { WalletService } from '../services/wallet.service';
 import { CampaignFundingService } from '../services/campaign/campaign-funding.service';
 import { PromoterPaymentService } from '../services/promoter/promoter-payment.service';
-import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationHelperService } from 'src/services/notifications/notification-helper.service';
 import { NotificationDeliveryService } from '../services/notification-delivery.service';
 import { EmailService } from '../services/email/email.service';
 import { PhoneService } from '../services/phone/phone.service';

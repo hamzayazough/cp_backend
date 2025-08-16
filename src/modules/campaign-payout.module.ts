@@ -15,7 +15,7 @@ import { Transaction } from '../database/entities/transaction.entity';
 import { PromoterCampaign } from '../database/entities/promoter-campaign.entity';
 import { PaymentRecord } from '../database/entities/payment-record.entity';
 import { StripeModule } from '../stripe/stripe.module';
-import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationHelperService } from 'src/services/notifications/notification-helper.service';
 import { NotificationDeliveryService } from '../services/notification-delivery.service';
 import { EmailService } from '../services/email/email.service';
 import { PhoneService } from '../services/phone/phone.service';

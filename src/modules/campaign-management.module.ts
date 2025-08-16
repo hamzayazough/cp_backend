@@ -17,7 +17,7 @@ import { CampaignManagementController } from '../controllers/campaign-management
 import { PaymentModule } from './payment.module';
 import { AdvertiserModule } from './advertiser.module';
 import { NotificationDeliveryService } from '../services/notification-delivery.service';
-import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationHelperService } from 'src/services/notifications/notification-helper.service';
 import { NotificationEntity } from '../database/entities/notification.entity';
 import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
 import { PhoneService } from '../services/phone/phone.service';

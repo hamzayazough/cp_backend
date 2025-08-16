@@ -29,7 +29,7 @@ import { CampaignStatus } from '../../enums/campaign-status';
 import { UserType } from '../../enums/user-type';
 import { PayPromoterDto } from '../../controllers/advertiser.controller';
 import { getCachedFxRate } from '../../helpers/currency.helper';
-import { NotificationHelperService } from '../notification-helper.service';
+import { NotificationHelperService } from '../notifications/notification-helper.service';
 import {
   NotificationDeliveryService,
   NotificationDeliveryData,

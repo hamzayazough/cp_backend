@@ -13,7 +13,7 @@ import { MessagingGateway } from '../gateways/messaging.gateway';
 import { UserModule } from './user.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationDeliveryService } from '../services/notification-delivery.service';
-import { NotificationHelperService } from '../services/notification-helper.service';
+import { NotificationHelperService } from 'src/services/notifications/notification-helper.service';
 import { NotificationEntity } from '../database/entities/notification.entity';
 import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
 import { EmailService } from '../services/email/email.service';

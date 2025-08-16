@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserNotificationPreferenceEntity } from '../database/entities/user-notification-preference.entity';
-import { NotificationType } from '../enums/notification-type';
-import { NotificationDeliveryMethod } from '../enums/notification-delivery-method';
+import { UserNotificationPreferenceEntity } from 'src/database/entities/user-notification-preference.entity';
+import { NotificationType } from 'src/enums/notification-type';
+import { NotificationDeliveryMethod } from 'src/enums/notification-delivery-method';
 
 @Injectable()
 export class NotificationHelperService {
