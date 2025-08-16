@@ -4,7 +4,6 @@ import { WalletService } from '../wallet.service';
 import { CampaignFundingService } from '../campaign/campaign-funding.service';
 import { PromoterPaymentService } from '../promoter/promoter-payment.service';
 import {
-  CompletePaymentSetupDto,
   AddPaymentMethodDto,
   AddFundsDto,
   TransactionQueryDto,
@@ -34,11 +33,8 @@ export class AdvertiserPaymentService {
     return this.paymentMethodService.getPaymentSetupStatus(firebaseUid);
   }
 
-  async completePaymentSetup(
-    firebaseUid: string,
-    dto: CompletePaymentSetupDto,
-  ) {
-    return this.paymentMethodService.completePaymentSetup(firebaseUid, dto);
+  async completePaymentSetup(firebaseUid: string) {
+    return this.paymentMethodService.completePaymentSetup(firebaseUid);
   }
 
   async createSetupIntent(firebaseUid: string) {

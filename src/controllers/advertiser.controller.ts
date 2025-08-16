@@ -45,11 +45,6 @@ import { FAILED_DASHBOARD_DATA } from 'src/constants/advertiser.constants';
 import { ApplicationStatus } from 'src/database/entities/campaign-applications.entity';
 
 // Payment DTOs
-export class CompletePaymentSetupDto {
-  companyName: string;
-  email: string;
-}
-
 export class AddPaymentMethodDto {
   paymentMethodId: string;
   setAsDefault?: boolean = false;
@@ -417,13 +412,9 @@ export class AdvertiserController {
 
   @Post('payment-setup/complete')
   @HttpCode(HttpStatus.OK)
-  async completePaymentSetup(
-    @Request() req: { user: FirebaseUser },
-    @Body() dto: CompletePaymentSetupDto,
-  ) {
+  async completePaymentSetup(@Request() req: { user: FirebaseUser }) {
     const result = await this.advertiserPaymentService.completePaymentSetup(
       req.user.uid,
-      dto,
     );
 
     return {

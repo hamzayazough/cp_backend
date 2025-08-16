@@ -6,10 +6,7 @@ import { STRIPE_CLIENT } from '../stripe.constants';
 import { UserEntity } from 'src/database/entities';
 import { AdvertiserDetailsEntity } from '../../database/entities/advertiser-details.entity';
 import { PaymentMethod } from '../../database/entities/payment-method.entity';
-import {
-  CompletePaymentSetupDto,
-  AddPaymentMethodDto,
-} from '../../controllers/advertiser.controller';
+import { AddPaymentMethodDto } from '../../controllers/advertiser.controller';
 
 export interface PaymentSetupStatus {
   hasStripeCustomer: boolean;
@@ -113,43 +110,44 @@ export class PaymentMethodService {
     };
   }
 
-  async completePaymentSetup(
-    firebaseUid: string,
-    dto: CompletePaymentSetupDto,
-  ) {
-    const user = await this.findUserByFirebaseUid(firebaseUid);
-    const advertiserDetails = await this.advertiserDetailsRepo.findOne({
-      where: { userId: user.id },
+  async completePaymentSetup(firebaseUid: string) {
+    const user = await this.userRepo.findOne({
+      where: { firebaseUid },
+      relations: ['advertiserDetails'],
     });
 
-    if (!advertiserDetails) {
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.advertiserDetails) {
       throw new NotFoundException('Advertiser details not found');
     }
 
     // Create Stripe customer if not exists
-    if (!advertiserDetails.stripeCustomerId) {
+    if (!user.advertiserDetails.stripeCustomerId) {
       const stripeCustomer = await this.stripe.customers.create({
-        email: dto.email,
-        name: dto.companyName,
+        email: user.email,
+        name: user.advertiserDetails.companyName,
         metadata: {
           firebaseUid: user.firebaseUid,
           userId: user.id,
         },
       });
 
-      advertiserDetails.stripeCustomerId = stripeCustomer.id;
-      await this.advertiserDetailsRepo.save(advertiserDetails);
+      user.advertiserDetails.stripeCustomerId = stripeCustomer.id;
+      await this.advertiserDetailsRepo.save(user.advertiserDetails);
     }
 
     return {
-      id: `stripe_customer_${advertiserDetails.id}`,
-      customerId: advertiserDetails.stripeCustomerId,
+      id: `stripe_customer_${user.advertiserDetails.id}`,
+      customerId: user.advertiserDetails.stripeCustomerId,
       userId: user.id,
-      email: dto.email,
-      name: dto.companyName,
+      email: user.email,
+      name: user.advertiserDetails.companyName,
       defaultPaymentMethodId: null,
-      createdAt: advertiserDetails.createdAt.toISOString(),
-      updatedAt: advertiserDetails.updatedAt.toISOString(),
+      createdAt: user.advertiserDetails.createdAt.toISOString(),
+      updatedAt: user.advertiserDetails.updatedAt.toISOString(),
     };
   }
 
